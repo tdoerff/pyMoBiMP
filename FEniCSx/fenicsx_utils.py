@@ -47,7 +47,7 @@ def time_stepping(
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
-    **pars,
+    **event_pars,
 ):
 
     it_out = 0
@@ -74,12 +74,10 @@ def time_stepping(
     while t < T:
         u0.x.array[:] = u.x.array[:]
 
-        event_handler(t, u, **pars)
+        event_handler(t, u, **event_pars)
 
         try:
             if float(dt) < 1e-6:
-                u_out.append(u.sub(0).eval(points_on_proc, cells))
-                t_out.append(t)
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
