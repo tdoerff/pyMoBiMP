@@ -82,6 +82,12 @@ def time_stepping(
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
+            
+        except StopEvent as e:
+            
+            print(e)
+            
+            break
 
         except RuntimeError as e:
 
@@ -234,3 +240,7 @@ class RuntimeAnalysisBase(abc.ABC):
     def analyze(self, u_state, t):
 
         self.t.append(t)
+
+
+class StopEvent(RuntimeError):
+    pass
