@@ -43,7 +43,7 @@ def get_mesh_spacing(mesh):
 
 
 def time_stepping(
-    solver, u, u0, T, n_out, dt, t_start=0, dt_max=10.,
+    solver, u, u0, T, dt, t_start=0, dt_max=10., dt_increase=1.01,
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
@@ -111,18 +111,11 @@ def time_stepping(
 
         t += float(dt)
 
-        if t > it_out / n_out * T:
-            print(f">>> output #{it_out:>4}")
-
-            u_out.append(u.sub(0).eval(points_on_proc, cells))
-            t_out.append(t)
-            it_out += 1
-
-        dt.value *= 1.01
+        dt.value *= dt_increase
 
         print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
 
-    return t_out, x_out, u_out
+    return
 
 
 class NewtonSolver(NewtonSolverBase):
