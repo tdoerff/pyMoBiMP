@@ -43,7 +43,15 @@ def get_mesh_spacing(mesh):
 
 
 def time_stepping(
-    solver, u, u0, T, dt, t_start=0, dt_max=10., dt_increase=1.01,
+    solver,
+    u,
+    u0,
+    T,
+    dt,
+    t_start=0,
+    dt_max=10.0,
+    dt_min=1e-7,
+    dt_increase=1.01,
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
@@ -77,16 +85,16 @@ def time_stepping(
         event_handler(t, u, **event_pars)
 
         try:
-            if float(dt) < 1e-6:
+            if float(dt) < dt_min:
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
-            
+
         except StopEvent as e:
-            
+
             print(e)
-            
+
             break
 
         except RuntimeError as e:
@@ -96,12 +104,16 @@ def time_stepping(
             # reset and continue with smaller time step.
             u.x.array[:] = u0.x.array[:]
 
-            if dt.value < dt_max:
+            if dt.value > dt_min:
                 dt.value *= 0.5
 
-            print(f"Decrease timestep to dt={dt.value:1.3e}")
+                print(f"Decrease timestep to dt={dt.value:1.3e}")
 
-            continue
+                continue
+
+            else:
+                if output is not None:
+                    output.save_snapshot(u, t)
 
         except ValueError as e:
 
@@ -117,7 +129,8 @@ def time_stepping(
 
         t += float(dt)
 
-        dt.value *= dt_increase
+        if dt.value * dt_increase < dt_max:
+            dt.value *= dt_increase
 
         print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
 
