@@ -12,7 +12,6 @@ from fenicsx_utils import (evaluation_points_and_cells,
 
 
 def cahn_hilliard_form(psi, psi0, dt,
-                       metric_factor=0,
                        M=lambda c: 1,
                        c_of_y=lambda y: y,
                        free_energy=lambda c: 0.25 * (c**2 - 1)**2,
