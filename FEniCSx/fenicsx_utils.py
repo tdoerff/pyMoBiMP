@@ -243,6 +243,15 @@ class Fenicx1DOutput(OutputBase):
 
         return output_snapshot
 
+    def get_output(self, return_time=False, return_coords=False):
+
+        ret = list(super().get_output(return_time))
+
+        if return_coords:
+            ret = [self.x_eval, *ret]
+
+        return ret
+
 
 class RuntimeAnalysisBase(abc.ABC):
 
