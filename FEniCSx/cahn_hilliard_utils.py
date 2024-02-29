@@ -14,7 +14,6 @@ def cahn_hilliard_form(psi, psi0, dt,
                        I_charge=0.1,
                        theta=0.5):
 
-    # TODO:
     #   [ ] Assert whether psi, psi0, and v are on the same mesh/V
     V = psi.function_space
     mesh = V.mesh
