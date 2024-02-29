@@ -80,11 +80,15 @@ def time_stepping(
     it_out += 1
 
     while t < T:
-        u0.x.array[:] = u.x.array[:]
-
-        event_handler(t, u, **event_pars)
 
         try:
+            u0.x.array[:] = u.x.array[:]
+
+            stop = event_handler(t, u, **event_pars)
+
+            if stop:
+                break
+
             if float(dt) < dt_min:
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
@@ -93,7 +97,10 @@ def time_stepping(
 
         except StopEvent as e:
 
+            # TODO: Fix the event handler.
+
             print(e)
+            print(">>> Stop integration.")
 
             break
 
@@ -257,5 +264,5 @@ class RuntimeAnalysisBase(abc.ABC):
         self.t.append(t)
 
 
-class StopEvent(RuntimeError):
+class StopEvent(Exception):
     pass
