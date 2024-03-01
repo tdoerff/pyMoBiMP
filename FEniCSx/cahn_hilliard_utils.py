@@ -123,13 +123,13 @@ def charge_discharge_stop(t, u, I_charge, c_bounds=[0.05, 0.99], c_of_y=lambda y
     max_c = mesh.comm.allreduce(max(c.x.array), op=MPI.MAX)
     min_c = mesh.comm.allreduce(min(c.x.array), op=MPI.MIN)
 
-    # x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
+    x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
 
-    # c_bc = float(c.eval(x, cell))
+    c_bc = float(c.eval(x, cell))
 
-    # max_c = min_c = c_bc
+    max_c = min_c = c_bc
 
-    print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}")
+    print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}", c_bounds)
 
     if max_c > c_bounds[1] and I_charge.value > 0.0:
         print(
