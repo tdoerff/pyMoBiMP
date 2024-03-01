@@ -46,12 +46,6 @@ def plot_charging_cycle(q, mu_bc, eps):
     line_mu, = ax.plot(q, -mu_bc, label=r"$\left. \mu \right|_{\partial \omega_I}$")
     # line_f, = ax.plot(q, -f_bar, label=r"$\overline{f(c)}$")
 
-    # TODO: use AD or something else to generalize
-    q_plot = np.linspace(eps, 1-eps, 101)
-    dFdc = np.log(q_plot / (1 - q_plot))
-
-    ax.plot(q_plot, -dFdc, 'r--', label=r"$f(q)$")
-
     ax.set_xlabel(r"q")
 
     ax.legend()
