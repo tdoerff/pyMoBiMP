@@ -215,3 +215,4 @@ pyrightconfig.json
 # Added by TD
 */**/__pycache__/*
 *.pyc
+.DS_Store
