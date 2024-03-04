@@ -6,9 +6,8 @@ import numpy as np
 
 import ufl
 
-from fenicsx_utils import (evaluation_points_and_cells,
-                           RuntimeAnalysisBase,
-                           StopEvent)
+from fenicsx_utils import evaluation_points_and_cells, RuntimeAnalysisBase, StopEvent
+
 
 # Forward and backward variable transformation.
 def c_of_y(y, exp):
@@ -19,13 +18,17 @@ def y_of_c(c, log):
     return log(c / (1 - c))
 
 
-def cahn_hilliard_form(psi, psi0, dt,
-                       M=lambda c: 1,
-                       c_of_y=lambda y: c_of_y(y, ufl.exp),
-                       free_energy=lambda c: 0.25 * (c**2 - 1)**2,
-                       lam=0.01,
-                       I_charge=0.1,
-                       theta=0.5):
+def cahn_hilliard_form(
+    psi,
+    psi0,
+    dt,
+    M=lambda c: 1,
+    c_of_y=lambda y: c_of_y(y, ufl.exp),
+    free_energy=lambda c: 0.25 * (c**2 - 1) ** 2,
+    lam=0.01,
+    I_charge=0.1,
+    theta=0.5,
+):
 
     #   [ ] Assert whether psi, psi0, and v are on the same mesh/V
     V = psi.function_space
@@ -51,7 +54,7 @@ def cahn_hilliard_form(psi, psi0, dt,
     # Theta scheme
     theta = dfx.fem.Constant(mesh, theta)
 
-    mu_theta = theta * mu + (theta - 1.) * mu0
+    mu_theta = theta * mu + (theta - 1.0) * mu0
 
     r = ufl.SpatialCoordinate(mesh)
 
@@ -92,7 +95,6 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
 
     u_ini.sub(0).interpolate(y_ini)
 
-
     # Store chemical potential into state vector
     # ------------------------------------------
 
@@ -100,8 +102,7 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
     c_ini = ufl.variable(c_ini)
     dFdc = ufl.diff(free_energy(c_ini), c_ini)
 
-    u_ini.sub(1).interpolate(
-        dfx.fem.Expression(dFdc, W.interpolation_points()))
+    u_ini.sub(1).interpolate(dfx.fem.Expression(dFdc, W.interpolation_points()))
 
     u_ini.x.scatter_forward()
 
@@ -150,7 +151,7 @@ def charge_discharge_stop(
             return True
 
         else:
-            I_charge.value *= -1.
+            I_charge.value *= -1.0
 
             return False
 
