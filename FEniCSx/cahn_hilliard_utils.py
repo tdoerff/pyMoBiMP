@@ -106,7 +106,9 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
     u_ini.x.scatter_forward()
 
 
-def charge_discharge_stop(t, u, I_charge, c_bounds=[0.05, 0.99], c_of_y=lambda y: y):
+def charge_discharge_stop(
+    t, u, I_charge, c_bounds=[0.05, 0.99], c_of_y=lambda y: y, stop_at_empty=True
+):
 
     V = u.function_space
 
@@ -142,9 +144,15 @@ def charge_discharge_stop(t, u, I_charge, c_bounds=[0.05, 0.99], c_of_y=lambda y
 
     if min_c < c_bounds[0] and I_charge.value < 0.0:
 
-        print("Particle is emptied!")
+        if stop_at_empty:
+            print("Particle is emptied!")
 
-        return True
+            return True
+
+        else:
+            I_charge.value *= -1.
+
+            return False
 
     return False
 
