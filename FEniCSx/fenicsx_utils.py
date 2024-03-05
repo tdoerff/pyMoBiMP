@@ -66,6 +66,9 @@ def time_stepping(
 
     t = t_start
 
+    # Make sure initial time step does not exceed limits.
+    dt.value = np.minimum(dt.value, dt_max)
+
     V = u.function_space
     mesh = V.mesh
 
