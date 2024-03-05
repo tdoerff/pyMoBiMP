@@ -249,7 +249,7 @@ class PyvistaAnimation:
         # Doens't work. :()
         # self.plotter.mesh.overwrite(clipped)
 
-        # Dirty hack to update the plot.
+        # Dirty hack to update the plot. TODO: make plot more efficient.
         self.plotter.add_mesh(clipped, **self.plotter_kwargs)
 
         self.plotter.update()
