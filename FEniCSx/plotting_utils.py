@@ -153,6 +153,8 @@ class PyvistaAnimation:
         self.data_out = np.array(data_out).squeeze()
         self.data_out[:, 0, :] = c_of_y(self.data_out[:, 0, :])
 
+        self.t_out = np.array(t_out)
+
         if mesh_3d is None:
             mesh_3d, _, _ = dfx_spherical_mesh(resolution=res)
 
@@ -175,6 +177,8 @@ class PyvistaAnimation:
         self.plotter = pyvista.Plotter()
 
         self.plotter.add_mesh(grid_clipped, **plotter_kwargs)
+
+        self.time_label = self.plotter.add_text(f"t = {self.t_out[0]:1.3f}")
 
         self.show()
 
@@ -217,6 +221,16 @@ class PyvistaAnimation:
         self._update_data_on_grid(it)
 
         self._update_clipped_grid()
+
+        self._update_time_label(it)
+
+    def _update_time_label(self, it):
+
+        for actor, content in self.plotter.actors.items():
+            if content == self.time_label:
+                content.SetVisibility(False)
+
+        self.time_label = self.plotter.add_text(f"t = {self.t_out[it]:1.3f}")
 
     def _update_data_on_grid(self, it):
 
