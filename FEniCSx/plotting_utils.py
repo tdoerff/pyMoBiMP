@@ -178,13 +178,19 @@ class PyvistaAnimation:
 
         self.show()
 
-    def get_slider_widget(self):
+    def it_max_and_update(self):
+        """Returns it_max and update to be used, e.g., in ipywidget"""
 
-        it_max = len(self.data_out)
+        return len(self.data_out), self.update
+
+    def get_slider_widget(self):
+        """Sets up and returns an ipywidget slider object."""
+
+        it_max, update = self.it_max_and_update()
 
         it_slider=ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0)
 
-        widget = ipywidgets.interact(self.update, it=it_slider)
+        widget = ipywidgets.interact(update, it=it_slider)
 
         return widget
 
