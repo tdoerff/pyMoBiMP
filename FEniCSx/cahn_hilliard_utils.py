@@ -108,7 +108,14 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
 
 
 def charge_discharge_stop(
-    t, u, I_charge, c_bounds=[0.05, 0.99], c_of_y=lambda y: y, stop_at_empty=True
+    t,
+    u,
+    I_charge,
+    c_bounds=[0.05, 0.99],
+    c_of_y=lambda y: y,
+    stop_at_empty=True,
+    cycling=True,
+    logging=False
 ):
 
     V = u.function_space
@@ -132,7 +139,8 @@ def charge_discharge_stop(
 
     max_c = min_c = c_bc
 
-    print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}", c_bounds)
+    if logging:
+        print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}", c_bounds)
 
     if max_c > c_bounds[1] and I_charge.value > 0.0:
         print(
@@ -151,7 +159,8 @@ def charge_discharge_stop(
             return True
 
         else:
-            I_charge.value *= -1.0
+            if cycling:
+                I_charge.value *= -1.0
 
             return False
 
