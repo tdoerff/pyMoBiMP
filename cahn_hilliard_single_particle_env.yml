@@ -74,7 +74,6 @@ dependencies:
   - glib=2.78.4=h1059232_0
   - glib-tools=2.78.4=h1059232_0
   - gmp=6.3.0=h965bd2d_0
-  - gmsh=4.12.2=hd427cfb_0
   - gnutls=3.7.9=hd26332c_0
   - graphite2=1.3.13=h9f76cd9_1001
   - gst-plugins-base=1.22.9=h09b4b5e_0
@@ -251,6 +250,7 @@ dependencies:
   - requests=2.31.0=pyhd8ed1ab_0
   - rich=13.7.1=pyhd8ed1ab_0
   - scalapack=2.2.0=hb170938_1
+  - scipy=1.12.0=py312h9d7df2b_2
   - scooby=0.9.2=pyhd8ed1ab_0
   - scotch=7.0.4=heaa5b5c_1
   - setuptools=69.1.1=pyhd8ed1ab_0
@@ -320,4 +320,7 @@ dependencies:
   - zlib=1.2.13=h53f4e23_5
   - zlib-ng=2.0.7=h1a8c8d9_0
   - zstd=1.5.5=h4f39d0f_0
+  - pip:
+      - gmsh==4.12.2
+      - pygmsh==7.1.17
 prefix: /Users/doerffel/anaconda3/envs/fenicsx-env
