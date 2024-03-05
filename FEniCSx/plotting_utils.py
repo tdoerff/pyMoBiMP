@@ -15,6 +15,8 @@ import pyvista
 
 import scipy as sp
 
+from typing import Optional
+
 from fenicsx_utils import Fenicx1DOutput
 from gmsh_utils import dfx_spherical_mesh
 
@@ -131,7 +133,8 @@ class PyvistaAnimation:
     def __init__(
         self,
         output: Fenicx1DOutput,
-        c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike],
+        c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike] = lambda y: y,
+        mesh_3d: Optional[dolfinx.mesh.Mesh] = None,
         res: float = 1.0,
         specular: float = 1.0,
         **plotter_kwargs
@@ -150,7 +153,8 @@ class PyvistaAnimation:
         self.data_out = np.array(data_out).squeeze()
         self.data_out[:, 0, :] = c_of_y(self.data_out[:, 0, :])
 
-        mesh_3d, _, _ = dfx_spherical_mesh(resolution=res)
+        if mesh_3d is None:
+            mesh_3d, _, _ = dfx_spherical_mesh(resolution=res)
 
         # Create the function space and Function object for holding the data
         # ------------------------------------------------------------------
