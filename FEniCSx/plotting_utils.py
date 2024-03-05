@@ -133,7 +133,7 @@ class PyvistaAnimation:
         output: Fenicx1DOutput,
         c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike],
         res: float = 1.0,
-        specular=1.,
+        specular: float = 1.0,
         **plotter_kwargs
     ):
 
