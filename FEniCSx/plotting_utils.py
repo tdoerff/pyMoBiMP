@@ -1,8 +1,22 @@
 # file plotting_utils.py
 
+from collections.abc import Callable
+
+import dolfinx
+
 import ipywidgets
+
 from matplotlib import pyplot as plt
+
 import numpy as np
+import numpy.typing as npt
+
+import pyvista
+
+import scipy as sp
+
+from fenicsx_utils import Fenicx1DOutput
+from gmsh_utils import dfx_spherical_mesh
 
 
 def add_arrow(line, position=None, direction='right', size=15, color=None):
@@ -106,4 +120,93 @@ def animate_time_series(output, c_of_y):
 
     ax.set_ybound(0, 1)
 
-    ipywidgets.interact(update, it=ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0))
+
+
+class PyvistaAnimation:
+
+    def __init__(
+        self,
+        output: Fenicx1DOutput,
+        c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike],
+        res: float = 1.0,
+        specular=1.,
+        **plotter_kwargs
+    ):
+
+        # Sanitize input
+        # --------------
+        plotter_kwargs.update(specular=specular)
+        self.plotter_kwargs = plotter_kwargs
+
+        # get the data
+        # ------------
+        r, t_out, data_out = output.get_output(return_time=True, return_coords=True)
+        self.r = np.array(r)[:, 0]
+
+        self.data_out = np.array(data_out).squeeze()
+        self.data_out[:, 0, :] = c_of_y(self.data_out[:, 0, :])
+
+        mesh_3d, _, _ = dfx_spherical_mesh(resolution=res)
+
+        # Create the function space and Function object for holding the data
+        # ------------------------------------------------------------------
+        V_3d = dolfinx.fem.functionspace(mesh_3d, ("CG", 1))
+
+        self.u_3d = dolfinx.fem.Function(V_3d)
+
+        # Initialize pyvista plotter
+        # --------------------------
+
+        # The unclipped grid.
+        self.grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(V_3d))
+
+        self._update_data_on_grid(0)
+
+        grid_clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
+
+        self.plotter = pyvista.Plotter()
+
+        self.plotter.add_mesh(grid_clipped, **plotter_kwargs)
+
+        self.show()
+
+    def get_slider_widget(self):
+
+        it_max = len(self.data_out)
+
+        it_slider=ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0)
+
+        widget = ipywidgets.interact(self.update, it=it_slider)
+
+        return widget
+
+    def show(self):
+        self.plotter.show()
+
+    def update(self, it):
+
+        self._update_data_on_grid(it)
+
+        self._update_clipped_grid()
+
+    def _update_data_on_grid(self, it):
+
+        c = self.data_out[it, 0, :]
+
+        poly = sp.interpolate.interp1d(self.r, c, fill_value="extrapolate")
+
+        self.u_3d.interpolate(lambda x: poly((x[0]**2 + x[1]**2 + x[2]**2)**0.5))
+
+        self.grid["u"] = self.u_3d.x.array
+
+    def _update_clipped_grid(self):
+
+        clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
+
+        # Doens't work. :()
+        # self.plotter.mesh.overwrite(clipped)
+
+        # Dirty hack to update the plot.
+        self.plotter.add_mesh(clipped, **self.plotter_kwargs)
+
+        self.plotter.update()
