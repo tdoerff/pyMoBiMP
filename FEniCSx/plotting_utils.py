@@ -194,6 +194,21 @@ class PyvistaAnimation:
 
         return widget
 
+    def get_gif_animation(self, filename="anim.gif"):
+        """Stores a gif file."""
+
+        it_max, update = self.it_max_and_update()
+
+        self.plotter.open_gif(filename)
+
+        for it in range(it_max):
+
+            update(it)
+
+            self.plotter.write_frame()
+
+        self.plotter.close()
+
     def show(self):
         self.plotter.show()
 
