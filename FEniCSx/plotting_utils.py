@@ -19,10 +19,10 @@ from fenicsx_utils import Fenicx1DOutput
 from gmsh_utils import dfx_spherical_mesh
 
 
-def add_arrow(line, position=None, direction='right', size=15, color=None):
+def add_arrow(line, position=None, direction="right", size=15, color=None):
     """
     add an arrow to a line.
-    
+
     Copied from https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot (2024/02/28)
 
     line:       Line2D object
@@ -41,23 +41,24 @@ def add_arrow(line, position=None, direction='right', size=15, color=None):
         position = xdata.mean()
     # find closest index
     start_ind = np.argmin(np.absolute(xdata - position))
-    if direction == 'right':
+    if direction == "right":
         end_ind = start_ind + 1
     else:
         end_ind = start_ind - 1
 
-    line.axes.annotate('',
+    line.axes.annotate(
+        "",
         xytext=(xdata[start_ind], ydata[start_ind]),
         xy=(xdata[end_ind], ydata[end_ind]),
         arrowprops=dict(arrowstyle="->", color=color),
-        size=size
+        size=size,
     )
 
 
 def plot_charging_cycle(q, mu_bc, eps):
     fig, ax = plt.subplots()
 
-    line_mu, = ax.plot(q, -mu_bc, label=r"$\left. \mu \right|_{\partial \omega_I}$")
+    (line_mu,) = ax.plot(q, -mu_bc, label=r"$\left. \mu \right|_{\partial \omega_I}$")
     # line_f, = ax.plot(q, -f_bar, label=r"$\overline{f(c)}$")
 
     ax.set_xlabel(r"q")
@@ -109,7 +110,7 @@ def animate_time_series(output, c_of_y):
 
     it_max = len(data_out)
 
-    def update(it = 10):
+    def update(it=10):
 
         c = c_of_y(data_out[it][0])
 
@@ -120,6 +121,9 @@ def animate_time_series(output, c_of_y):
 
     ax.set_ybound(0, 1)
 
+    ipywidgets.interact(
+        update, it=ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0)
+    )
 
 
 class PyvistaAnimation:
