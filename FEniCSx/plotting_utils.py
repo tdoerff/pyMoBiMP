@@ -11,6 +11,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
+import os
+
 import pyvista
 
 import scipy as sp
@@ -198,12 +200,13 @@ class PyvistaAnimation:
 
         return widget
 
-    def get_gif_animation(self, filename="anim.gif"):
+    def get_gif_animation(
+        self, filename: str | os.PathLike = "anim.gif"):
         """Stores a gif file."""
 
         it_max, update = self.it_max_and_update()
 
-        self.plotter.open_gif(filename)
+        self.plotter.open_gif(str(filename))
 
         for it in range(it_max):
 
