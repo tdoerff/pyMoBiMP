@@ -249,7 +249,8 @@ class PyvistaAnimation:
         # Doens't work. :()
         # self.plotter.mesh.overwrite(clipped)
 
-        # Dirty hack to update the plot. TODO: make plot more efficient.
-        self.plotter.add_mesh(clipped, **self.plotter_kwargs)
+        # This might do the trick to update the clipped data without re-plotting
+        # whole grid.
+        self.plotter.mesh["u"] = clipped["u"]
 
         self.plotter.update()
