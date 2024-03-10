@@ -133,8 +133,9 @@ def charge_discharge_stop(
     max_c = mesh.comm.allreduce(max(c.x.array), op=MPI.MAX)
     min_c = mesh.comm.allreduce(min(c.x.array), op=MPI.MIN)
 
-    c_bc = dfx.fem.form(c * ufl.ds)
-    c_bc = dfx.fem.assemble_scalar(c_bc) / (4 * np.pi)
+    x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
+
+    c_bc = float(c.eval(x, cell))
 
     max_c = min_c = c_bc
 
@@ -198,8 +199,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
 
-        mu_bc = dfx.fem.form(mu * ufl.ds)
-        mu_bc = dfx.fem.assemble_scalar(mu_bc) / (4 * np.pi)
+        mu_bc = float(mu.eval(x, cell))
 
         self.data.append([charge, chem_pot, mu_bc])
 
