@@ -213,7 +213,7 @@ class OutputBase(abc.ABC):
 
 class VTXOutput(OutputBase):
 
-    def setup(self, filename="output.vtx"):
+    def setup(self, filename="output.bp", variable_transform = lambda y: y):
 
         mesh = self.u_state.function_space.mesh
         comm = mesh.comm
