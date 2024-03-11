@@ -160,7 +160,12 @@ def charge_discharge_stop(
 
         else:
             if cycling:
+                print(">>> Start charging.")
                 I_charge.value *= -1.0
+
+            else:
+                print(">>> Stop charging.")
+                I_charge.value = 0.0
 
             return False
 
