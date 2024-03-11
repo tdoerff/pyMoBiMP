@@ -125,46 +125,35 @@ def charge_discharge_stop(
     u,
     I_charge,
     c_bounds=[0.05, 0.99],
-    c_of_y=lambda y: y,
+    c_of_y=lambda y: c_of_y(y, ufl.exp),
     stop_at_empty=True,
     cycling=True,
     logging=False
 ):
 
-    V = u.function_space
+    coords = ufl.SpatialCoordinate(u.function_space.mesh)
+    r = ufl.sqrt(sum([c for c in coords]))
 
-    mesh = V.mesh
+    y, _ = u.split()
 
-    W, dof = V.sub(0).collapse()
+    c = c_of_y(y)
 
-    y, mu = u.split()
-
-    c = dfx.fem.Function(W)
-
-    c.interpolate(dfx.fem.Expression(c_of_y(y), W.element.interpolation_points()))
-
-    max_c = mesh.comm.allreduce(max(c.x.array), op=MPI.MAX)
-    min_c = mesh.comm.allreduce(min(c.x.array), op=MPI.MIN)
-
-    x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
-
-    c_bc = float(c.eval(x, cell))
-
-    max_c = min_c = c_bc
+    c_bc = dfx.fem.form(r**2 * c * ufl.ds)
+    c_bc = dfx.fem.assemble_scalar(c_bc)
 
     if logging:
-        print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}", c_bounds)
+        print(f"t={t:1.5f} ; c_bc = {c_bc:1.3e}", c_bounds)
 
-    if max_c > c_bounds[1] and I_charge.value > 0.0:
+    if c_bc > c_bounds[1] and I_charge.value > 0.0:
         print(
-            f">>> total charge exceeds maximum (max(c) = {max_c:1.3f} > {c_bounds[0]:1.3f})."
+            f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[0]:1.3f})."
         )
         print(">>> Start discharging.")
         I_charge.value *= -1.0
 
         return False
 
-    if min_c < c_bounds[0] and I_charge.value < 0.0:
+    if c_bc < c_bounds[0] and I_charge.value < 0.0:
 
         if stop_at_empty:
             print("Particle is emptied!")
@@ -204,7 +193,8 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         c = self.c_of_y(y)
 
-        r = ufl.SpatialCoordinate(mesh)
+        coords = ufl.SpatialCoordinate(mesh)
+        r = ufl.sqrt(sum([c for c in coords]))
 
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
@@ -215,9 +205,8 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         chem_pot = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
         chem_pot = dfx.fem.assemble_scalar(chem_pot)
 
-        x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
-
-        mu_bc = float(mu.eval(x, cell))
+        mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
+        mu_bc = dfx.fem.assemble_scalar(mu_bc)
 
         self.data.append([charge, chem_pot, mu_bc])
 
