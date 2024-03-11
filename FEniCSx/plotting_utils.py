@@ -249,11 +249,8 @@ class PyvistaAnimation:
 
         clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
 
-        # Doens't work. :()
-        # self.plotter.mesh.overwrite(clipped)
-
-        # This might do the trick to update the clipped data without re-plotting
-        # whole grid.
+        # This should do the trick to update the clipped
+        # data without re-plotting whole grid.
         self.plotter.mesh["u"] = clipped["u"]
 
         self.plotter.update()
