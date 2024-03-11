@@ -130,6 +130,12 @@ def time_stepping(
 
         print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
 
+    else:
+
+        if output is not None:
+
+            [o.finalize() for o in output]
+
     return
 
 
@@ -174,6 +180,10 @@ class OutputBase(abc.ABC):
     def setup(self, *args, **kwargs):
         pass
 
+    @abc.abstractmethod
+    def finalize(self):
+        pass
+
     def save_snapshot(self, u_state, t):
 
         if t > self.t_out_next:
@@ -212,6 +222,9 @@ class Fenicx1DOutput(OutputBase):
         points_on_proc, cells = evaluation_points_and_cells(mesh, x)
 
         self.x_eval, self.cells = points_on_proc, cells
+
+    def finalize(self):
+        return super().finalize()
 
     def extract_output(self, u_state, t):
 
