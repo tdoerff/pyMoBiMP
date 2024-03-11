@@ -202,8 +202,8 @@ class OutputBase(abc.ABC):
         pass
 
     def get_output(self, return_time=False):
-        
-        # TODO: add mesh mesh information.s
+
+        # TODO: add mesh mesh information.
 
         if return_time:
             return self.output_times, self.output_container
