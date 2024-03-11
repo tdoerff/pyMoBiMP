@@ -216,6 +216,25 @@ class PyvistaAnimation:
 
         self.plotter.close()
 
+    def write_vtk_output(
+        self, filename: str | os.PathLike = "output.bp"):
+
+        u = self.u_3d
+        mesh = u.function_space.mesh
+        comm = mesh.comm
+
+        writer = dolfinx.io.VTXWriter(comm, filename, u)
+
+        it_max, update = self.it_max_and_update()
+
+        for it in range(it_max):
+
+            update(it)
+
+            writer.write(self.t_out[it])
+
+        writer.close()
+
     def show(self):
         self.plotter.show()
 
