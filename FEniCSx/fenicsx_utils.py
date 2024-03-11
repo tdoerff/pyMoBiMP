@@ -211,6 +211,54 @@ class OutputBase(abc.ABC):
             return self.output_container
 
 
+class VTXOutput(OutputBase):
+
+    def setup(self, filename="output.vtx"):
+
+        mesh = self.u_state.function_space.mesh
+        comm = mesh.comm
+
+        output = self.extract_output(0.)
+
+        self.writer = dfx.io.VTXWriter(comm, filename, output)
+
+    def extract_output(self, t):
+
+        V = self.u_state.function_space
+
+        num_comp = V.num_sub_spaces
+
+        ret = []
+
+        for i in range(num_comp):
+
+            i_comp = self.u_state.sub(i)
+            i_comp.name = f"comp_{i}"
+
+            ret.append(i_comp)
+
+        return ret
+
+    def save_snapshot(self, u_state, t):
+
+        if t > self.t_out_next:
+
+            print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+
+            self.writer.write(t)
+
+            self.it_out += 1
+            self.t_out_last = self.t_out_next
+            self.t_out_next = self.ts_out_planned[self.it_out]
+
+    def get_output(self, return_time=False):
+        raise NotImplementedError("In VTXOutput, get_output is not implemented!")
+
+    def finalize(self):
+
+        self.writer.close()
+
+
 class Fenicx1DOutput(OutputBase):
 
     def setup(self, x):
@@ -236,8 +284,6 @@ class Fenicx1DOutput(OutputBase):
         output_snapshot = []
 
         for i_comp in range(num_comp):
-
-            sub_space, dofs = V.sub(i_comp).collapse()
 
             values = u_state.sub(i_comp).eval(self.x_eval, self.cells)
 
