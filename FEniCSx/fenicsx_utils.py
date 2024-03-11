@@ -218,6 +218,8 @@ class VTXOutput(OutputBase):
         mesh = self.u_state.function_space.mesh
         comm = mesh.comm
 
+        self.c_of_y = variable_transform
+
         output = self.extract_output(0.)
 
         self.writer = dfx.io.VTXWriter(comm, filename, output)
@@ -234,6 +236,15 @@ class VTXOutput(OutputBase):
 
             i_comp = self.u_state.sub(i)
             i_comp.name = f"comp_{i}"
+
+            if i == 0:
+
+                V0, _ = V.sub(i).collapse()
+
+                i_comp.interpolate(
+                    dfx.fem.Expression(self.c_of_y(i_comp),
+                                       V0.element.interpolation_points())
+                )
 
             ret.append(i_comp)
 
