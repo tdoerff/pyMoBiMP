@@ -1,12 +1,25 @@
+from collections.abc import Callable
+
 import dolfinx as dfx
+
+from dolfinx.fem.petsc import NonlinearProblem
 
 from mpi4py import MPI
 
 import numpy as np
 
+import os
+
+from typing import Optional, TypedDict, Unpack
+
 import ufl
 
-from fenicsx_utils import evaluation_points_and_cells, RuntimeAnalysisBase, StopEvent
+from fenicsx_utils import (evaluation_points_and_cells,
+                           get_mesh_spacing,
+                           NewtonSolver,
+                           RuntimeAnalysisBase,
+                           time_stepping,
+                           VTXOutput)
 
 
 # Forward and backward variable transformation.
@@ -209,3 +222,129 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         self.data.append([charge, chem_pot, mu_bc])
 
         return super().analyze(u_state, t)
+
+
+# Defaults for the Simulation class
+_mesh = dfx.mesh.create_unit_interval(MPI.COMM_WORLD, 128)
+
+
+def _free_energy(
+    u: dfx.fem.Function, a: float = 6.0 / 4.0, b: float = 0.2, c: float = 5.0
+):
+
+    fe = (
+        u * ufl.ln(u) \
+        + (1 - u) * ufl.ln(1 - u) \
+        + a * u * (1 - u) \
+        + b * ufl.sin(c * np.pi * u) \
+    )
+
+    return fe
+
+# [ ] make it possible to hand over pre-configured output class or object
+# [ ] add runtime analysis
+
+class Simulation:
+
+    def __init__(self,
+        mesh: dfx.mesh.Mesh = _mesh,
+        element: ufl.FiniteElement | ufl.MixedElement = ufl.FiniteElement(
+            "Lagrange", _mesh.ufl_cell(), 1
+        ),
+        free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
+        T_final: float = 2.0,
+        experiment: Callable[
+            [float, dfx.fem.Function], dfx.fem.Expression
+        ] = charge_discharge_stop,
+        gamma: float = 0.1,
+        M: Callable[[dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression] = lambda c: 1.0 * c * (1 - c),
+        I: float = 1.0,
+        eps: float = 1e-3,
+        c_ini = lambda x, eps: eps * np.ones_like(x[0]),
+        output_file: str | os.PathLike = "simulation_output/output.vtk",
+        n_out: int = 51,
+        runtime_analysis: Optional[RuntimeAnalysisBase] = None
+    ):
+
+        # Define mixed element and function space
+        # ---------------------------------------
+        if element.num_sub_elements() == 2:
+            mixed_element = element
+        elif element.num_sub_elements() > 2:
+            raise ValueError(
+                f"element.num_sub_elements() = {element.num_sub_elements()} > 2"
+            )
+        else:
+            mixed_element = element * element
+
+        V = dfx.fem.FunctionSpace(mesh, mixed_element)
+
+        # (initial) timestep
+        # ------------------
+        dx = get_mesh_spacing(mesh)
+        self.dt = dfx.fem.Constant(mesh, 0.01 * dx)
+
+        self.T_final = T_final
+
+        # The mixed-element functions
+        # ---------------------------
+        self.u = dfx.fem.Function(V)
+        self.u0 = dfx.fem.Function(V)
+
+        # Experimental setup
+        # ------------------
+
+        # Charging current goes into the form and is recomputed in experiment
+        I_charge = dfx.fem.Constant(mesh, 1.0)
+
+        self.event_params = dict(I_charge=I_charge)
+
+        self.experiment = experiment
+
+        # The weak form of the problem
+        # ----------------------------
+        F = cahn_hilliard_form(
+            self.u,
+            self.u0,
+            self.dt,
+            free_energy=free_energy,
+            theta=0.75,
+            c_of_y = lambda y: c_of_y(y, ufl.exp),
+            M=M,
+            lam=gamma,
+            **self.event_params,
+        )
+
+        # Initial data
+        # ------------
+        u_ini = dfx.fem.Function(V)
+
+        populate_initial_data(u_ini,
+                              lambda r: c_ini(r, eps),
+                              free_energy)
+
+        # Problem and solver setup
+        # ------------------------
+        problem = NonlinearProblem(F, self.u)
+
+        self.solver = NewtonSolver(mesh.comm, problem)
+
+        self.output = VTXOutput(self.u, np.linspace(0, T_final, n_out), output_file)
+
+        self.rt_analysis = runtime_analysis
+
+    def run(self):
+
+        time_stepping(
+            self.solver,
+            self.u,
+            self.u0,
+            self.T_final,
+            self.dt,
+            dt_increase=1.0,
+            dt_max=1e-3,
+            event_handler=self.experiment,
+            output=self.output,
+            runtime_analysis=self.rt_analysis,
+            **self.event_params,
+        )
