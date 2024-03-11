@@ -58,29 +58,14 @@ def time_stepping(
     **event_pars,
 ):
 
-    it_out = 0
-
-    # Empty containers for output data
-    u_out = []
-    t_out = []
-
     t = t_start
 
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
 
-    V = u.function_space
-    mesh = V.mesh
-
-    # Necessary for output.
-    # TODO: Retrieve interval from mesh
-    x_out = np.linspace(0, 1, 101)
-    points_on_proc, cells = evaluation_points_and_cells(mesh, x_out)
-
-    # Write the initial data.
-    u_out.append(u.sub(0).eval(points_on_proc, cells))
-    t_out.append(t)
-    it_out += 1
+    # Prepare outout
+    if output is not None:
+        output = np.atleast_1d(output)
 
     while t < T:
 
@@ -123,6 +108,7 @@ def time_stepping(
 
             else:
                 if output is not None:
+
                     output.save_snapshot(u, t)
 
         except ValueError as e:
@@ -132,7 +118,7 @@ def time_stepping(
             break
 
         if output is not None:
-            output.save_snapshot(u, t)
+            [o.save_snapshot(u, t) for o in output]
 
         if runtime_analysis is not None:
             runtime_analysis.analyze(u, t)
