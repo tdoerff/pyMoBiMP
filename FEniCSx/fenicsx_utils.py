@@ -186,7 +186,7 @@ class OutputBase(abc.ABC):
 
     def save_snapshot(self, u_state, t):
 
-        if t > self.t_out_next:
+        if t >= self.t_out_next:
 
             print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
@@ -220,11 +220,11 @@ class VTXOutput(OutputBase):
 
         self.c_of_y = variable_transform
 
-        output = self.extract_output(0.)
+        output = self.extract_output(self.u_state, 0.)
 
         self.writer = dfx.io.VTXWriter(comm, filename, output)
 
-    def extract_output(self, t):
+    def extract_output(self, u_state, t):
 
         V = self.u_state.function_space
 
@@ -251,16 +251,10 @@ class VTXOutput(OutputBase):
         return ret
 
     def save_snapshot(self, u_state, t):
+        super().save_snapshot(u_state, t)
 
-        if t > self.t_out_next:
-
-            print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
-
+        if t >= self.t_out_next:
             self.writer.write(t)
-
-            self.it_out += 1
-            self.t_out_last = self.t_out_next
-            self.t_out_next = self.ts_out_planned[self.it_out]
 
     def get_output(self, return_time=False):
         raise NotImplementedError("In VTXOutput, get_output is not implemented!")
