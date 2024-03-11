@@ -220,10 +220,14 @@ class PyvistaAnimation:
         self, filename: str | os.PathLike = "output.bp"):
 
         u = self.u_3d
+        u.name = "c"
         mesh = u.function_space.mesh
         comm = mesh.comm
 
-        writer = dolfinx.io.VTXWriter(comm, filename, u)
+        # writer = dolfinx.io.VTXWriter(comm, filename, u)
+        file = dolfinx.io.VTKFile(comm, filename, "w")
+
+        file.write_mesh(mesh)
 
         it_max, update = self.it_max_and_update()
 
@@ -231,9 +235,9 @@ class PyvistaAnimation:
 
             update(it)
 
-            writer.write(self.t_out[it])
+            file.write_function(u, self.t_out[it])
 
-        writer.close()
+        file.close()
 
     def show(self):
         self.plotter.show()
