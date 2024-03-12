@@ -21,7 +21,8 @@ from fenicsx_utils import (evaluation_points_and_cells,
                            NewtonSolver,
                            RuntimeAnalysisBase,
                            time_stepping,
-                           VTXOutput)
+                           FileWriter,
+                           Fenicx1DOutput)
 
 
 # Forward and backward variable transformation.
@@ -258,7 +259,7 @@ class Simulation:
         I: float = 1.0,
         eps: float = 1e-3,
         c_ini=lambda x, eps: eps * np.ones_like(x[0]),
-        output_file: str | os.PathLike = "simulation_output/output.bp",
+        output_file: Optional[str | os.PathLike] = None,
         n_out: int = 51,
         runtime_analysis: Optional[RuntimeAnalysisBase] = None,
     ):
@@ -332,22 +333,23 @@ class Simulation:
         # Setup output
         # ------------
 
-        # make sure directory exists.
-        real_file_path = os.path.realpath(output_file)
+        if output_file is not None:
+            # make sure directory exists.
+            real_file_path = os.path.realpath(output_file)
 
-        dir_path = os.path.dirname(real_file_path)
-        dir_path = pathlib.Path(dir_path)
+            dir_path = os.path.dirname(real_file_path)
+            dir_path = pathlib.Path(dir_path)
 
-        dir_path.mkdir(exist_ok=True, parents=True)
+            dir_path.mkdir(exist_ok=True, parents=True)
 
-        print(f">>> output to {real_file_path}")
-
-        self.output = VTXOutput(
-            self.u,
-            np.linspace(0, T_final, n_out),
-            output_file,
-            variable_transform=lambda y: c_of_y(y, ufl.exp),
-        )
+            # FIXME: This is jsut a dirty hack to get some output running.
+            # Write a consistent file writer class and use here!!!
+            self.output = Fenicx1DOutput(
+                self.u,
+                np.linspace(0, T_final, n_out),
+                np.linspace(0, 1., 101))
+        else:
+            self.output = None
 
         self.rt_analysis = runtime_analysis
 
