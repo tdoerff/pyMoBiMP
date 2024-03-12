@@ -25,12 +25,12 @@ from fenicsx_utils import (evaluation_points_and_cells,
 
 
 # Forward and backward variable transformation.
-def c_of_y(y, exp):
-    return exp(y) / (1 + exp(y))
+def c_of_y(y):
+    return ufl.exp(y) / (1 + ufl.exp(y))
 
 
-def y_of_c(c, log):
-    return log(c / (1 - c))
+def y_of_c(c):
+    return ufl.ln(c / (1 - c))
 
 
 def cahn_hilliard_form(
@@ -38,7 +38,7 @@ def cahn_hilliard_form(
     psi0,
     dt,
     M=lambda c: 1,
-    c_of_y=lambda y: c_of_y(y, ufl.exp),
+    c_of_y=c_of_y,
     free_energy=lambda c: 0.25 * (c**2 - 1) ** 2,
     lam=0.01,
     I_charge=0.1,
@@ -100,7 +100,7 @@ def cahn_hilliard_form(
     return F
 
 
-def populate_initial_data(u_ini, c_ini_fun, free_energy):
+def populate_initial_data(u_ini, c_ini_fun, free_energy, y_of_c=y_of_c):
 
     # Store concentration-like quantity into state vector
     # ---------------------------------------------------
@@ -111,7 +111,7 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
     c_ini = dfx.fem.Function(W)
     c_ini.interpolate(c_ini_fun)
 
-    y_ini = dfx.fem.Expression(y_of_c(c_ini, ufl.ln), W.element.interpolation_points())
+    y_ini = dfx.fem.Expression(y_of_c(c_ini), W.element.interpolation_points())
 
     u_ini.sub(0).interpolate(y_ini)
 
@@ -132,7 +132,7 @@ def charge_discharge_stop(
     u,
     I_charge,
     c_bounds=[0.05, 0.99],
-    c_of_y=lambda y: c_of_y(y, ufl.exp),
+    c_of_y=c_of_y,
     stop_at_empty=True,
     cycling=True,
     logging=False
@@ -184,7 +184,7 @@ def charge_discharge_stop(
 class AnalyzeOCP(RuntimeAnalysisBase):
 
     def setup(
-        self, *args, c_of_y=lambda y: y, free_energy=lambda u: 0.5 * u**2, **kwargs
+        self, *args, c_of_y=c_of_y, free_energy=lambda u: 0.5 * u**2, **kwargs
     ):
         self.free_energy = free_energy
         self.c_of_y = c_of_y
@@ -309,7 +309,7 @@ class Simulation:
             self.dt,
             free_energy=free_energy,
             theta=0.75,
-            c_of_y = lambda y: c_of_y(y, ufl.exp),
+            c_of_y = lambda y: c_of_y(y),
             M=M,
             lam=gamma,
             **self.event_params,
