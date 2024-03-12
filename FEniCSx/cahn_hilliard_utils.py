@@ -242,7 +242,8 @@ def _free_energy(
 
 class Simulation:
 
-    def __init__(self,
+    def __init__(
+        self,
         mesh: dfx.mesh.Mesh = _mesh,
         element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
         free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
@@ -251,13 +252,15 @@ class Simulation:
             [float, dfx.fem.Function], dfx.fem.Expression
         ] = charge_discharge_stop,
         gamma: float = 0.1,
-        M: Callable[[dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression] = lambda c: 1.0 * c * (1 - c),
+        M: Callable[
+            [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
+        ] = lambda c: 1.0 * c * (1 - c),
         I: float = 1.0,
         eps: float = 1e-3,
-        c_ini = lambda x, eps: eps * np.ones_like(x[0]),
-        output_file: str | os.PathLike = "simulation_output/output.vtk",
+        c_ini=lambda x, eps: eps * np.ones_like(x[0]),
+        output_file: str | os.PathLike = "simulation_output/output.bp",
         n_out: int = 51,
-        runtime_analysis: Optional[RuntimeAnalysisBase] = None
+        runtime_analysis: Optional[RuntimeAnalysisBase] = None,
     ):
 
         # Define mixed element and function space
