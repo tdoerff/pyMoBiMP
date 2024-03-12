@@ -10,6 +10,8 @@ import numpy as np
 
 import os
 
+import pathlib
+
 from typing import Optional, TypedDict, Unpack
 
 import ufl
@@ -324,7 +326,25 @@ class Simulation:
 
         self.solver = NewtonSolver(mesh.comm, problem)
 
-        self.output = VTXOutput(self.u, np.linspace(0, T_final, n_out), output_file)
+        # Setup output
+        # ------------
+
+        # make sure directory exists.
+        real_file_path = os.path.realpath(output_file)
+
+        dir_path = os.path.dirname(real_file_path)
+        dir_path = pathlib.Path(dir_path)
+
+        dir_path.mkdir(exist_ok=True, parents=True)
+
+        print(f">>> output to {real_file_path}")
+
+        self.output = VTXOutput(
+            self.u,
+            np.linspace(0, T_final, n_out),
+            output_file,
+            variable_transform=lambda y: c_of_y(y, ufl.exp),
+        )
 
         self.rt_analysis = runtime_analysis
 
