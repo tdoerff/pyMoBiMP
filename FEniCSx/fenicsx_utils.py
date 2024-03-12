@@ -264,6 +264,36 @@ class VTXOutput(OutputBase):
         self.writer.close()
 
 
+class VTKOutput(OutputBase):
+
+    def setup(self, filename="output.vtk", variable_transform=lambda y: y):
+
+        mesh = self.u_state.function_space.mesh
+        comm = mesh.comm
+
+        self.c_of_y = variable_transform
+
+        self.file = dfx.io.VTKFile(comm, filename, "w")
+
+    def extract_output(self, u_state, t):
+        # Borrow from VTXOutput.
+        return VTXOutput.extract_output(self, u_state, t)
+
+    def save_snapshot(self, u_state, t):
+        super().save_snapshot(u_state, t)
+
+        if t >= self.t_out_next:
+            output = self.extract_output(self.u_state, 0.)
+            [self.file.write_function(comp, 0.) for comp in output]
+
+    def get_output(self, return_time=False):
+        raise NotImplementedError("In VTXOutput, get_output is not implemented!")
+
+    def finalize(self):
+
+        self.file.close()
+
+
 class Fenicx1DOutput(OutputBase):
 
     def setup(self, x):
