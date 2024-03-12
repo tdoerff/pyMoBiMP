@@ -29,6 +29,8 @@ def gmsh_sphere_model(model: gmsh.model, name: str) -> gmsh.model:
 
     # Generate the mesh
     model.mesh.generate(dim=3)
+    model.mesh.optimize("Netgen")
+
     return model
 
 
