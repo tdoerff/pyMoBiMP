@@ -216,3 +216,4 @@ pyrightconfig.json
 */**/__pycache__/*
 *.pyc
 .DS_Store
+simulation_output/
