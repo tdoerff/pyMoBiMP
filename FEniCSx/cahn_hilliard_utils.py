@@ -361,7 +361,7 @@ class Simulation:
             self.u0,
             self.T_final,
             self.dt,
-            dt_increase=1.01,
+            dt_increase=1.0,
             dt_max=1e-2,
             event_handler=self.experiment,
             output=self.output,
