@@ -41,6 +41,7 @@ def cahn_hilliard_form(
     lam=0.01,
     I_charge=0.1,
     theta=0.5,
+    form_weights=None
 ):
 
     #   [ ] Assert whether psi, psi0, and v are on the same mesh/V
@@ -72,8 +73,12 @@ def cahn_hilliard_form(
     r = ufl.SpatialCoordinate(mesh)
 
     # adaptation of the volume element due to geometry
-    s_V = 4 * np.pi * r**2
-    s_A = 2 * np.pi * r**2
+    if form_weights is not None:
+        s_V = form_weights["volume"]
+        s_A = form_weights["surface"]
+    else:
+        s_V = 4 * np.pi * r**2
+        s_A = 2 * np.pi * r**2
 
     dx = ufl.dx  # The volume element
     ds = ufl.ds  # The surface element
@@ -237,9 +242,7 @@ class Simulation:
 
     def __init__(self,
         mesh: dfx.mesh.Mesh = _mesh,
-        element: ufl.FiniteElement | ufl.MixedElement = ufl.FiniteElement(
-            "Lagrange", _mesh.ufl_cell(), 1
-        ),
+        element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
         free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
         T_final: float = 2.0,
         experiment: Callable[
@@ -257,6 +260,9 @@ class Simulation:
 
         # Define mixed element and function space
         # ---------------------------------------
+        if element is None:
+            element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
         if element.num_sub_elements() == 2:
             mixed_element = element
         elif element.num_sub_elements() > 2:
