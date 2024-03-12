@@ -292,7 +292,7 @@ class Simulation:
         # ------------------
 
         # Charging current goes into the form and is recomputed in experiment
-        I_charge = dfx.fem.Constant(mesh, 1.0)
+        I_charge = dfx.fem.Constant(mesh, I)
 
         self.event_params = dict(I_charge=I_charge)
 
