@@ -38,11 +38,12 @@ if __name__ == "__main__":
                                  filename=results_folder / f"I_{I:1.3e}.txt")
 
         sim = Simulation(mesh=mesh,
-                        free_energy=ideal_free_energy,
-                        T_final=2.,
-                        output_file=None,
-                        runtime_analysis=rt_analysis,
-                        I=I)
+                         free_energy=ideal_free_energy,
+                         T_final=2.,
+                         output_file=None,
+                         runtime_analysis=rt_analysis,
+                         I=I,
+                         logging=False)
 
         sim.run()
 
