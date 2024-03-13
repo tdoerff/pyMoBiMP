@@ -134,6 +134,7 @@ def charge_discharge_stop(
     c_bounds=[0.05, 0.99],
     c_of_y=c_of_y,
     stop_at_empty=True,
+    stop_on_full=True,
     cycling=True,
     logging=False
 ):
@@ -155,6 +156,10 @@ def charge_discharge_stop(
         print(
             f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[0]:1.3f})."
         )
+
+        if stop_on_full:
+            return True
+
         print(">>> Start discharging.")
         I_charge.value *= -1.0
 
