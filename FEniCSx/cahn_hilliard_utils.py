@@ -21,7 +21,6 @@ from fenicsx_utils import (evaluation_points_and_cells,
                            NewtonSolver,
                            RuntimeAnalysisBase,
                            time_stepping,
-                           FileWriter,
                            Fenicx1DOutput)
 
 
