@@ -101,7 +101,7 @@ def plot_time_sequence(output, c_of_y):
 
         ax.plot(x, mu_t, color=color)
 
-    return fig, ax
+    return fig, axs
 
 
 def animate_time_series(output, c_of_y):
