@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
         sim = Simulation(mesh=mesh,
                          free_energy=ideal_free_energy,
-                         T_final=50.,
+                         T_final=70.,
                          experiment=experiment,
                          output_file=None,
                          runtime_analysis=rt_analysis,
