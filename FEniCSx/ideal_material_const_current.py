@@ -32,7 +32,10 @@ if __name__ == "__main__":
 
     for I in np.logspace(-2, 1, 4, base=10):
 
-        rt_analysis = AnalyzeOCP(c_of_y=c_of_y, free_energy=ideal_free_energy)
+        print(f">>> I = {I:1.3e}")
+
+        rt_analysis = AnalyzeOCP(c_of_y=c_of_y, free_energy=ideal_free_energy,
+                                 filename=results_folder / f"I_{I:1.3e}.txt")
 
         sim = Simulation(mesh=mesh,
                         free_energy=ideal_free_energy,
@@ -45,7 +48,7 @@ if __name__ == "__main__":
 
         ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
 
-        np.savetxt(results_folder / f"I_{I:1.3e}.txt", ana_out_array)
+        # np.savetxt(results_folder / f"I_{I:1.3e}.txt", ana_out_array)
 
     # FIXME: The output below is a workaround due to
     # non-functional VTK/XDMF/... output.
