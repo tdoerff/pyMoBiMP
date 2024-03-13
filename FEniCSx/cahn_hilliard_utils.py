@@ -277,6 +277,7 @@ class Simulation:
         output_file: Optional[str | os.PathLike] = None,
         n_out: int = 51,
         runtime_analysis: Optional[RuntimeAnalysisBase] = None,
+        logging: bool=True
     ):
 
         # Define mixed element and function space
@@ -368,6 +369,8 @@ class Simulation:
 
         self.rt_analysis = runtime_analysis
 
+        self.logging = logging
+
     def run(self):
 
         time_stepping(
@@ -382,4 +385,5 @@ class Simulation:
             output=self.output,
             runtime_analysis=self.rt_analysis,
             **self.event_params,
+            logging=self.logging
         )

@@ -55,6 +55,7 @@ def time_stepping(
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
+    logging=True,
     **event_pars,
 ):
 
@@ -128,7 +129,8 @@ def time_stepping(
         if dt.value * dt_increase < dt_max:
             dt.value *= dt_increase
 
-        print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
+        if logging:
+            print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
 
     else:
 
