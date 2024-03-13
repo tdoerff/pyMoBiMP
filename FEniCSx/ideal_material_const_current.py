@@ -10,6 +10,7 @@ from cahn_hilliard_utils import AnalyzeOCP
 from cahn_hilliard_utils import Simulation
 from cahn_hilliard_utils import _free_energy as free_energy_general
 from cahn_hilliard_utils import c_of_y
+from cahn_hilliard_utils import charge_discharge_stop
 
 from gmsh_utils import dfx_spherical_mesh
 
@@ -18,6 +19,11 @@ from plotting_utils import PyvistaAnimation
 
 def ideal_free_energy(c):
     return free_energy_general(c, a=0., b=0., c=0.)
+
+
+def experiment(t, u, I_charge):
+    return charge_discharge_stop(t, u, I_charge, stop_on_full=True)
+
 
 if __name__ == "__main__":
 
@@ -39,7 +45,8 @@ if __name__ == "__main__":
 
         sim = Simulation(mesh=mesh,
                          free_energy=ideal_free_energy,
-                         T_final=2.,
+                         T_final=50.,
+                         experiment=experiment,
                          output_file=None,
                          runtime_analysis=rt_analysis,
                          I=I,
