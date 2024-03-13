@@ -140,12 +140,14 @@ def charge_discharge_stop(
 ):
 
     coords = ufl.SpatialCoordinate(u.function_space.mesh)
-    r = ufl.sqrt(sum([c for c in coords]))
+    r = ufl.sqrt(sum([c**2 for c in coords]))
 
     y, _ = u.split()
 
     c = c_of_y(y)
 
+    # This is a bit hackish, since we just need to multiply by a function that
+    # is zero at r=0 and 1 at r=1.
     c_bc = dfx.fem.form(r**2 * c * ufl.ds)
     c_bc = dfx.fem.assemble_scalar(c_bc)
 
@@ -219,7 +221,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         c = self.c_of_y(y)
 
         coords = ufl.SpatialCoordinate(mesh)
-        r = ufl.sqrt(sum([co for co in coords]))
+        r = ufl.sqrt(sum([co**2 for co in coords]))
 
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
