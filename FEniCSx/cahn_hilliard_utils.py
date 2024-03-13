@@ -333,9 +333,8 @@ class Simulation:
 
         # Initial data
         # ------------
-        u_ini = dfx.fem.Function(V)
 
-        populate_initial_data(u_ini,
+        populate_initial_data(self.u,
                               lambda r: c_ini(r, eps),
                               free_energy)
 
