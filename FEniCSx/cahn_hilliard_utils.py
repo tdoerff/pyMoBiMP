@@ -202,7 +202,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         c = self.c_of_y(y)
 
         coords = ufl.SpatialCoordinate(mesh)
-        r = ufl.sqrt(sum([c for c in coords]))
+        r = ufl.sqrt(sum([co for co in coords]))
 
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
