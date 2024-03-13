@@ -298,7 +298,7 @@ class Simulation:
         # (initial) timestep
         # ------------------
         dx = get_mesh_spacing(mesh)
-        self.dt = dfx.fem.Constant(mesh, 0.01 * dx)
+        self.dt = dfx.fem.Constant(mesh, 1e-2 * dx / I)
 
         self.T_final = T_final
 
