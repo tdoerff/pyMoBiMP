@@ -10,6 +10,8 @@ import numpy as np
 
 import os
 
+import pathlib
+
 from typing import Optional, TypedDict, Unpack
 
 import ufl
@@ -19,16 +21,16 @@ from fenicsx_utils import (evaluation_points_and_cells,
                            NewtonSolver,
                            RuntimeAnalysisBase,
                            time_stepping,
-                           VTXOutput)
+                           Fenicx1DOutput)
 
 
 # Forward and backward variable transformation.
-def c_of_y(y, exp):
-    return exp(y) / (1 + exp(y))
+def c_of_y(y):
+    return ufl.exp(y) / (1 + ufl.exp(y))
 
 
-def y_of_c(c, log):
-    return log(c / (1 - c))
+def y_of_c(c):
+    return ufl.ln(c / (1 - c))
 
 
 def cahn_hilliard_form(
@@ -36,11 +38,12 @@ def cahn_hilliard_form(
     psi0,
     dt,
     M=lambda c: 1,
-    c_of_y=lambda y: c_of_y(y, ufl.exp),
+    c_of_y=c_of_y,
     free_energy=lambda c: 0.25 * (c**2 - 1) ** 2,
     lam=0.01,
     I_charge=0.1,
     theta=0.5,
+    form_weights=None
 ):
 
     #   [ ] Assert whether psi, psi0, and v are on the same mesh/V
@@ -72,8 +75,12 @@ def cahn_hilliard_form(
     r = ufl.SpatialCoordinate(mesh)
 
     # adaptation of the volume element due to geometry
-    s_V = 4 * np.pi * r**2
-    s_A = 2 * np.pi * r**2
+    if form_weights is not None:
+        s_V = form_weights["volume"]
+        s_A = form_weights["surface"]
+    else:
+        s_V = 4 * np.pi * r**2
+        s_A = 2 * np.pi * r**2
 
     dx = ufl.dx  # The volume element
     ds = ufl.ds  # The surface element
@@ -93,7 +100,7 @@ def cahn_hilliard_form(
     return F
 
 
-def populate_initial_data(u_ini, c_ini_fun, free_energy):
+def populate_initial_data(u_ini, c_ini_fun, free_energy, y_of_c=y_of_c):
 
     # Store concentration-like quantity into state vector
     # ---------------------------------------------------
@@ -104,7 +111,7 @@ def populate_initial_data(u_ini, c_ini_fun, free_energy):
     c_ini = dfx.fem.Function(W)
     c_ini.interpolate(c_ini_fun)
 
-    y_ini = dfx.fem.Expression(y_of_c(c_ini, ufl.ln), W.element.interpolation_points())
+    y_ini = dfx.fem.Expression(y_of_c(c_ini), W.element.interpolation_points())
 
     u_ini.sub(0).interpolate(y_ini)
 
@@ -125,49 +132,47 @@ def charge_discharge_stop(
     u,
     I_charge,
     c_bounds=[0.05, 0.99],
-    c_of_y=lambda y: y,
+    c_of_y=c_of_y,
     stop_at_empty=True,
+    stop_on_full=True,
     cycling=True,
     logging=False
 ):
 
-    V = u.function_space
+    coords = ufl.SpatialCoordinate(u.function_space.mesh)
+    r = ufl.sqrt(sum([c**2 for c in coords]))
 
-    mesh = V.mesh
+    y, _ = u.split()
 
-    W, dof = V.sub(0).collapse()
+    c = c_of_y(y)
 
-    y, mu = u.split()
-
-    c = dfx.fem.Function(W)
-
-    c.interpolate(dfx.fem.Expression(c_of_y(y), W.element.interpolation_points()))
-
-    max_c = mesh.comm.allreduce(max(c.x.array), op=MPI.MAX)
-    min_c = mesh.comm.allreduce(min(c.x.array), op=MPI.MIN)
-
-    x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
-
-    c_bc = float(c.eval(x, cell))
-
-    max_c = min_c = c_bc
+    # This is a bit hackish, since we just need to multiply by a function that
+    # is zero at r=0 and 1 at r=1.
+    c_bc = dfx.fem.form(r**2 * c * ufl.ds)
+    c_bc = dfx.fem.assemble_scalar(c_bc)
 
     if logging:
-        print(f"t={t:1.5f} ; min_c = {min_c:1.3e} ; max_c = {max_c:1.3e}", c_bounds)
+        print(f"t={t:1.5f} ; c_bc = {c_bc:1.3e}", c_bounds)
 
-    if max_c > c_bounds[1] and I_charge.value > 0.0:
+    if c_bc > c_bounds[1] and I_charge.value > 0.0:
         print(
-            f">>> total charge exceeds maximum (max(c) = {max_c:1.3f} > {c_bounds[0]:1.3f})."
+            f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[1]:1.3f})."
         )
+
+        if stop_on_full:
+            print(">>> Particle is filled.")
+
+            return True
+
         print(">>> Start discharging.")
         I_charge.value *= -1.0
 
         return False
 
-    if min_c < c_bounds[0] and I_charge.value < 0.0:
+    if c_bc < c_bounds[0] and I_charge.value < 0.0:
 
         if stop_at_empty:
-            print("Particle is emptied!")
+            print(">>> Particle is emptied!")
 
             return True
 
@@ -188,10 +193,21 @@ def charge_discharge_stop(
 class AnalyzeOCP(RuntimeAnalysisBase):
 
     def setup(
-        self, *args, c_of_y=lambda y: y, free_energy=lambda u: 0.5 * u**2, **kwargs
+        self,
+        *args,
+        c_of_y=c_of_y,
+        free_energy=lambda u: 0.5 * u**2,
+        filename=None,
+        **kwargs,
     ):
         self.free_energy = free_energy
         self.c_of_y = c_of_y
+
+        self.filename = filename
+
+        if self.filename is not None:
+            with open(self.filename, "w") as file:
+                pass
 
         return super().setup(*args, **kwargs)
 
@@ -204,7 +220,8 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         c = self.c_of_y(y)
 
-        r = ufl.SpatialCoordinate(mesh)
+        coords = ufl.SpatialCoordinate(mesh)
+        r = ufl.sqrt(sum([co**2 for co in coords]))
 
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
@@ -215,11 +232,14 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         chem_pot = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
         chem_pot = dfx.fem.assemble_scalar(chem_pot)
 
-        x, cell = evaluation_points_and_cells(mesh, np.array([1.0]))
-
-        mu_bc = float(mu.eval(x, cell))
+        mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
+        mu_bc = dfx.fem.assemble_scalar(mu_bc)
 
         self.data.append([charge, chem_pot, mu_bc])
+
+        if self.filename is not None:
+            with open(self.filename, "a") as file:
+                np.savetxt(file, np.array([[t, charge, chem_pot, mu_bc]]))
 
         return super().analyze(u_state, t)
 
@@ -246,28 +266,33 @@ def _free_energy(
 
 class Simulation:
 
-    def __init__(self,
+    def __init__(
+        self,
         mesh: dfx.mesh.Mesh = _mesh,
-        element: ufl.FiniteElement | ufl.MixedElement = ufl.FiniteElement(
-            "Lagrange", _mesh.ufl_cell(), 1
-        ),
+        element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
         free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
         T_final: float = 2.0,
         experiment: Callable[
             [float, dfx.fem.Function], dfx.fem.Expression
         ] = charge_discharge_stop,
         gamma: float = 0.1,
-        M: Callable[[dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression] = lambda c: 1.0 * c * (1 - c),
+        M: Callable[
+            [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
+        ] = lambda c: 1.0 * c * (1 - c),
         I: float = 1.0,
         eps: float = 1e-3,
-        c_ini = lambda x, eps: eps * np.ones_like(x[0]),
-        output_file: str | os.PathLike = "simulation_output/output.vtk",
+        c_ini=lambda x, eps: eps * np.ones_like(x[0]),
+        output_file: Optional[str | os.PathLike] = None,
         n_out: int = 51,
-        runtime_analysis: Optional[RuntimeAnalysisBase] = None
+        runtime_analysis: Optional[RuntimeAnalysisBase] = None,
+        logging: bool=True
     ):
 
         # Define mixed element and function space
         # ---------------------------------------
+        if element is None:
+            element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
         if element.num_sub_elements() == 2:
             mixed_element = element
         elif element.num_sub_elements() > 2:
@@ -282,7 +307,7 @@ class Simulation:
         # (initial) timestep
         # ------------------
         dx = get_mesh_spacing(mesh)
-        self.dt = dfx.fem.Constant(mesh, 0.01 * dx)
+        self.dt = dfx.fem.Constant(mesh, 1e-2 * dx / I)
 
         self.T_final = T_final
 
@@ -295,7 +320,7 @@ class Simulation:
         # ------------------
 
         # Charging current goes into the form and is recomputed in experiment
-        I_charge = dfx.fem.Constant(mesh, 1.0)
+        I_charge = dfx.fem.Constant(mesh, I)
 
         self.event_params = dict(I_charge=I_charge)
 
@@ -309,7 +334,7 @@ class Simulation:
             self.dt,
             free_energy=free_energy,
             theta=0.75,
-            c_of_y = lambda y: c_of_y(y, ufl.exp),
+            c_of_y = lambda y: c_of_y(y),
             M=M,
             lam=gamma,
             **self.event_params,
@@ -317,9 +342,8 @@ class Simulation:
 
         # Initial data
         # ------------
-        u_ini = dfx.fem.Function(V)
 
-        populate_initial_data(u_ini,
+        populate_initial_data(self.u,
                               lambda r: c_ini(r, eps),
                               free_energy)
 
@@ -329,9 +353,30 @@ class Simulation:
 
         self.solver = NewtonSolver(mesh.comm, problem)
 
-        self.output = VTXOutput(self.u, np.linspace(0, T_final, n_out), output_file)
+        # Setup output
+        # ------------
+
+        if output_file is not None:
+            # make sure directory exists.
+            real_file_path = os.path.realpath(output_file)
+
+            dir_path = os.path.dirname(real_file_path)
+            dir_path = pathlib.Path(dir_path)
+
+            dir_path.mkdir(exist_ok=True, parents=True)
+
+            # FIXME: This is jsut a dirty hack to get some output running.
+            # Write a consistent file writer class and use here!!!
+            self.output = Fenicx1DOutput(
+                self.u,
+                np.linspace(0, T_final, n_out),
+                np.linspace(0, 1., 101))
+        else:
+            self.output = None
 
         self.rt_analysis = runtime_analysis
+
+        self.logging = logging
 
     def run(self):
 
@@ -342,9 +387,10 @@ class Simulation:
             self.T_final,
             self.dt,
             dt_increase=1.0,
-            dt_max=1e-3,
+            dt_max=1e-2,
             event_handler=self.experiment,
             output=self.output,
             runtime_analysis=self.rt_analysis,
             **self.event_params,
+            logging=self.logging
         )

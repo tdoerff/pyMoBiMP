@@ -229,11 +229,11 @@ class PyvistaAnimation:
 
         file.write_mesh(mesh)
 
-        it_max, update = self.it_max_and_update()
+        it_max, _ = self.it_max_and_update()
 
         for it in range(it_max):
 
-            update(it)
+            self._update_data_on_grid(it)
 
             file.write_function(u, self.t_out[it])
 

@@ -29,6 +29,8 @@ def gmsh_sphere_model(model: gmsh.model, name: str) -> gmsh.model:
 
     # Generate the mesh
     model.mesh.generate(dim=3)
+    model.mesh.optimize("Netgen")
+
     return model
 
 
@@ -59,7 +61,7 @@ def model_to_file(comm: MPI.Comm, model: gmsh.model, name: str, filename: str, m
         )
 
 
-def dfx_spherical_mesh(resolution: float=1.):
+def dfx_spherical_mesh(comm: MPI.Comm, resolution: float=1.):
     """Create spherical dolfinx grid to plot onto.
 
     Parameters
@@ -79,15 +81,16 @@ def dfx_spherical_mesh(resolution: float=1.):
 
     gmsh.initialize()
 
-    # Create model
-    model = gmsh.model()
+    if comm.rank == 0:
+        # Create model
+        model = gmsh.model()
 
-    gmsh.option.setNumber("Mesh.MeshSizeFactor", resolution)
+        gmsh.option.setNumber("Mesh.MeshSizeFactor", resolution)
 
-    model = gmsh_sphere_model(model, "Sphere")
-    model.setCurrent("Sphere")
+        model = gmsh_sphere_model(model, "Sphere")
+        model.setCurrent("Sphere")
 
-    mesh_3d, ct, ft = gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0)
+    mesh_3d, ct, ft = gmshio.model_to_mesh(gmsh.model, comm, rank=0)
 
     gmsh.finalize()
 
