@@ -154,10 +154,13 @@ def charge_discharge_stop(
 
     if c_bc > c_bounds[1] and I_charge.value > 0.0:
         print(
-            f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[0]:1.3f})."
+            f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[1]:1.3f})."
         )
 
         if stop_on_full:
+
+            print(">>> Particle is filled.")
+
             return True
 
         print(">>> Start discharging.")
@@ -168,7 +171,7 @@ def charge_discharge_stop(
     if c_bc < c_bounds[0] and I_charge.value < 0.0:
 
         if stop_at_empty:
-            print("Particle is emptied!")
+            print(">>> Particle is emptied!")
 
             return True
 
