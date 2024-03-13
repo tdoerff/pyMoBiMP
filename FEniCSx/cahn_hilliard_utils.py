@@ -158,7 +158,6 @@ def charge_discharge_stop(
         )
 
         if stop_on_full:
-
             print(">>> Particle is filled.")
 
             return True
