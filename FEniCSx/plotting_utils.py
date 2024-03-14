@@ -59,21 +59,6 @@ def add_arrow(line, position=None, direction="right", size=15, color=None):
     )
 
 
-def plot_charging_cycle(q, mu_bc, eps):
-    fig, ax = plt.subplots()
-
-    (line_mu,) = ax.plot(q, -mu_bc, label=r"$\left. \mu \right|_{\partial \omega_I}$")
-    # line_f, = ax.plot(q, -f_bar, label=r"$\overline{f(c)}$")
-
-    ax.set_xlabel(r"q")
-
-    ax.legend()
-
-    add_arrow(line_mu, position=0.4002)
-
-    return fig, ax
-
-
 def plot_time_sequence(output, c_of_y):
 
     fig, axs = plt.subplots(2, 1, sharex=True)
@@ -277,3 +262,33 @@ class PyvistaAnimation:
         self.plotter.mesh["u"] = clipped["u"]
 
         self.plotter.update()
+
+
+def plot_charging_cycle(files, free_energy):
+
+    # [ ] adjust plot size
+    # [ ] adjust spacing around x=0 and x=1
+
+    chart = pyvista.Chart2D()
+
+    q = np.linspace(0, 1.0)
+
+    f = free_energy(q)
+
+    chart.line(q, -f, color="tab:orange", style="--", label=r"$f_A$")
+
+    for i, file in enumerate(files):
+
+        data = np.loadtxt(data_dir / file)
+
+        t, q, f, mu = data.T
+
+        print(file)
+
+        color = (0, 0, 0.2 + 0.79 * i / (len(files) - 1))
+
+        I = get_current_from_file_name(file)
+
+        chart.line(q, -mu, color=color, label=rf"I = {I:1.3e}")
+
+    return chart
