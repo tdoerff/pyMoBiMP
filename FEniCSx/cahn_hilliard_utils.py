@@ -281,6 +281,7 @@ class Simulation:
         ] = lambda c: 1.0 * c * (1 - c),
         I: float = 1.0,
         eps: float = 1e-3,
+        dt_fac_ini: float= 1e-2,
         c_ini=lambda x, eps: eps * np.ones_like(x[0]),
         output_file: Optional[str | os.PathLike] = None,
         n_out: int = 51,
@@ -307,7 +308,7 @@ class Simulation:
         # (initial) timestep
         # ------------------
         dx = get_mesh_spacing(mesh)
-        self.dt = dfx.fem.Constant(mesh, 1e-2 * dx / I)
+        self.dt = dfx.fem.Constant(mesh, dt_fac_ini * dx / I)
 
         self.T_final = T_final
 
