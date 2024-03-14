@@ -278,7 +278,7 @@ def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
 
     for i, (I, q, mu) in enumerate(I_q_mu_bcs):
 
-        color = (0, 0, 0.2 + 0.79 * i / (len(I_q_mu_bcs) - 1))
+        color = (0, 0, 0.2 + 0.79 * i / (max(len(I_q_mu_bcs), 2) - 1))
 
         chart.line(q, -mu, color=color, label=rf"I = {I:1.3e}")
 
