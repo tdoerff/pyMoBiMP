@@ -264,30 +264,21 @@ class PyvistaAnimation:
         self.plotter.update()
 
 
-def plot_charging_cycle(files, free_energy):
+def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
 
     # [ ] adjust plot size
     # [ ] adjust spacing around x=0 and x=1
 
     chart = pyvista.Chart2D()
 
-    q = np.linspace(0, 1.0)
+    q_plot = np.linspace(eps, 1-eps, 101)
+    f = f_A(q_plot)
 
-    f = free_energy(q)
+    chart.line(q_plot, -f, color="tab:orange", style="--", label=r"$f_A$")
 
-    chart.line(q, -f, color="tab:orange", style="--", label=r"$f_A$")
+    for i, (I, q, mu) in enumerate(I_q_mu_bcs):
 
-    for i, file in enumerate(files):
-
-        data = np.loadtxt(data_dir / file)
-
-        t, q, f, mu = data.T
-
-        print(file)
-
-        color = (0, 0, 0.2 + 0.79 * i / (len(files) - 1))
-
-        I = get_current_from_file_name(file)
+        color = (0, 0, 0.2 + 0.79 * i / (len(I_q_mu_bcs) - 1))
 
         chart.line(q, -mu, color=color, label=rf"I = {I:1.3e}")
 
