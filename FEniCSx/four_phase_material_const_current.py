@@ -14,23 +14,23 @@ from cahn_hilliard_utils import charge_discharge_stop
 
 from gmsh_utils import dfx_spherical_mesh
 
+from ideal_material_const_current import exp_currents
+
 from plotting_utils import PyvistaAnimation
 
 
 def free_energy(c):
-    return free_energy_general(c, a=0., b=0., c=0.)
+    return free_energy_general(c)
 
 
 def experiment(t, u, I_charge):
     return charge_discharge_stop(t, u, I_charge, stop_on_full=True)
 
-exp_currents = np.array([1e-2, 1e-1, 1., 2.])
-
 
 if __name__ == "__main__":
 
     base_dir = Path("simulation_output")
-    material_dir = Path("ideal_material")
+    material_dir = Path("four_phase_material")
     exp_dir = Path("const_current")
 
     results_folder = base_dir / material_dir / exp_dir
@@ -52,26 +52,9 @@ if __name__ == "__main__":
                          output_file=None,
                          runtime_analysis=rt_analysis,
                          I=I,
-                         gamma=1e-3,
+                         dt_fac_ini=1e-3,
                          logging=False)
 
         sim.run()
 
         ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
-
-        # np.savetxt(results_folder / f"I_{I:1.3e}.txt", ana_out_array)
-
-    # FIXME: The output below is a workaround due to
-    # non-functional VTK/XDMF/... output.
-    # mesh_3d, _, _ = dfx_spherical_mesh(comm_world, resolution=1.0)
-
-    # anim = PyvistaAnimation(
-    #     sim.output,
-    #     mesh_3d=mesh_3d,
-    #     c_of_y=lambda y: np.exp(y) / (1 + np.exp(y)),
-    #     res=1.0,
-    #     clim=[0.0, 1.0],
-    #     cmap="hot",
-    # )
-
-    # anim.write_vtk_output("simulation_output/ideal_material/constant_current.vtk")
