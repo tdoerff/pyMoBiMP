@@ -279,17 +279,39 @@ def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
     # [ ] adjust plot size
     # [ ] adjust spacing around x=0 and x=1
 
-    chart = pyvista.Chart2D()
+    # chart = pyvista.Chart2D()
+
+    # q_plot = np.linspace(eps, 1-eps, 101)
+    # f = f_A(q_plot)
+
+    # chart.line(q_plot, -f, color="tab:orange", style="--", label=r"f_A")
+
+    # for i, (I, q, mu) in enumerate(I_q_mu_bcs):
+
+    #     color = (0, 0, 0.2 + 0.79 * i / (max(len(I_q_mu_bcs), 2) - 1))
+
+    #     chart.line(q, -mu, color=color, label=rf"I = {I:1.3e}")
+
+    # return chart
+
+    fig, ax = plt.subplots()
 
     q_plot = np.linspace(eps, 1-eps, 101)
     f = f_A(q_plot)
 
-    chart.line(q_plot, -f, color="tab:orange", style="--", label=r"$f_A$")
+    ax.plot(q_plot, -f, "r--", label=r"$f_A$")
 
     for i, (I, q, mu) in enumerate(I_q_mu_bcs):
 
         color = (0, 0, 0.2 + 0.79 * i / (max(len(I_q_mu_bcs), 2) - 1))
 
-        chart.line(q, -mu, color=color, label=rf"I = {I:1.3e}")
+        (line, ) = ax.plot(q, -mu, color=color, label=rf"I = {I:1.1e}", alpha=0.5)
 
-    return chart
+        add_arrow(line)
+
+    ax.set_xlabel(r"$q$")
+    ax.set_ylabel(r"$\mu$")
+
+    ax.legend()
+
+    return ax
