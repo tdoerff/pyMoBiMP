@@ -88,6 +88,12 @@ def plot_time_sequence(output, c_of_y):
 
         ax.plot(r, mu_t, color=color)
 
+    axs[0].set_ylabel("$c$")
+
+    axs[1].set_ylabel(r"$\mu$")
+
+    axs[1].set_xlabel("$r$")
+
     return fig, axs
 
 
