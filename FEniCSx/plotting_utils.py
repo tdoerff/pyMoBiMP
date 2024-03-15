@@ -103,6 +103,8 @@ def animate_time_series(output, c_of_y):
 
     x, t_out, data_out = output.get_output(return_time=True, return_coords=True)
 
+    r = np.array(x)[:, 0]
+
     data_out = np.array(data_out).squeeze()
 
     it_max = len(data_out)
@@ -114,7 +116,7 @@ def animate_time_series(output, c_of_y):
         line.set_ydata(c)
         fig.canvas.draw_idle()
 
-    line, _, _ = ax.plot(x, c_of_y(data_out[0][0]))
+    line, _, _ = ax.plot(r, c_of_y(data_out[0][0]))
 
     ax.set_ybound(0, 1)
 
