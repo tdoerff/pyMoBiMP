@@ -65,6 +65,8 @@ def plot_time_sequence(output, c_of_y):
 
     x, t_out, data_out = output.get_output(return_time=True, return_coords=True)
 
+    r = np.array(x)[:, 0]
+
     data_out = np.array(data_out).squeeze()
 
     for it_out, (data_t, t) in enumerate(zip(data_out, t_out)):
@@ -78,13 +80,13 @@ def plot_time_sequence(output, c_of_y):
 
         color = (it_out / len(t_out), 0, 0)
 
-        ax.plot(x, c_t, color=color)
+        ax.plot(r, c_t, color=color)
 
         ax = axs[1]
 
         color = (0, 0, it_out / len(t_out))
 
-        ax.plot(x, mu_t, color=color)
+        ax.plot(r, mu_t, color=color)
 
     return fig, axs
 
