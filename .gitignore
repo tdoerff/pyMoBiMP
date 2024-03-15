@@ -217,3 +217,4 @@ pyrightconfig.json
 *.pyc
 .DS_Store
 simulation_output/
+post_processing/
