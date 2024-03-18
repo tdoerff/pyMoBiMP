@@ -59,9 +59,12 @@ def add_arrow(line, position=None, direction="right", size=15, color=None):
     )
 
 
-def plot_time_sequence(output, c_of_y):
+def plot_time_sequence(output, c_of_y, plot_mu=True):
 
-    fig, axs = plt.subplots(2, 1, sharex=True)
+    if plot_mu:
+        fig, axs = plt.subplots(2, 1, sharex=True)
+    else:
+        fig, ax = plt.subplots()
 
     x, t_out, data_out = output.get_output(return_time=True, return_coords=True)
 
@@ -76,23 +79,28 @@ def plot_time_sequence(output, c_of_y):
 
         c_t = c_of_y(y_t)
 
-        ax = axs[0]
+        if plot_mu:
+            ax = axs[0]
 
         color = (it_out / len(t_out), 0, 0)
 
         ax.plot(r, c_t, color=color)
 
-        ax = axs[1]
+        ax.set_ylabel("$c$")
 
-        color = (0, 0, it_out / len(t_out))
+        if plot_mu:
+            ax = axs[1]
 
-        ax.plot(r, mu_t, color=color)
+            color = (0, 0, it_out / len(t_out))
 
-    axs[0].set_ylabel("$c$")
+            ax.plot(r, mu_t, color=color)
 
-    axs[1].set_ylabel(r"$\mu$")
+            ax.set_ylabel(r"$\mu$")
 
-    axs[1].set_xlabel("$r$")
+    ax.set_xlabel("$r$")
+
+    if not plot_mu:
+        axs = ax
 
     return fig, axs
 
