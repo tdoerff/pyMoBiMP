@@ -262,7 +262,6 @@ def _free_energy(
     return fe
 
 # [ ] make it possible to hand over pre-configured output class or object
-# [ ] add runtime analysis
 
 class Simulation:
 
