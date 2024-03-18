@@ -5,7 +5,7 @@ import gmsh
 from mpi4py import MPI
 
 
-def gmsh_sphere_model(model: gmsh.model, name: str) -> gmsh.model:
+def gmsh_sphere_model(model: gmsh.model, name: str, optimize: bool = False) -> gmsh.model:
     """Create a Gmsh model of a sphere.
 
     Args:
@@ -29,7 +29,9 @@ def gmsh_sphere_model(model: gmsh.model, name: str) -> gmsh.model:
 
     # Generate the mesh
     model.mesh.generate(dim=3)
-    model.mesh.optimize("Netgen")
+
+    if optimize:
+        model.mesh.optimize("Netgen")
 
     return model
 
@@ -61,7 +63,7 @@ def model_to_file(comm: MPI.Comm, model: gmsh.model, name: str, filename: str, m
         )
 
 
-def dfx_spherical_mesh(comm: MPI.Comm, resolution: float=1.):
+def dfx_spherical_mesh(comm: MPI.Comm, resolution: float=1., optimize=True):
     """Create spherical dolfinx grid to plot onto.
 
     Parameters
@@ -87,7 +89,7 @@ def dfx_spherical_mesh(comm: MPI.Comm, resolution: float=1.):
 
         gmsh.option.setNumber("Mesh.MeshSizeFactor", resolution)
 
-        model = gmsh_sphere_model(model, "Sphere")
+        model = gmsh_sphere_model(model, "Sphere", optimize=optimize)
         model.setCurrent("Sphere")
 
     mesh_3d, ct, ft = gmshio.model_to_mesh(gmsh.model, comm, rank=0)
