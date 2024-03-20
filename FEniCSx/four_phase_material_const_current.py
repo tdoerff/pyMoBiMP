@@ -12,11 +12,7 @@ from cahn_hilliard_utils import _free_energy as free_energy_general
 from cahn_hilliard_utils import c_of_y
 from cahn_hilliard_utils import charge_discharge_stop
 
-from gmsh_utils import dfx_spherical_mesh
-
 from ideal_material_const_current import exp_currents
-
-from plotting_utils import PyvistaAnimation
 
 
 def free_energy(c):
@@ -56,5 +52,3 @@ if __name__ == "__main__":
                          logging=False)
 
         sim.run()
-
-        ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
