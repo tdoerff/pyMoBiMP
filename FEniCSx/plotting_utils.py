@@ -8,6 +8,8 @@ import ipywidgets
 
 from matplotlib import pyplot as plt
 
+from mpi4py.MPI import COMM_WORLD
+
 import numpy as np
 import numpy.typing as npt
 
@@ -184,7 +186,7 @@ class PyvistaAnimation:
         self.t_out = np.array(t_out)
 
         if mesh_3d is None:
-            mesh_3d, _, _ = dfx_spherical_mesh(resolution=res)
+            mesh_3d, _, _ = dfx_spherical_mesh(COMM_WORLD, resolution=res)
 
         # Create the function space and Function object for holding the data
         # ------------------------------------------------------------------
