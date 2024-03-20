@@ -17,7 +17,7 @@ import pyvista
 
 import scipy as sp
 
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from fenicsx_utils import Fenicx1DOutput
 from gmsh_utils import dfx_spherical_mesh
@@ -137,7 +137,7 @@ class PyvistaAnimation:
 
     def __init__(
         self,
-        output: Fenicx1DOutput,
+        output: Fenicx1DOutput | List[npt.NDArray] | Tuple[npt.NDArray],
         c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike] = lambda y: y,
         mesh_3d: Optional[dolfinx.mesh.Mesh] = None,
         res: float = 1.0,
@@ -152,7 +152,18 @@ class PyvistaAnimation:
 
         # get the data
         # ------------
-        r, t_out, data_out = output.get_output(return_time=True, return_coords=True)
+
+        if isinstance(output, Fenicx1DOutput):
+            r, t_out, data_out = output.get_output(
+                return_time=True, return_coords=True)
+
+        elif isinstance(output, List) or isinstance(output, Tuple):
+            # Unpack the list
+            r, t_out, data_out = output
+
+        else:
+            raise TypeError("Input is not List or Tuple or Fenicsx1DOutput!")
+
         self.r = np.array(r)[:, 0]
 
         self.data_out = np.array(data_out).squeeze()
