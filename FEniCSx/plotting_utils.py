@@ -66,9 +66,21 @@ def plot_time_sequence(output, c_of_y, plot_mu=True):
     else:
         fig, ax = plt.subplots()
 
-    x, t_out, data_out = output.get_output(return_time=True, return_coords=True)
+    # get the data
+    # ------------
 
-    r = np.array(x)[:, 0]
+    if isinstance(output, Fenicx1DOutput):
+        r, t_out, data_out = output.get_output(
+            return_time=True, return_coords=True)
+
+    elif isinstance(output, List) or isinstance(output, Tuple):
+        # Unpack the list
+        r, t_out, data_out = output
+
+    else:
+        raise TypeError("`output` is not List or Tuple or Fenicsx1DOutput!")
+
+    r = np.array(r)[:, 0]
 
     data_out = np.array(data_out).squeeze()
 
