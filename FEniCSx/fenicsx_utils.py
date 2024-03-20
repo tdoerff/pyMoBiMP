@@ -266,34 +266,47 @@ class VTXOutput(OutputBase):
         self.writer.close()
 
 
-class VTKOutput(OutputBase):
+class FileOutput(OutputBase):
 
-    def setup(self, filename="output.vtk", variable_transform=lambda y: y):
+    FileType = dfx.io.XDMFFile
+
+    def setup(self, filename="output", variable_transform=lambda y: y):
 
         mesh = self.u_state.function_space.mesh
-        comm = mesh.comm
+        self.comm = comm = mesh.comm
 
         self.c_of_y = variable_transform
 
-        self.file = dfx.io.VTKFile(comm, filename, "w")
+        self.filename = filename
+
+        with self.FileType(comm, self.filename, "w") as file:
+            file.write_mesh(mesh)
 
     def extract_output(self, u_state, t):
         # Borrow from VTXOutput.
         return VTXOutput.extract_output(self, u_state, t)
 
     def save_snapshot(self, u_state, t):
-        super().save_snapshot(u_state, t)
 
         if t >= self.t_out_next:
-            output = self.extract_output(self.u_state, 0.)
-            [self.file.write_function(comp, 0.) for comp in output]
+
+            print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+
+            self.it_out += 1
+            self.t_out_last = self.t_out_next
+            self.t_out_next = self.ts_out_planned[self.it_out]
+
+            output = self.extract_output(self.u_state, t)
+            with self.FileType(self.comm, self.filename, "a") as file:
+                [file.write_function(comp, t) for comp in output]
 
     def get_output(self, return_time=False):
-        raise NotImplementedError("In VTXOutput, get_output is not implemented!")
+        raise NotImplementedError(
+            f"In {self.__class__}, get_output is not implemented!")
 
     def finalize(self):
-
-        self.file.close()
+        pass  # File status should be clear since we
+              # use always use a context manager.
 
 
 class Fenicx1DOutput(OutputBase):
