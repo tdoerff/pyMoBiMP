@@ -58,5 +58,3 @@ if __name__ == "__main__":
                          logging=False)
 
         sim.run()
-
-        ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
