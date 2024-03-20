@@ -52,26 +52,9 @@ if __name__ == "__main__":
                          output_file=None,
                          runtime_analysis=rt_analysis,
                          I=I,
-                         gamma=1e-3,
+                         gamma=0.,
                          logging=False)
 
         sim.run()
 
         ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
-
-        # np.savetxt(results_folder / f"I_{I:1.3e}.txt", ana_out_array)
-
-    # FIXME: The output below is a workaround due to
-    # non-functional VTK/XDMF/... output.
-    # mesh_3d, _, _ = dfx_spherical_mesh(comm_world, resolution=1.0)
-
-    # anim = PyvistaAnimation(
-    #     sim.output,
-    #     mesh_3d=mesh_3d,
-    #     c_of_y=lambda y: np.exp(y) / (1 + np.exp(y)),
-    #     res=1.0,
-    #     clim=[0.0, 1.0],
-    #     cmap="hot",
-    # )
-
-    # anim.write_vtk_output("simulation_output/ideal_material/constant_current.vtk")
