@@ -93,7 +93,7 @@ def cahn_hilliard_form(
 
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
-    F2 -= s_V * ufl.inner(lam * ufl.grad(c), ufl.grad(v_mu)) * dx
+    F2 -= lam * (s_V * ufl.inner(ufl.grad(c), ufl.grad(v_mu)) * dx)
 
     F = F1 + F2
 
