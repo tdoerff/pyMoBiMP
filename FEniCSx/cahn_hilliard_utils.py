@@ -21,7 +21,7 @@ from fenicsx_utils import (evaluation_points_and_cells,
                            NewtonSolver,
                            RuntimeAnalysisBase,
                            time_stepping,
-                           Fenicx1DOutput)
+                           FileOutput)
 
 
 # Forward and backward variable transformation.
@@ -367,10 +367,11 @@ class Simulation:
 
             # FIXME: This is jsut a dirty hack to get some output running.
             # Write a consistent file writer class and use here!!!
-            self.output = Fenicx1DOutput(
+            self.output = FileOutput(
                 self.u,
                 np.linspace(0, T_final, n_out),
-                np.linspace(0, 1., 101))
+                output_file,
+                variable_transform=c_of_y)
         else:
             self.output = None
 
