@@ -243,10 +243,16 @@ class VTXOutput(OutputBase):
 
                 V0, _ = V.sub(i).collapse()
 
-                i_comp.interpolate(
+                i_comp_transformed = dfx.fem.Function(V0)
+                i_comp_transformed.name = i_comp.name
+
+                i_comp_transformed.interpolate(
                     dfx.fem.Expression(self.c_of_y(i_comp),
                                        V0.element.interpolation_points())
                 )
+
+                # Overwrite the reference that is been put out
+                i_comp = i_comp_transformed
 
             ret.append(i_comp)
 
