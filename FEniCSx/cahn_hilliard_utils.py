@@ -42,6 +42,7 @@ def cahn_hilliard_form(
     free_energy=lambda c: 0.25 * (c**2 - 1) ** 2,
     lam=0.01,
     I_charge=0.1,
+    grad_c_bc=lambda c: 0. * c,
     theta=0.5,
     form_weights=None
 ):
@@ -89,11 +90,12 @@ def cahn_hilliard_form(
 
     F1 = s_V * dcdy * (y - y0) * v_c * dx
     F1 += s_V * ufl.dot(flux, ufl.grad(v_c)) * dt * dx
-    F1 -= s_A * I_charge * v_c * dt * ds
+    F1 -= I_charge * (s_A * v_c * dt * ds)
 
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
     F2 -= lam * (s_V * ufl.inner(ufl.grad(c), ufl.grad(v_mu)) * dx)
+    F2 +=  grad_c_bc(c) * (s_A * v_mu * ds)
 
     F = F1 + F2
 
