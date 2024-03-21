@@ -15,12 +15,14 @@ import numpy.typing as npt
 
 import os
 
+import vtk  # necessary to use latex labels in pyvista
 import pyvista
 
 import scipy as sp
 
 from typing import List, Optional, Tuple
 
+from cahn_hilliard_utils import AnalyzeOCP
 from fenicsx_utils import Fenicx1DOutput
 from gmsh_utils import dfx_spherical_mesh
 
@@ -152,7 +154,10 @@ class PyvistaAnimation:
     def __init__(
         self,
         output: Fenicx1DOutput | List[npt.NDArray] | Tuple[npt.NDArray],
+        rt_data: Optional[npt.NDArray] = None,
+        plot_c_of_r: bool = True,
         c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike] = lambda y: y,
+        f_of_q: Optional[Callable[[npt.ArrayLike], npt.ArrayLike]] = None,
         mesh_3d: Optional[dolfinx.mesh.Mesh] = None,
         res: float = 1.0,
         specular: float = 1.0,
@@ -195,7 +200,35 @@ class PyvistaAnimation:
         self.u_3d = dolfinx.fem.Function(V_3d)
 
         # Initialize pyvista plotter
-        # --------------------------
+        # ==========================
+
+        # figure out how many subplots we need.
+        num_plots = 1  # At least one plot
+
+        self.plot_cell_voltage = rt_data is not None
+
+        if self.plot_cell_voltage:
+            num_plots += 1
+
+        if plot_c_of_r:
+            num_plots += 1
+        self.plot_c_of_r = plot_c_of_r
+
+        self.num_plots = num_plots
+
+        if num_plots == 1:
+            self.plotter = pyvista.Plotter()
+        elif num_plots == 2:
+            self.plotter = pyvista.Plotter(shape="1/1")
+        elif num_plots == 3:
+            self.plotter = pyvista.Plotter(shape="1/2")
+        else:
+            raise RuntimeError(f"num_plots = {num_plots} is invalid.")
+
+        # The clipped sphere plot
+        # -----------------------
+        if num_plots > 1:
+            self.plotter.subplot(self.num_plots - 1)
 
         # The unclipped grid.
         self.grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(V_3d))
@@ -204,11 +237,59 @@ class PyvistaAnimation:
 
         grid_clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
 
-        self.plotter = pyvista.Plotter()
-
         self.plotter.add_mesh(grid_clipped, **plotter_kwargs)
 
         self.time_label = self.plotter.add_text(f"t = {self.t_out[0]:1.3f}")
+
+        # radial charge distribution
+        # --------------------------
+        if self.plot_c_of_r:
+            self.plotter.subplot(0)
+
+            chart = pyvista.Chart2D()
+
+            c = self.data_out[0, 0, :]
+
+            chart.line(r, c, color=(0, 0, 0))
+
+            chart.y_range = [0, 1]
+
+            chart.x_label = r"$r$"
+            chart.y_label = r"$c$"
+
+            self.plotter.add_chart(chart)
+
+            # Initialized actors
+            self.c_t_chart = chart
+            self.c_t_line = chart.line(r, c, 'r')
+
+        # cell voltage plot
+        # -----------------
+        if self.plot_cell_voltage:
+            self.plotter.subplot(int(plot_c_of_r))
+
+            chart = pyvista.Chart2D(x_label=r"$q$", y_label=r"$\mu$")
+
+            q = rt_data[:, 1]
+            mu = rt_data[:, 3]
+
+            chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
+
+            chart.x_range = [0, 1]
+            eps = 0.5
+            chart.y_range = [min(mu) - eps, max(mu) + eps]
+
+            if f_of_q is not None:
+                eps = 1e-3
+                q = np.linspace(eps, 1 - eps, 101)
+
+                chart.line(q, -f_of_q(q), color="tab:orange", style="--", label=r"$f_A$")
+
+            self.plotter.add_chart(chart)
+
+            # Initialized actors
+            self.q_mu_chart = chart
+            self.q_mu_scatter = chart.scatter([], [])
 
         self.show()
 
@@ -235,6 +316,22 @@ class PyvistaAnimation:
         it_max, update = self.it_max_and_update()
 
         self.plotter.open_gif(str(filename))
+
+        for it in range(it_max):
+
+            update(it)
+
+            self.plotter.write_frame()
+
+        self.plotter.close()
+
+    def get_mp4_animation(
+        self, filename: str | os.PathLike = "anim.mp4"):
+        """Stores a gif file."""
+
+        it_max, update = self.it_max_and_update()
+
+        self.plotter.open_movie(str(filename))
 
         for it in range(it_max):
 
@@ -278,7 +375,17 @@ class PyvistaAnimation:
 
         self._update_time_label(it)
 
+        if self.plot_c_of_r:
+            self._update_c_t(it)
+
+        if self.plot_cell_voltage:
+            self._update_q_mu(it)
+
     def _update_time_label(self, it):
+
+        # FIXME: adjust in case of less than three plots
+        if self.num_plots > 1:
+            self.plotter.subplot(self.num_plots - 1)
 
         for actor, content in self.plotter.actors.items():
             if content == self.time_label:
@@ -305,6 +412,26 @@ class PyvistaAnimation:
         self.plotter.mesh["u"] = clipped["u"]
 
         self.plotter.update()
+
+    def _update_c_t(self, it):
+
+        r = self.r
+        c = self.data_out[it, 0, :]
+
+        self.c_t_chart.remove_plot(self.c_t_line)
+
+        self.c_t_line = self.c_t_chart.line(r, c, color='r')
+
+    def _update_q_mu(self, it):
+
+        c = self.data_out[it, 0, :]
+
+        q = sp.integrate.trapezoid(3 * self.r**2 * c, self.r, axis=-1)
+        mu = self.data_out[it, 1, -1]
+
+        self.q_mu_chart.remove_plot(self.q_mu_scatter)
+
+        self.q_mu_scatter = self.q_mu_chart.scatter([q], [-mu], color='r')
 
 
 def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
