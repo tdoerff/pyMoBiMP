@@ -85,6 +85,7 @@ dependencies:
   - hypre=2.28.0=mpi_mpich_hd226f01_0
   - icu=73.2=hc8870d7_0
   - idna=3.6=pyhd8ed1ab_0
+  - imageio=2.34.0=pyh4b66e23_0
   - imath=3.1.10=h1059232_0
   - importlib-metadata=7.0.1=pyha770c72_0
   - importlib_metadata=7.0.1=hd8ed1ab_0
@@ -321,6 +322,7 @@ dependencies:
   - zlib-ng=2.0.7=h1a8c8d9_0
   - zstd=1.5.5=h4f39d0f_0
   - pip:
+      - colorcet==3.1.0
       - gmsh==4.12.2
       - pygmsh==7.1.17
 prefix: /Users/doerffel/anaconda3/envs/fenicsx-env
