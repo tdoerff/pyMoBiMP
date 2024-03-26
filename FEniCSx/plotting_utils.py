@@ -140,7 +140,7 @@ def animate_time_series(output, c_of_y):
         line.set_ydata(c)
         fig.canvas.draw_idle()
 
-    line, _, _ = ax.plot(r, c_of_y(data_out[0][0]))
+    line, = ax.plot(r, c_of_y(data_out[0][0]))
 
     ax.set_ybound(0, 1)
 
