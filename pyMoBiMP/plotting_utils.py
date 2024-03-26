@@ -22,9 +22,9 @@ import scipy as sp
 
 from typing import List, Optional, Tuple
 
-from cahn_hilliard_utils import AnalyzeOCP
-from fenicsx_utils import Fenicx1DOutput
-from gmsh_utils import dfx_spherical_mesh
+from .cahn_hilliard_utils import AnalyzeOCP
+from .fenicsx_utils import Fenicx1DOutput
+from .gmsh_utils import dfx_spherical_mesh
 
 
 def add_arrow(line, position=None, direction="right", size=15, color=None):

@@ -16,7 +16,7 @@ from typing import Optional, TypedDict, Unpack
 
 import ufl
 
-from fenicsx_utils import (evaluation_points_and_cells,
+from .fenicsx_utils import (evaluation_points_and_cells,
                            get_mesh_spacing,
                            NewtonSolver,
                            RuntimeAnalysisBase,

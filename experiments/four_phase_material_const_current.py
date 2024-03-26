@@ -6,31 +6,27 @@ from pathlib import Path
 
 import numpy as np
 
-from cahn_hilliard_utils import AnalyzeOCP
-from cahn_hilliard_utils import Simulation
-from cahn_hilliard_utils import _free_energy as free_energy_general
-from cahn_hilliard_utils import c_of_y
-from cahn_hilliard_utils import charge_discharge_stop
+from pyMoBiMP.cahn_hilliard_utils import AnalyzeOCP
+from pyMoBiMP.cahn_hilliard_utils import Simulation
+from pyMoBiMP.cahn_hilliard_utils import _free_energy as free_energy_general
+from pyMoBiMP.cahn_hilliard_utils import c_of_y
+from pyMoBiMP.cahn_hilliard_utils import charge_discharge_stop
 
-from gmsh_utils import dfx_spherical_mesh
-
-from plotting_utils import PyvistaAnimation
+from ideal_material_const_current import exp_currents
 
 
 def free_energy(c):
-    return free_energy_general(c, a=0., b=0., c=0.)
+    return free_energy_general(c)
 
 
 def experiment(t, u, I_charge):
     return charge_discharge_stop(t, u, I_charge, stop_on_full=True)
 
-exp_currents = np.array([1e-2, 1e-1, 1., 2.])
-
 
 if __name__ == "__main__":
 
     base_dir = Path("simulation_output")
-    material_dir = Path("ideal_material")
+    material_dir = Path("four_phase_material")
     exp_dir = Path("const_current")
 
     results_folder = base_dir / material_dir / exp_dir
@@ -52,9 +48,7 @@ if __name__ == "__main__":
                          output_file=None,
                          runtime_analysis=rt_analysis,
                          I=I,
-                         gamma=0.,
+                         dt_fac_ini=1e-3,
                          logging=False)
 
         sim.run()
-
-        ana_out_array = np.array([(t, *data) for t, data in zip(sim.rt_analysis.t, sim.rt_analysis.data)])
