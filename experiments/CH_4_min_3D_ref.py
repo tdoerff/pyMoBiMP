@@ -19,18 +19,18 @@ import pyvista
 
 import ufl
 
-from cahn_hilliard_utils import (
+from pyMoBiMP.cahn_hilliard_utils import (
     charge_discharge_stop,
     AnalyzeOCP,
     c_of_y,
     populate_initial_data)
 
-from fenicsx_utils import (get_mesh_spacing,
+from pyMoBiMP.fenicsx_utils import (get_mesh_spacing,
                            time_stepping,
                            NewtonSolver,
                            FileOutput)
 
-from gmsh_utils import dfx_spherical_mesh
+from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
 
 comm_world = MPI.COMM_WORLD
 
@@ -101,7 +101,7 @@ event_params = dict(I_charge=I_charge, stop_at_empty=False, cycling=False)
 # %%
 # The variational form
 # --------------------
-from cahn_hilliard_utils import cahn_hilliard_form
+from pyMoBiMP.cahn_hilliard_utils import cahn_hilliard_form
 # c_of_y=lambda y: y
 
 params = dict(I_charge=I_charge)

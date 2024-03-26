@@ -6,15 +6,11 @@ from pathlib import Path
 
 import numpy as np
 
-from cahn_hilliard_utils import AnalyzeOCP
-from cahn_hilliard_utils import Simulation
-from cahn_hilliard_utils import _free_energy as free_energy_general
-from cahn_hilliard_utils import c_of_y
-from cahn_hilliard_utils import charge_discharge_stop
-
-from gmsh_utils import dfx_spherical_mesh
-
-from plotting_utils import PyvistaAnimation
+from pyMoBiMP.cahn_hilliard_utils import AnalyzeOCP
+from pyMoBiMP.cahn_hilliard_utils import Simulation
+from pyMoBiMP.cahn_hilliard_utils import _free_energy as free_energy_general
+from pyMoBiMP.cahn_hilliard_utils import c_of_y
+from pyMoBiMP.cahn_hilliard_utils import charge_discharge_stop
 
 
 def free_energy(c):
