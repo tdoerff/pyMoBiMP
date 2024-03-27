@@ -3,9 +3,13 @@ import abc
 import dolfinx as dfx
 from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
+from mpi4py import MPI
+
 import numpy as np
 
 from petsc4py import PETSc
+
+import ufl
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -50,14 +54,17 @@ def time_stepping(
     dt,
     t_start=0,
     dt_max=10.0,
-    dt_min=1e-7,
-    dt_increase=1.01,
+    dt_min=1e-9,
+    tol=1e-6,
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
     logging=True,
     **event_pars,
 ):
+
+    assert dt_min < dt_max
+    assert tol > 0.
 
     t = t_start
 
@@ -84,6 +91,13 @@ def time_stepping(
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
+
+            # Adaptive timestepping a la Yibao Li et al. (2017)
+            u_max_loc = np.abs(u.x.array - u0.x.array).max()
+
+            u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+
+            dt.value = min(max(tol / u_err_max, dt_min), dt_max)
 
         except StopEvent as e:
 
@@ -126,9 +140,6 @@ def time_stepping(
             runtime_analysis.analyze(u, t)
 
         t += float(dt)
-
-        if dt.value * dt_increase < dt_max:
-            dt.value *= dt_increase
 
         if logging:
             print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
