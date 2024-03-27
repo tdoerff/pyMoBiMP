@@ -465,7 +465,14 @@ def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
 
         color = (0, 0, 0.2 + 0.79 * i / (max(len(I_q_mu_bcs), 2) - 1))
 
-        (line, ) = ax.plot(q, -mu, color=color, label=rf"I = {I:1.1e}", alpha=0.5)
+        if isinstance(I, float):
+            label = rf"I = {I:1.1e}"
+        elif isinstance(I, str):
+            label = I
+        else:
+            label = None
+
+        (line, ) = ax.plot(q, -mu, color=color, label=label, alpha=0.5)
 
         add_arrow(line)
 
