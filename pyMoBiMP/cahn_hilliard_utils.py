@@ -381,7 +381,11 @@ class Simulation:
 
         self.logging = logging
 
-    def run(self):
+    def run(self,
+            *args,
+            dt_increase=1.0,
+            dt_max=1e-2,
+            **kwargs):
 
         time_stepping(
             self.solver,
@@ -389,11 +393,12 @@ class Simulation:
             self.u0,
             self.T_final,
             self.dt,
-            dt_increase=1.0,
-            dt_max=1e-2,
+            dt_increase=dt_increase,
+            dt_max=dt_max,
             event_handler=self.experiment,
             output=self.output,
             runtime_analysis=self.rt_analysis,
             **self.event_params,
+            **kwargs,
             logging=self.logging
         )
