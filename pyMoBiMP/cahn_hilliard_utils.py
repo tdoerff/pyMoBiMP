@@ -68,9 +68,6 @@ def cahn_hilliard_form(
     dfdc = ufl.diff(free_energy(c), c)
     mu_chem = dfdc
 
-    # Theta scheme
-    theta = dfx.fem.Constant(mesh, theta)
-
     mu_theta = theta * mu + (theta - 1.0) * mu0
 
     r = ufl.SpatialCoordinate(mesh)
