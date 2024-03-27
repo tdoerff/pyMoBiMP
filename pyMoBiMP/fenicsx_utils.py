@@ -148,7 +148,7 @@ class NewtonSolver(NewtonSolverBase):
         super().__init__(*args, **kwargs)
 
         self.convergence_criterion = "incremental"
-        self.rtol = 1e-6
+        self.rtol = 1e-9
 
         # # We can customize the linear solver used inside the NewtonSolver by
         # # modifying the PETSc options
