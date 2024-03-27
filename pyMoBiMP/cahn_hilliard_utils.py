@@ -43,7 +43,7 @@ def cahn_hilliard_form(
     lam=0.01,
     I_charge=0.1,
     grad_c_bc=lambda c: 0. * c,
-    theta=0.5,
+    theta=1.0,
     form_weights=None
 ):
 
