@@ -85,6 +85,7 @@ def time_stepping(
         try:
             u.x.scatter_forward()
             u0.x.array[:] = u.x.array[:]
+            u0.x.scatter_forward()
 
             stop = event_handler(t, u, **event_pars)
 
