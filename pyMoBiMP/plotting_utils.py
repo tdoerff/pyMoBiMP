@@ -98,7 +98,7 @@ def plot_time_sequence(output, c_of_y, plot_mu=True):
         if plot_mu:
             ax = axs[0]
 
-        color = (it_out / len(t_out), 0, 0)
+        color = (t / t_out[-1], 0, 0)
 
         ax.plot(r, c_t, color=color)
 
@@ -107,7 +107,7 @@ def plot_time_sequence(output, c_of_y, plot_mu=True):
         if plot_mu:
             ax = axs[1]
 
-            color = (0, 0, it_out / len(t_out))
+            color = (0, 0, t / t_out[-1])
 
             ax.plot(r, mu_t, color=color)
 
