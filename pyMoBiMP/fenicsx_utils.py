@@ -75,7 +75,11 @@ def time_stepping(
     if output is not None:
         output = np.atleast_1d(output)
 
+    it = 0
+
     while t < T:
+
+        it += 1
 
         try:
             u.x.scatter_forward()
@@ -142,7 +146,7 @@ def time_stepping(
         t += float(dt)
 
         if logging:
-            print(f"t = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
+            print(f"t[{it:06}] = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
 
     else:
 
