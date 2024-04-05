@@ -67,6 +67,7 @@ def time_stepping(
     assert tol > 0.
 
     t = t_start
+    dt.value = dt_min * 1.1
 
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
@@ -90,7 +91,7 @@ def time_stepping(
             if stop:
                 break
 
-            if float(dt) < dt_min:
+            if float(dt) <= dt_min:
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
@@ -101,7 +102,7 @@ def time_stepping(
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
-            dt.value = min(max(tol / u_err_max, dt_min), dt_max)
+            dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
 
         except StopEvent as e:
 
