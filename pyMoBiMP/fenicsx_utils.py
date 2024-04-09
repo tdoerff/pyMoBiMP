@@ -148,9 +148,12 @@ def time_stepping(
             runtime_analysis.analyze(u, t)
 
         t += float(dt)
+        it += 1
 
         if logging:
-            print(f"t[{it:06}] = {t:1.6f} : dt = {dt.value:1.3e}, its = {iterations}")
+            perc = (t - t_start) / (T - t_start) * 100
+
+            print(f"{perc:>3.0f} % : t[{it:06}] = {t:1.6f}, dt = {dt.value:1.3e}, its = {iterations}")
 
     else:
 
