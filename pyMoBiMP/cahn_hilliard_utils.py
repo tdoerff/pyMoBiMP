@@ -12,9 +12,11 @@ import os
 
 import pathlib
 
-from typing import Optional, TypedDict, Unpack
+from typing import Dict, Optional, overload, TypedDict, Union, Unpack
 
 import ufl
+
+from .exceptions import WrongNumberOfArguments
 
 from .fenicsx_utils import (evaluation_points_and_cells,
                            get_mesh_spacing,
@@ -33,34 +35,122 @@ def y_of_c(c):
     return ufl.ln(c / (1 - c))
 
 
+@overload
 def cahn_hilliard_form(
-    psi,
-    psi0,
-    dt,
-    M=lambda c: 1,
-    c_of_y=c_of_y,
-    free_energy=lambda c: 0.25 * (c**2 - 1) ** 2,
-    lam=0.01,
-    I_charge=0.1,
-    grad_c_bc=lambda c: 0. * c,
-    theta=1.0,
-    form_weights=None
-):
+    u: dfx.fem.Function,
+    u0: dfx.fem.Function,
+    dt: Union[dfx.fem.Constant, float],
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
+    lam: float=0.01,
+    I_charge: Union[float, dfx.fem.Constant] = 0.1,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    theta: Union[float, dfx.fem.Constant] = 1.0,
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
+) -> dfx.fem.Form:
+    ...
 
-    #   [ ] Assert whether psi, psi0, and v are on the same mesh/V
-    V = psi.function_space
+@overload
+def cahn_hilliard_form(
+    V: dfx.fem.FunctionSpace,
+    u: dfx.fem.Function,
+    u0: dfx.fem.Function,
+    v: ufl.Coargument,
+    dt: Union[dfx.fem.Constant, float],
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
+    lam: float=0.01,
+    I_charge: Union[float, dfx.fem.Constant] = 0.1,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    theta: Union[float, dfx.fem.Constant] = 1.0,
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
+) -> dfx.fem.Form:
+    ...
+
+
+def cahn_hilliard_form(
+    *args,
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
+    lam: float=0.01,
+    I_charge: Union[float, dfx.fem.Constant] = 0.1,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    theta: Union[float, dfx.fem.Constant] = 1.0,
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
+) -> dfx.fem.Form:
+    """Compose the FEM form for the Cahn-Hilliard equation.
+
+    Parameters
+    ----------
+    *args :
+    M : Callable[[dfx.fem.Function], dfx.fem.Expression], optional
+        diffusivity, by default lambda c: 1.
+    c_of_y : Callable[[dfx.fem.Function], dfx.fem.Expression], optional
+        varable transform, by default c_of_y
+    free_energy : Callable[[dfx.fem.Function], dfx.fem.Expression], optional
+        free energy density function, by default lambda c: 0.25*(c**2 - 1)**2
+    lam : float, optional
+        phase separation parameter, by default 0.01
+    I_charge : Union[float, dfx.fem.Constant], optional
+        current density through surface, by default 0.1
+    grad_c_bc : Callable[[dfx.fem.Function], dfx.fem.Expression], optional
+        Neumann condition for c at surface, by default lambda c: 0.*c
+    theta : Union[float, dfx.fem.Constant], optional
+        parameter controlling the Theta-timestepping scheme, by default 1.0
+    form_weights : Dict[str, dfx.fem.Expression], optional
+        surface and volume element weights, by default O=None, leads to spherical geometry
+
+    Returns
+    -------
+    dfx.fem.Form
+        The assembled single-domain (i.e., single-particle) Cahn-Hilliard form
+
+    Raises
+    ------
+    WrongNumberOfArguments
+        *args must contain 3 or 5 elements.
+    """
+
+    # Timestep is supposed to be the last positional argument
+    dt = args[-1]
+
+    if len(args) == 3:
+
+        psi = args[0]
+        psi0 = args[1]
+
+        assert psi.function_space is psi0.function_space
+
+        #   [ ] Assert whether psi, psi0, and v are on the same mesh
+        V = psi.function_space
+
+        # Split the functions
+        y, mu = ufl.split(psi)
+        y0, mu0 = ufl.split(psi0)
+
+        v_c, v_mu = ufl.TestFunctions(V)
+
+    elif len(args) == 5:
+        V = args[0]
+
+        y, mu = args[1]
+        y0, mu0 = args[2]
+
+        v_c, v_mu = args[3]
+
+    else:
+        raise WrongNumberOfArguments(
+            "cahn_hilliard_form takes either 3 or 5 positional arguments.")
+
     mesh = V.mesh
-
-    # Split the functions
-    y, mu = ufl.split(psi)
-    y0, mu0 = ufl.split(psi0)
 
     y = ufl.variable(y)
     c = c_of_y(y)
 
     dcdy = ufl.diff(c, y)
-
-    v_c, v_mu = ufl.TestFunctions(V)
 
     # Differentiate the free energy function to
     # obtain the chemical potential
