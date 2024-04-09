@@ -71,6 +71,6 @@ def test_instantiate_multi_particle_particle_form(num_particles):
     for y, mu, y0, mu0, vc, vmu in zip(
         *ufl.split(u), *ufl.split(u0), *ufl.split(v)
     ):
-        Fs.append(cahn_hilliard_form(V, (y, mu), (y0, mu0), (vc, vmu), dt))
+        Fs.append(cahn_hilliard_form(mesh, (y, mu), (y0, mu0), (vc, vmu), dt))
 
     F = sum(Fs)

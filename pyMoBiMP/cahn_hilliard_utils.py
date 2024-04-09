@@ -53,7 +53,7 @@ def cahn_hilliard_form(
 
 @overload
 def cahn_hilliard_form(
-    V: dfx.fem.FunctionSpace,
+    mesh: dfx.mesh.Mesh,
     u: dfx.fem.Function,
     u0: dfx.fem.Function,
     v: ufl.Coargument,
@@ -126,6 +126,7 @@ def cahn_hilliard_form(
 
         #   [ ] Assert whether psi, psi0, and v are on the same mesh
         V = psi.function_space
+        mesh = V.mesh
 
         # Split the functions
         y, mu = ufl.split(psi)
@@ -134,7 +135,7 @@ def cahn_hilliard_form(
         v_c, v_mu = ufl.TestFunctions(V)
 
     elif len(args) == 5:
-        V = args[0]
+        mesh = args[0]
 
         y, mu = args[1]
         y0, mu0 = args[2]
@@ -144,8 +145,6 @@ def cahn_hilliard_form(
     else:
         raise WrongNumberOfArguments(
             "cahn_hilliard_form takes either 3 or 5 positional arguments.")
-
-    mesh = V.mesh
 
     y = ufl.variable(y)
     c = c_of_y(y)
@@ -177,7 +176,7 @@ def cahn_hilliard_form(
 
     F1 = s_V * dcdy * (y - y0) * v_c * dx
     F1 += s_V * ufl.dot(flux, ufl.grad(v_c)) * dt * dx
-    F1 -= I_charge * (s_A * v_c * dt * ds)
+    F1 -= I_charge * s_A * v_c * dt * ds
 
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
