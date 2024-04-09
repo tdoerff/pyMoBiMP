@@ -22,9 +22,9 @@ def test_instantiate_single_particle_form():
     elem_c = elem1
     elem_mu = elem1
 
-    mixed_element = elem_c * elem_mu
+    particle_element = elem_c * elem_mu
 
-    V = dfx.fem.FunctionSpace(mesh, mixed_element)  # A mixed two-component function space
+    V = dfx.fem.FunctionSpace(mesh, particle_element)
 
     u = dfx.fem.Function(V)
     u0 = dfx.fem.Function(V)
@@ -34,7 +34,8 @@ def test_instantiate_single_particle_form():
     F = cahn_hilliard_form(u, u0, dt)
 
 
-def test_instantiate_two_ingle_particle_form():
+@pytest.mark.parametrize("num_particles", [1, 2, 3])
+def test_instantiate_multi_particle_particle_form(num_particles):
 
     # Set up the mesh
     n_elem = 128
@@ -47,15 +48,29 @@ def test_instantiate_two_ingle_particle_form():
     elem_c = elem1
     elem_mu = elem1
 
-    mixed_element = elem_c * elem_mu
+    multi_particle_element = ufl.MixedElement(
+        [
+            [elem_c, ] * num_particles,
+            [elem_mu,] * num_particles
+        ]
+    )
 
-    two_particle_element = mixed_element * mixed_element
-
-    V = dfx.fem.FunctionSpace(mesh, two_particle_element)  # A mixed two-component function space
+    V = dfx.fem.FunctionSpace(
+        mesh, multi_particle_element
+    )  # A mixed two-component function space
 
     u = dfx.fem.Function(V)
     u0 = dfx.fem.Function(V)
 
+    v = ufl.TestFunction(V)
+
     dt = dfx.fem.Constant(mesh, 1.0)
 
-    F = cahn_hilliard_form(u, u0, dt)
+    Fs = []
+
+    for y, mu, y0, mu0, vc, vmu in zip(
+        *ufl.split(u), *ufl.split(u0), *ufl.split(v)
+    ):
+        Fs.append(cahn_hilliard_form(V, (y, mu), (y0, mu0), (vc, vmu), dt))
+
+    F = sum(Fs)
