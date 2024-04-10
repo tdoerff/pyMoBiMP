@@ -388,7 +388,14 @@ class RuntimeAnalysisBase(abc.ABC):
         self.t = []
         self.data = []
 
+        self.filename = None
+
         self.setup(*args, **kwargs)
+
+        # Touch the file to make sure it exists.
+        if self.filename is not None:
+            with open(self.filename, "w"):
+                pass
 
     @abc.abstractmethod
     def setup(self, *args, **kwargs):
@@ -398,6 +405,10 @@ class RuntimeAnalysisBase(abc.ABC):
     def analyze(self, u_state, t):
 
         self.t.append(t)
+
+        if self.filename is not None:
+            with open(self.filename, "a") as file:
+                np.savetxt(file, np.array([[t, *self.data[-1]]]))
 
 
 class StopEvent(Exception):

@@ -293,10 +293,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         self.filename = filename
 
-        if self.filename is not None:
-            with open(self.filename, "w") as file:
-                pass
-
         return super().setup(*args, **kwargs)
 
     def analyze(self, u_state, t):
@@ -324,10 +320,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         mu_bc = dfx.fem.assemble_scalar(mu_bc)
 
         self.data.append([charge, chem_pot, mu_bc])
-
-        if self.filename is not None:
-            with open(self.filename, "a") as file:
-                np.savetxt(file, np.array([[t, charge, chem_pot, mu_bc]]))
 
         return super().analyze(u_state, t)
 
