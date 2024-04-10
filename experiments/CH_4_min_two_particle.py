@@ -14,7 +14,6 @@ import ufl
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     charge_discharge_stop,
-    AnalyzeOCP,
     y_of_c,
     c_of_y,
 )
@@ -26,6 +25,7 @@ from pyMoBiMP.fenicsx_utils import (
     NewtonSolver,
     FileOutput as FileOutputBase,
     Fenicx1DOutput,
+    RuntimeAnalysisBase,
 )
 
 
@@ -83,6 +83,61 @@ class FileOutput(FileOutputBase):
                 ret.append(func)
 
         return ret
+
+
+class AnalyzeCellPotential(RuntimeAnalysisBase):
+
+    def setup(
+        self,
+        *args,
+        c_of_y=c_of_y,
+        free_energy=lambda u: 0.5 * u**2,
+        filename=None,
+        **kwargs,
+    ):
+        self.free_energy = free_energy
+        self.c_of_y = c_of_y
+
+        self.filename = filename
+
+        return super().setup(*args, **kwargs)
+
+    def analyze(self, u_state, t):
+
+        V = u_state.function_space
+        mesh = V.mesh
+
+        ys, mus = u_state.split()
+
+        cs = [self.c_of_y(y) for y in ys.split()]
+
+        # select one reference particle
+        c = cs[0]
+        mu = mus[0]
+
+        coords = ufl.SpatialCoordinate(mesh)
+        r = ufl.sqrt(sum([co**2 for co in coords]))
+
+        c = ufl.variable(c)
+        dFdc = ufl.diff(self.free_energy(c), c)
+
+        charge = sum(
+            [dfx.fem.assemble_scalar(
+                dfx.fem.form(3 * c * r**2 * ufl.dx)) for c in cs])
+
+        chem_pot = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
+        chem_pot = dfx.fem.assemble_scalar(chem_pot)
+
+        mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
+        mu_bc = dfx.fem.assemble_scalar(mu_bc)
+
+        self.data.append([charge, chem_pot, mu_bc])
+
+        if self.filename is not None:
+            with open(self.filename, "a") as file:
+                np.savetxt(file, np.array([[t, charge, chem_pot, mu_bc]]))
+
+        return super().analyze(u_state, t)
 
 
 comm_world = MPI.COMM_WORLD
@@ -367,12 +422,14 @@ if __name__ == "__main__":
     results_folder = Path("simulation_output")
     results_folder.mkdir(exist_ok=True, parents=True)
 
-    filename = results_folder / "CH_4_min_2_particle.xdmf"
+    base_filename = "CH_4_min_2_particle"
+
+    filename = results_folder / (base_filename + ".xdmf")
 
     output_xdmf = FileOutput(u, np.linspace(0, T_final, 51), filename=filename)
 
-    rt_analysis = AnalyzeOCP(
-        c_of_y=c_of_y, filename=results_folder / "CH_4_min_1D_rt.txt"
+    rt_analysis = AnalyzeCellPotential(
+        c_of_y=c_of_y, filename=results_folder / (base_filename + "_rt.txt")
     )
 
     # %%
@@ -390,6 +447,6 @@ if __name__ == "__main__":
         tol=1e-7,
         event_handler=lambda *args, **kwargs: False,
         output=(output_np, output_xdmf),
-        runtime_analysis=None,
+        runtime_analysis=rt_analysis,
         **event_params,
     )
