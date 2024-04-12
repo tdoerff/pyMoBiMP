@@ -1,2 +1,4 @@
 pp_output/
 results/
+mesh_3d.xdmf
+mesh_3d.h5
