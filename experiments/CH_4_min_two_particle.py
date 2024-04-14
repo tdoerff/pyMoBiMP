@@ -369,7 +369,7 @@ if __name__ == "__main__":
     c_ini = dfx.fem.Function(V_c)
 
     c_ini.sub(0).interpolate(lambda x: 1.0 * c_ini_fun(x))
-    c_ini.sub(1).interpolate(lambda x: 10.0 * c_ini_fun(x))
+    c_ini.sub(1).interpolate(lambda x: 0.0 * c_ini_fun(x) + 0.99)
 
     y_ini1 = dfx.fem.Expression(
         y_of_c(c_ini.sub(0)),
