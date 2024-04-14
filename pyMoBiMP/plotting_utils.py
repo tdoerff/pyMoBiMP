@@ -86,7 +86,7 @@ def plot_time_sequence(output, c_of_y, plot_mu=True):
 
     r = np.array(r)[:, 0]
 
-    data_out = np.array(data_out).squeeze()
+    data_out = np.array(data_out)
 
     for it_out, (data_t, t) in enumerate(zip(data_out, t_out)):
 
@@ -185,7 +185,7 @@ class PyvistaAnimation:
 
         self.r = np.array(r)[:, 0]
 
-        self.data_out = np.array(data_out).squeeze()
+        self.data_out = np.array(data_out)
         self.data_out[:, 0, :] = c_of_y(self.data_out[:, 0, :])
 
         self.t_out = np.array(t_out)
