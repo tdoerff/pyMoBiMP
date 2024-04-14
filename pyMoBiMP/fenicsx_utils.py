@@ -141,14 +141,14 @@ def time_stepping(
 
             break
 
+        t += float(dt)
+        it += 1
+
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
 
         if runtime_analysis is not None:
             runtime_analysis.analyze(u, t)
-
-        t += float(dt)
-        it += 1
 
         if logging:
             perc = (t - t_start) / (T - t_start) * 100
