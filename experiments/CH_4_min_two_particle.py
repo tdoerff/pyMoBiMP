@@ -7,6 +7,8 @@ from mpi4py import MPI
 
 import numpy as np
 
+import os
+
 from pathlib import Path
 
 import scipy as sp
@@ -154,7 +156,14 @@ if __name__ == "__main__":
     # Set up the mesh
     n_elem = 128
 
-    mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
+    mesh_filename = "Meshes/line_mesh.xdmf"
+
+    if os.path.isfile(mesh_filename):
+        # Load mesh from file
+        with dfx.io.XDMFFile(comm_world, mesh_filename, 'r') as file:
+            mesh = file.read_mesh(name="Grid")
+    else:
+        mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
     dx_cell = get_mesh_spacing(mesh)
 
