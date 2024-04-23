@@ -9,6 +9,8 @@ import numpy as np
 
 from pathlib import Path
 
+import scipy as sp
+
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
@@ -208,6 +210,22 @@ if __name__ == "__main__":
         )
 
     eps = 1e-4
+
+    res_c_left = sp.optimize.minimize_scalar(
+        lambda c: free_energy(c, np.log, np.sin),
+        bracket=(2 * eps, 0.05),
+        bounds=(eps, 0.05))
+
+    assert res_c_left.success
+    c_left = res_c_left.x
+
+    res_c_right = sp.optimize.minimize_scalar(
+        lambda c: free_energy(c, np.log, np.sin),
+        bracket=(0.95, 1 - 2 * eps),
+        bounds=(0.95, 1 - eps))
+
+    assert res_c_right.success
+    c_right = res_c_right.x
 
     # %%
     # Experimental setup
