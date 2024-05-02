@@ -5,7 +5,9 @@ import gmsh
 from mpi4py import MPI
 
 
-def gmsh_sphere_model(model: gmsh.model, name: str, optimize: bool = False) -> gmsh.model:
+def gmsh_sphere_model(
+    model: gmsh.model, name: str, optimize: bool = False
+) -> gmsh.model:
     """Create a Gmsh model of a sphere.
 
     Args:
@@ -36,7 +38,9 @@ def gmsh_sphere_model(model: gmsh.model, name: str, optimize: bool = False) -> g
     return model
 
 
-def model_to_file(comm: MPI.Comm, model: gmsh.model, name: str, filename: str, mode: str):
+def model_to_file(
+    comm: MPI.Comm, model: gmsh.model, name: str, filename: str, mode: str
+):
     """Create a DOLFINx from a Gmsh model and output to file.
 
     Args:
@@ -56,14 +60,18 @@ def model_to_file(comm: MPI.Comm, model: gmsh.model, name: str, filename: str, m
         msh.topology.create_connectivity(2, 3)
         file.write_mesh(msh)
         file.write_meshtags(
-            ct, msh.geometry, geometry_xpath=f"/Xdmf/Domain/Grid[@Name='{msh.name}']/Geometry"
+            ct,
+            msh.geometry,
+            geometry_xpath=f"/Xdmf/Domain/Grid[@Name='{msh.name}']/Geometry",
         )
         file.write_meshtags(
-            ft, msh.geometry, geometry_xpath=f"/Xdmf/Domain/Grid[@Name='{msh.name}']/Geometry"
+            ft,
+            msh.geometry,
+            geometry_xpath=f"/Xdmf/Domain/Grid[@Name='{msh.name}']/Geometry",
         )
 
 
-def dfx_spherical_mesh(comm: MPI.Comm, resolution: float=1., optimize=True):
+def dfx_spherical_mesh(comm: MPI.Comm, resolution: float = 1.0, optimize=True):
     """Create spherical dolfinx grid to plot onto.
 
     Parameters
