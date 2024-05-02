@@ -12,18 +12,19 @@ import os
 
 import pathlib
 
-from typing import Dict, Optional, overload, TypedDict, Union, Unpack
+from typing import Dict, Optional, overload, Union
 
 import ufl
 
 from .exceptions import WrongNumberOfArguments
 
-from .fenicsx_utils import (evaluation_points_and_cells,
-                           get_mesh_spacing,
-                           NewtonSolver,
-                           RuntimeAnalysisBase,
-                           time_stepping,
-                           FileOutput)
+from .fenicsx_utils import (
+    get_mesh_spacing,
+    NewtonSolver,
+    RuntimeAnalysisBase,
+    time_stepping,
+    FileOutput,
+)
 
 
 # Forward and backward variable transformation.
@@ -40,16 +41,17 @@ def cahn_hilliard_form(
     u: dfx.fem.Function,
     u0: dfx.fem.Function,
     dt: Union[dfx.fem.Constant, float],
-    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.0,
     c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
-    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
-    lam: float=0.01,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25
+    * (c**2 - 1) ** 2,
+    lam: float = 0.01,
     I_charge: Union[float, dfx.fem.Constant] = 0.1,
-    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.0 * c,
     theta: Union[float, dfx.fem.Constant] = 1.0,
-    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
-) -> dfx.fem.Form:
-    ...
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None,
+) -> dfx.fem.Form: ...
+
 
 @overload
 def cahn_hilliard_form(
@@ -58,28 +60,29 @@ def cahn_hilliard_form(
     u0: dfx.fem.Function,
     v: ufl.Coargument,
     dt: Union[dfx.fem.Constant, float],
-    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.0,
     c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
-    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
-    lam: float=0.01,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25
+    * (c**2 - 1) ** 2,
+    lam: float = 0.01,
     I_charge: Union[float, dfx.fem.Constant] = 0.1,
-    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.0 * c,
     theta: Union[float, dfx.fem.Constant] = 1.0,
-    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
-) -> dfx.fem.Form:
-    ...
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None,
+) -> dfx.fem.Form: ...
 
 
 def cahn_hilliard_form(
     *args,
-    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.,
+    M: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 1.0,
     c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
-    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25 * (c**2 - 1) ** 2,
-    lam: float=0.01,
+    free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.25
+    * (c**2 - 1) ** 2,
+    lam: float = 0.01,
     I_charge: Union[float, dfx.fem.Constant] = 0.1,
-    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0. * c,
+    grad_c_bc: Callable[[dfx.fem.Function], dfx.fem.Expression] = lambda c: 0.0 * c,
     theta: Union[float, dfx.fem.Constant] = 1.0,
-    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None
+    form_weights: Optional[Dict[str, dfx.fem.Expression]] = None,
 ) -> dfx.fem.Form:
     """Compose the FEM form for the Cahn-Hilliard equation.
 
@@ -144,7 +147,8 @@ def cahn_hilliard_form(
 
     else:
         raise WrongNumberOfArguments(
-            "cahn_hilliard_form takes either 3 or 5 positional arguments.")
+            "cahn_hilliard_form takes either 3 or 5 positional arguments."
+        )
 
     y = ufl.variable(y)
     c = c_of_y(y)
@@ -181,7 +185,7 @@ def cahn_hilliard_form(
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
     F2 -= lam * (s_V * ufl.inner(ufl.grad(c), ufl.grad(v_mu)) * dx)
-    F2 +=  grad_c_bc(c) * (s_A * v_mu * ds)
+    F2 += grad_c_bc(c) * (s_A * v_mu * ds)
 
     F = F1 + F2
 
@@ -224,7 +228,7 @@ def charge_discharge_stop(
     stop_at_empty=True,
     stop_on_full=True,
     cycling=True,
-    logging=False
+    logging=False,
 ):
 
     coords = ufl.SpatialCoordinate(u.function_space.mesh)
@@ -244,7 +248,8 @@ def charge_discharge_stop(
 
     if c_bc > c_bounds[1] and I_charge.value > 0.0:
         print(
-            f">>> charge at boundary exceeds maximum (max(c) = {c_bc:1.3f} > {c_bounds[1]:1.3f})."
+            ">>> charge at boundary exceeds maximum " +
+            f"(max(c) = {c_bc:1.3f} > {c_bounds[1]:1.3f})."
         )
 
         if stop_on_full:
@@ -333,15 +338,17 @@ def _free_energy(
 ):
 
     fe = (
-        u * ufl.ln(u) \
-        + (1 - u) * ufl.ln(1 - u) \
-        + a * u * (1 - u) \
-        + b * ufl.sin(c * np.pi * u) \
+        u * ufl.ln(u)
+        + (1 - u) * ufl.ln(1 - u)
+        + a * u * (1 - u)
+        + b * ufl.sin(c * np.pi * u)
     )
 
     return fe
 
+
 # [ ] make it possible to hand over pre-configured output class or object
+
 
 class Simulation:
 
@@ -357,15 +364,17 @@ class Simulation:
         gamma: float = 0.1,
         M: Callable[
             [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
-        ] = lambda c: 1.0 * c * (1 - c),
+        ] = lambda c: 1.0
+        * c
+        * (1 - c),
         I: float = 1.0,
         eps: float = 1e-3,
-        dt_fac_ini: float= 1e-2,
+        dt_fac_ini: float = 1e-2,
         c_ini=lambda x, eps: eps * np.ones_like(x[0]),
         output_file: Optional[str | os.PathLike] = None,
         n_out: int = 51,
         runtime_analysis: Optional[RuntimeAnalysisBase] = None,
-        logging: bool=True
+        logging: bool = True,
     ):
 
         # Define mixed element and function space
@@ -414,7 +423,7 @@ class Simulation:
             self.dt,
             free_energy=free_energy,
             theta=0.75,
-            c_of_y = lambda y: c_of_y(y),
+            c_of_y=lambda y: c_of_y(y),
             M=M,
             lam=gamma,
             **self.event_params,
@@ -423,9 +432,7 @@ class Simulation:
         # Initial data
         # ------------
 
-        populate_initial_data(self.u,
-                              lambda r: c_ini(r, eps),
-                              free_energy)
+        populate_initial_data(self.u, lambda r: c_ini(r, eps), free_energy)
 
         # Problem and solver setup
         # ------------------------
@@ -451,7 +458,8 @@ class Simulation:
                 self.u,
                 np.linspace(0, T_final, n_out),
                 output_file,
-                variable_transform=c_of_y)
+                variable_transform=c_of_y,
+            )
         else:
             self.output = None
 
@@ -459,11 +467,7 @@ class Simulation:
 
         self.logging = logging
 
-    def run(self,
-            *args,
-            dt_increase=1.0,
-            dt_max=1e-2,
-            **kwargs):
+    def run(self, *args, dt_increase=1.0, dt_max=1e-2, **kwargs):
 
         time_stepping(
             self.solver,
@@ -478,5 +482,5 @@ class Simulation:
             runtime_analysis=self.rt_analysis,
             **self.event_params,
             **kwargs,
-            logging=self.logging
+            logging=self.logging,
         )
