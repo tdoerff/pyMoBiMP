@@ -1,0 +1,127 @@
+---
+title: "Quasi-spherical coordinate transformation"
+format:
+    html:
+        code-fold: true
+---
+
+We are looking for a coordinate transformation $(r, \varphi, \theta) = \Phi(x)$ in which the diffusion equation
+
+$$
+    \begin{aligned}
+        \partial_t c          &= \Delta u   & \qquad\mbox{in}\qquad & \Omega \\
+        \vec n \cdot \nabla u &= f          & \qquad\mbox{on}\qquad & \partial\Omega
+    \end{aligned}
+$$
+
+takes the form
+
+$$
+    \begin{aligned}
+        \partial_t c          &= \frac{1}{r^{d-1}} \partial_{r} (r^{d-1} \partial_{r} u)   & \qquad\mbox{in}\qquad & [0, R] \\
+    \end{aligned}
+$$
+
+## Numerical experiments
+
+```{python}
+import dolfinx as dfx
+
+import gmsh
+
+from mpi4py.MPI import COMM_WORLD as comm
+
+import numpy as np
+
+import pyvista as pv
+
+import ufl
+```
+
+### Spherical mesh
+
+```{python}
+
+R = 1.
+
+resolution = 0.1
+
+gmsh.initialize()
+
+model = gmsh.model()
+
+model_name = "circle"
+
+gmsh.option.setNumber("Mesh.MeshSizeFactor", resolution)
+
+model.add(model_name)
+model.setCurrent(model_name)
+
+model.occ.addCircle(0, 0, 0, R, 1)
+model.occ.addCurveLoop([1], 2)
+gmsh.model.occ.addPlaneSurface([2],1)
+
+model.occ.synchronize()
+
+model.addPhysicalGroup(dim=1, tags=[1], tag=1)
+model.addPhysicalGroup(dim=2, tags=[1], tag=2)
+
+model.mesh.generate(dim=2)
+
+model.setCurrent(model_name)
+
+mesh, ct, ft = dfx.io.gmshio.model_to_mesh(gmsh.model, comm, rank=0)
+
+gmsh.finalize()
+
+```
+
+```{python}
+
+plotter = pv.Plotter()
+
+V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
+```
+
+### Distorted mesh
+
+```{python}
+
+# x, y, z = ufl.SpatialCoordinate(mesh)
+
+# r = ufl.sqrt(x**2 + y**2)
+
+# phi = ufl.atan2(y, x)
+
+x = mesh.geometry.x[:, :1]
+y = mesh.geometry.x[:, 1:2]
+
+r = np.sqrt(x**2 + y**2)
+
+phi = np.arctan2(x, y)
+
+e_r = np.array([
+    np.cos(phi).squeeze(),
+    np.sin(phi).squeeze()]).T
+
+mesh.geometry.x[:, :2] += r * 0.2 * e_r * np.sin(phi)
+
+plotter = pv.Plotter()
+
+V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
+
+print(e_r.shape)
+print(phi.shape)
+```
