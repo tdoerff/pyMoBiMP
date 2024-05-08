@@ -218,7 +218,7 @@ if __name__ == "__main__":
             + b * sin(cc * np.pi * u)
         )
 
-    eps = 1e-4
+    eps = 1e-2
 
     res_c_left = sp.optimize.minimize_scalar(
         lambda c: free_energy(c, np.log, np.sin),
@@ -287,37 +287,40 @@ if __name__ == "__main__":
     v_c1, v_c2 = ufl.split(v_c)
     v_mu1, v_mu2 = ufl.split(v_mu)
 
-    c1, c2 = ufl.variable(c1), ufl.variable(c2)
-    f_e1 = free_energy(c1, ufl.ln, ufl.sin)
-    f_e2 = free_energy(c2, ufl.ln, ufl.sin)
-
-    mu_chem1, mu_chem2 = ufl.diff(f_e1, c1), ufl.diff(f_e2, c2)
-
     mu_theta1, mu_theta2 = (
         theta * mu1 + (theta - 1.0) * mu01,
         theta * mu2 + (theta - 1.0) * mu02,
     )
 
-    r = ufl.SpatialCoordinate(mesh)
+    # particle parameters
+    R1 = 1.
+    R2 = 1.
 
-    # adaptation of the volume element due to geometry
-    if form_weights is not None:
-        s_V = form_weights["volume"]
-        s_A = form_weights["surface"]
-    else:
-        s_V = 4 * np.pi * r**2
-        s_A = 2 * np.pi * r**2
+    A1 = 4 * np.pi * R1
+    A2 = 4 * np.pi * R2
 
-    dx = ufl.dx  # The volume element
-    ds = ufl.ds  # The surface element
+    A = A1 + A2
 
-    flux1, flux2 = M(c1) * ufl.grad(mu_theta1), M(c2) * ufl.grad(mu_theta2)
+    # fraction of the total surface
+    a1 = A1 / A
+    a2 = A2 / A
 
-    n = n_1 = n_2 = ufl.FacetNormal(mesh)
+    # Coupling parameters between particle surface potential.
+    L1, L2 = 1.e1, 1.0e1
+    L = a1 * L1 + a2 * L2
 
     # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
-    I_charge1 = 2 * I_charge - ufl.dot(n_2, flux2)
-    I_charge2 = 2 * I_charge - ufl.dot(n_1, flux1)
+    term = L1 * a1 * mu_theta1 + L2 * a2 * mu_theta2
+
+    # Here must ne a negative sign since with the I_charges, we measure
+    # what flows out of the particle.
+    Voltage = - I_charge / L - term / L
+
+    # TODO: Check the sign! Somehow, there must be a minus for the
+    # code to work. I think, I_charge as constructed here is the current
+    # OUT OF the particle.
+    I_charge1 = - L1 * (mu_theta1 + Voltage) / A1
+    I_charge2 = - L2 * (mu_theta2 + Voltage) / A2
 
     F1 = cahn_hilliard_form(
         mesh,
@@ -333,9 +336,6 @@ if __name__ == "__main__":
         I_charge=I_charge1,
     )
 
-    F1 += ufl.dot(ufl.grad(v_mu1), n_1) * (mu1 - mu2) * s_A * ds
-    F1 -= alpha / h * (mu1 - mu2) * v_mu1 * s_A * ds
-
     F2 = cahn_hilliard_form(
         mesh,
         (y2, mu2),
@@ -349,9 +349,6 @@ if __name__ == "__main__":
         lam=0.1,
         I_charge=I_charge2,
     )
-
-    F2 += ufl.dot(ufl.grad(v_mu2), n_2) * (mu2 - mu1) * s_A * ds
-    F2 -= alpha / h * (mu2 - mu1) * v_mu2 * s_A * ds
 
     F = F1 + F2
 
@@ -395,8 +392,8 @@ if __name__ == "__main__":
 
     c_ini = dfx.fem.Function(V_c)
 
-    c_ini.sub(0).interpolate(lambda x: 1.0 * c_ini_fun(x))
-    c_ini.sub(1).interpolate(lambda x: 0.0 * c_ini_fun(x) + 0.99)
+    c_ini.sub(0).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
+    c_ini.sub(1).interpolate(lambda x: c_right - 0 * c_ini_fun(x))
 
     y_ini1 = dfx.fem.Expression(
         y_of_c(c_ini.sub(0)),
