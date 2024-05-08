@@ -243,7 +243,7 @@ if __name__ == "__main__":
     # charging current
     I_charge = dfx.fem.Constant(mesh, 1e-1)
 
-    T_final = 2.0 / I_charge.value  # ending time
+    T_final = 2.0 / I_charge.value if I_charge.value > 0 else 2.0  # ending time
 
     def experiment(t, u, I_charge, **kwargs):
 
