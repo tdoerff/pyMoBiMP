@@ -304,7 +304,7 @@ if __name__ == "__main__":
     a2 = A2 / A
 
     # Coupling parameters between particle surface potential.
-    L1, L2 = 1.e1, 1.0e1
+    L1, L2 = 1.e3, 0.99e3
     L = a1 * L1 + a2 * L2
 
     # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
@@ -391,7 +391,7 @@ if __name__ == "__main__":
     c_ini = dfx.fem.Function(V_c)
 
     c_ini.sub(0).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
-    c_ini.sub(1).interpolate(lambda x: c_right - 0 * c_ini_fun(x))
+    c_ini.sub(1).interpolate(lambda x: c_left - 0 * c_ini_fun(x))
 
     y_ini1 = dfx.fem.Expression(
         y_of_c(c_ini.sub(0)),
@@ -462,9 +462,9 @@ if __name__ == "__main__":
         u0,
         T_final,
         dt,
-        dt_max=1e-3,
-        dt_min=1e-12,
-        tol=1e-7,
+        dt_max=1e-1,
+        dt_min=1e-8,
+        tol=1e-5,
         event_handler=lambda *args, **kwargs: False,
         output=output_xdmf,
         runtime_analysis=rt_analysis,
