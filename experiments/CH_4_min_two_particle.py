@@ -274,41 +274,36 @@ if __name__ == "__main__":
     y, mu = ufl.split(u)
     y0, mu0 = ufl.split(u0)
 
-    y1, y2 = ufl.split(y)
-    y01, y02 = ufl.split(y0)
+    y1s = ufl.split(y)
+    y0s = ufl.split(y0)
 
-    mu1, mu2 = ufl.split(mu)
-    mu01, mu02 = ufl.split(mu0)
+    mu1s = ufl.split(mu)
+    mu0s = ufl.split(mu0)
 
     v_c, v_mu = ufl.TestFunctions(V)
 
-    v_c1, v_c2 = ufl.split(v_c)
-    v_mu1, v_mu2 = ufl.split(v_mu)
+    v_cs = ufl.split(v_c)
+    v_mus = ufl.split(v_mu)
 
-    mu_theta1, mu_theta2 = (
-        theta * mu1 + (theta - 1.0) * mu01,
-        theta * mu2 + (theta - 1.0) * mu02,
-    )
+    mu_theta = [theta * mu1s_ + (theta - 1.0) * mu0s_
+                for mu1s_, mu0s_ in zip(mu1s, mu0s)]
 
     # particle parameters
-    R1 = 1.
-    R2 = 1.
+    Rs = np.ones(num_particles)
 
-    A1 = 4 * np.pi * R1
-    A2 = 4 * np.pi * R2
+    As = 4 * np.pi * Rs
 
-    A = A1 + A2
+    A = sum(As)
 
     # fraction of the total surface
-    a1 = A1 / A
-    a2 = A2 / A
+    a_ratios = As / A
 
     # Coupling parameters between particle surface potential.
-    L1, L2 = 1.e3, 0.99e3
-    L = a1 * L1 + a2 * L2
+    Ls = 1.e3 * (1 + 0.01 * np.random.random(num_particles))
+    L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
 
     # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
-    term = L1 * a1 * mu_theta1 + L2 * a2 * mu_theta2
+    term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mu_theta)])
 
     # Here must ne a negative sign since with the I_charges, we measure
     # what flows out of the particle.
@@ -317,38 +312,28 @@ if __name__ == "__main__":
     # TODO: Check the sign! Somehow, there must be a minus for the
     # code to work. I think, I_charge as constructed here is the current
     # OUT OF the particle.
-    I_charge1 = - L1 * (mu_theta1 + Voltage) / A1
-    I_charge2 = - L2 * (mu_theta2 + Voltage) / A2
+    I_charges = [
+        -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mu_theta, As)]
 
-    F1 = cahn_hilliard_form(
-        mesh,
-        (y1, mu1),
-        (y01, mu01),
-        (v_c1, v_mu1),
-        dt,
-        M=M,
-        c_of_y=c_of_y,
-        free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
-        theta=theta,
-        lam=0.1,
-        I_charge=I_charge1,
-    )
+    Fs = [
+        cahn_hilliard_form(
+            mesh,
+            (y1_, mu1_),
+            (y0_, mu0_),
+            (v_c_, v_mu_),
+            dt,
+            M=M,
+            c_of_y=c_of_y,
+            free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
+            theta=theta,
+            lam=0.1,
+            I_charge=I_charge_,
+        ) for y1_, mu1_, y0_, mu0_, v_c_, v_mu_, I_charge_ in zip(
+            y1s, mu1s, y0s, mu0s, v_cs, v_mus, I_charges
+        )
+        ]
 
-    F2 = cahn_hilliard_form(
-        mesh,
-        (y2, mu2),
-        (y02, mu02),
-        (v_c2, v_mu2),
-        dt,
-        M=M,
-        c_of_y=c_of_y,
-        free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
-        theta=theta,
-        lam=0.1,
-        I_charge=I_charge2,
-    )
-
-    F = F1 + F2
+    F = sum(Fs)
 
     # %%
     # boundary conditions
