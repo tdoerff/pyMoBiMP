@@ -266,10 +266,7 @@ if __name__ == "__main__":
     def M(c):
         return c * (1 - c)
 
-    alpha = 100.0
     theta = 1.0
-
-    h = ufl.Circumradius(mesh)
 
     y, mu = ufl.split(u)
     y0, mu0 = ufl.split(u0)
@@ -279,8 +276,6 @@ if __name__ == "__main__":
 
     mu1, mu2 = ufl.split(mu)
     mu01, mu02 = ufl.split(mu0)
-
-    c1, c2 = c_of_y(y1), c_of_y(y2)
 
     v_c, v_mu = ufl.TestFunctions(V)
 
