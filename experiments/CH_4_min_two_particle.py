@@ -375,39 +375,29 @@ if __name__ == "__main__":
 
     c_ini = dfx.fem.Function(V_c)
 
-    c_ini.sub(0).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
-    c_ini.sub(1).interpolate(lambda x: c_left - 0 * c_ini_fun(x))
+    for i_particle in range(num_particles):
 
-    y_ini1 = dfx.fem.Expression(
-        y_of_c(c_ini.sub(0)),
-        c_ini.sub(0).function_space.element.interpolation_points()
-    )
-    y_ini2 = dfx.fem.Expression(
-        y_of_c(c_ini.sub(1)),
-        c_ini.sub(1).function_space.element.interpolation_points()
-    )
+        c_ini.sub(i_particle).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
 
-    u_ini.sub(0).sub(0).interpolate(y_ini1)
-    u_ini.sub(0).sub(1).interpolate(y_ini2)
+        W = c_ini.sub(i_particle).function_space
+        x_interpolate = W.element.interpolation_points()
+
+        y_ini = dfx.fem.Expression(
+            y_of_c(c_ini.sub(i_particle)), x_interpolate)
+
+        u_ini.sub(0).sub(i_particle).interpolate(y_ini)
 
     # Store chemical potential into state vector
     # ------------------------------------------
 
-    c_ini1 = ufl.variable(c_ini.sub(0))
-    dFdc1 = ufl.diff(free_energy(c_ini1, ufl.ln, ufl.sin), c_ini1)
+    for i_particle in range(num_particles):
+        c_ini_ = ufl.variable(c_ini.sub(i_particle))
+        dFdc1 = ufl.diff(free_energy(c_ini_, ufl.ln, ufl.sin), c_ini_)
 
-    W = u_ini.sub(1).sub(0).function_space
-    u_ini.sub(1).sub(0).interpolate(
-        dfx.fem.Expression(dFdc1, W.element.interpolation_points())
-    )
-
-    c_ini2 = ufl.variable(c_ini.sub(1))
-    dFdc2 = ufl.diff(free_energy(c_ini2, ufl.ln, ufl.sin), c_ini2)
-
-    W = u_ini.sub(1).sub(1).function_space
-    u_ini.sub(1).sub(1).interpolate(
-        dfx.fem.Expression(dFdc2, W.element.interpolation_points())
-    )
+        W = u_ini.sub(1).sub(i_particle).function_space
+        u_ini.sub(1).sub(i_particle).interpolate(
+            dfx.fem.Expression(dFdc1, W.element.interpolation_points())
+        )
 
     u_ini.x.scatter_forward()
 
