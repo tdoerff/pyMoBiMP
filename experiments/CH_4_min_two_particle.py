@@ -240,10 +240,13 @@ if __name__ == "__main__":
     # Experimental setup
     # ------------------
 
-    # charging current
-    I_charge = dfx.fem.Constant(mesh, 1e-1)
+    #
+    C_rate = 1.
 
-    T_final = 2.0 / I_charge.value if I_charge.value > 0 else 2.0  # ending time
+    # charging current
+    I_charge = dfx.fem.Constant(mesh, 3. * C_rate * num_particles)
+
+    T_final = 1.0 / C_rate if C_rate > 0 else 2.0  # ending time
 
     def experiment(t, u, I_charge, **kwargs):
 
