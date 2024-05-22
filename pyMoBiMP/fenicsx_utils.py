@@ -139,6 +139,9 @@ def time_stepping(
 
             print(e)
 
+            if output is not None:
+                [o.save_snapshot(u, t, force=True) for o in output]
+
             break
 
         t += float(dt)
@@ -209,18 +212,21 @@ class OutputBase(abc.ABC):
     def finalize(self):
         pass
 
-    def save_snapshot(self, u_state, t):
+    def save_snapshot(self, u_state, t, force=False):
 
-        if t >= self.t_out_next:
+        if t >= self.t_out_next or force:
 
             print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
             self.output_container.append(self.extract_output(u_state, t))
             self.output_times.append(t)
 
-            self.it_out += 1
             self.t_out_last = self.t_out_next
-            self.t_out_next = self.ts_out_planned[self.it_out]
+
+            # Increase the next time step except for the last one.
+            if self.it_out < len(self.ts_out_planned):
+                self.t_out_next = self.ts_out_planned[self.it_out]
+            self.it_out += 1
 
     @abc.abstractmethod
     def extract_output(self, u_state, t):
@@ -238,7 +244,7 @@ class OutputBase(abc.ABC):
 
 class VTXOutput(OutputBase):
 
-    def setup(self, filename="output.bp", variable_transform = lambda y: y):
+    def setup(self, filename="output.bp", variable_transform=lambda y: y):
 
         mesh = self.u_state.function_space.mesh
         comm = mesh.comm
@@ -281,10 +287,10 @@ class VTXOutput(OutputBase):
 
         return ret
 
-    def save_snapshot(self, u_state, t):
-        super().save_snapshot(u_state, t)
+    def save_snapshot(self, u_state, t, force=False):
+        super().save_snapshot(u_state, t, force)
 
-        if t >= self.t_out_next:
+        if t >= self.t_out_next or force:
             self.writer.write(t)
 
     def get_output(self, return_time=False):
@@ -315,15 +321,18 @@ class FileOutput(OutputBase):
         # Borrow from VTXOutput.
         return VTXOutput.extract_output(self, u_state, t)
 
-    def save_snapshot(self, u_state, t):
+    def save_snapshot(self, u_state, t, force=False):
 
-        if t >= self.t_out_next:
+        if t >= self.t_out_next or force:
 
             print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
-            self.it_out += 1
             self.t_out_last = self.t_out_next
-            self.t_out_next = self.ts_out_planned[self.it_out]
+
+            # Increase the next time step except for the last one.
+            if self.it_out < len(self.ts_out_planned):
+                self.t_out_next = self.ts_out_planned[self.it_out]
+            self.it_out += 1
 
             output = self.extract_output(self.u_state, t)
             with self.FileType(self.comm, self.filename, "a") as file:
