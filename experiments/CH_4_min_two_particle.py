@@ -427,7 +427,6 @@ if __name__ == "__main__":
     problem = NonlinearProblem(F, u)
 
     solver = NewtonSolver(comm_world, problem)
-
     # %%
     # Set up experiment
     # -----------------
@@ -436,8 +435,6 @@ if __name__ == "__main__":
 
     n_out = 501
 
-    output_np = Output(u, np.linspace(0, T_final, n_out), x)
-
     results_folder = Path("simulation_output")
     results_folder.mkdir(exist_ok=True, parents=True)
 
@@ -445,7 +442,8 @@ if __name__ == "__main__":
 
     filename = results_folder / (base_filename + ".xdmf")
 
-    output_xdmf = FileOutput(u, np.linspace(0, T_final, 51), filename=filename)
+    output_xdmf = FileOutput(
+        u, np.linspace(0, T_final, n_out), filename=filename)
 
     rt_analysis = AnalyzeCellPotential(
         c_of_y=c_of_y, filename=results_folder / (base_filename + "_rt.txt")
@@ -465,7 +463,7 @@ if __name__ == "__main__":
         dt_min=1e-12,
         tol=1e-7,
         event_handler=lambda *args, **kwargs: False,
-        output=(output_np, output_xdmf),
+        output=output_xdmf,
         runtime_analysis=rt_analysis,
         **event_params,
     )
