@@ -285,6 +285,11 @@ class PyvistaAnimation:
 
                 chart.line(q, -f_of_q(q), color="tab:orange", style="--", label=r"$f_A$")
 
+                eps = 0.5
+                chart.y_range = \
+                    [min(chart.y_range[0], min(-f_of_q(q) - eps)),
+                     max(chart.y_range[1], max(-f_of_q(q) + eps))]
+
             self.plotter.add_chart(chart)
 
             # Initialized actors
