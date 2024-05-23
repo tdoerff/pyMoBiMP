@@ -93,6 +93,9 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
     def setup(
         self,
+        Ls,
+        As,
+        I_charge,
         *args,
         c_of_y=c_of_y,
         free_energy=lambda u: 0.5 * u**2,
@@ -103,6 +106,12 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         self.c_of_y = c_of_y
 
         self.filename = filename
+
+        self.Ls = Ls
+
+        A = sum(As)
+        self.aas = As / A
+        self.I_charge = I_charge
 
         return super().setup(*args, **kwargs)
 
@@ -135,11 +144,15 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
         mu_bc = dfx.fem.assemble_scalar(mu_bc)
 
-        self.data.append([charge, chem_pot, mu_bc])
+        mus_bc = [
+            dfx.fem.assemble_scalar(dfx.fem.form(mu_ * r**2 * ufl.ds)) for mu_ in mus
+        ]
 
-        if self.filename is not None:
-            with open(self.filename, "a") as file:
-                np.savetxt(file, np.array([[t, charge, chem_pot, mu_bc]]))
+        cell_voltage = self.I_charge.value / L + sum(
+            L_ / L * a_ * mu_ for L_, a_, mu_ in zip(Ls, self.aas, mus_bc)
+        )
+
+        self.data.append([charge, chem_pot, mu_bc, cell_voltage])
 
         return super().analyze(u_state, t)
 
@@ -424,6 +437,7 @@ if __name__ == "__main__":
         u, np.linspace(0, T_final, n_out), filename=filename)
 
     rt_analysis = AnalyzeCellPotential(
+        Ls, As, I_charge,
         c_of_y=c_of_y, filename=results_folder / (base_filename + "_rt.txt")
     )
 
