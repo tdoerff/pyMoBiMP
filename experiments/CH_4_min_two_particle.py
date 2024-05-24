@@ -166,7 +166,7 @@ if __name__ == "__main__":
     # --------------
 
     # Set up the mesh
-    n_elem = 128
+    n_elem = 32
 
     mesh_filename = "Meshes/line_mesh.xdmf"
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     elem_c = elem1
     elem_mu = elem1
 
-    num_particles = 2
+    num_particles = 10
 
     multi_particle_element = ufl.MixedElement(
         [
@@ -368,7 +368,7 @@ if __name__ == "__main__":
     a_ratios = As / A
 
     # Coupling parameters between particle surface potential.
-    Ls = 1.e3 * (1 + 0.01 * np.random.random(num_particles))
+    Ls = 1.e1 * (1 + 0.1 * (2 * np.random.random(num_particles) - 1))
     L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
 
     # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
@@ -384,6 +384,7 @@ if __name__ == "__main__":
     I_charges = [
         -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mu_theta, As)]
 
+    # Assemble the individual particle forms.
     Fs = [
         cahn_hilliard_form(
             mesh,
@@ -402,6 +403,7 @@ if __name__ == "__main__":
         )
         ]
 
+    # Compose the global FEM form.
     F = sum(Fs)
 
     # %%
