@@ -164,7 +164,7 @@ comm_world = MPI.COMM_WORLD
 # --------------
 
 # Set up the mesh
-n_elem = 32
+n_elem = 16
 
 mesh_filename = "Meshes/line_mesh.xdmf"
 
@@ -459,6 +459,8 @@ u_ini.x.scatter_forward()
 problem = NonlinearProblem(F, u)
 
 solver = NewtonSolver(comm_world, problem)
+
+solver.tol = 1e-3
 # %%
 # Set up experiment
 # -----------------
@@ -496,7 +498,7 @@ if __name__ == "__main__":
         dt,
         dt_max=1e-1,
         dt_min=1e-8,
-        tol=1e-5,
+        tol=1e-4,
         event_handler=experiment,
         output=output_xdmf,
         runtime_analysis=rt_analysis,
