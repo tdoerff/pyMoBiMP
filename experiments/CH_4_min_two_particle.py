@@ -17,7 +17,6 @@ import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
-    charge_discharge_stop,
     y_of_c,
     c_of_y,
 )
@@ -336,8 +335,6 @@ if __name__ == "__main__":
     # The variational form
     # --------------------
 
-    form_weights = None
-
     def M(c):
         return c * (1 - c)
 
@@ -406,29 +403,6 @@ if __name__ == "__main__":
         ]
 
     F = sum(Fs)
-
-    # %%
-    # boundary conditions
-    # -------------------
-
-    def boundary_locator(x):
-        return np.isclose(x[0], 1)
-
-    # facets
-    tdim = mesh.topology.dim - 1
-
-    facets = dfx.mesh.locate_entities_boundary(mesh, tdim, boundary_locator)
-    dofs1 = dfx.fem.locate_dofs_topological(
-        (V.sub(1).sub(0), V.sub(1).sub(1)), tdim, facets
-    )
-    dofs2 = dfx.fem.locate_dofs_topological(
-        (V.sub(1).sub(1), V.sub(1).sub(0)), tdim, facets
-    )
-
-    bcs = [
-        dfx.fem.dirichletbc(u.sub(1).sub(1), dofs1, V.sub(1).sub(0)),
-        dfx.fem.dirichletbc(u.sub(1).sub(0), dofs2, V.sub(1).sub(1)),
-    ]
 
     # %%
     # Initial data
