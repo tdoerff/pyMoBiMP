@@ -261,9 +261,68 @@ if __name__ == "__main__":
 
     T_final = 1.0 / C_rate if C_rate > 0 else 2.0  # ending time
 
-    def experiment(t, u, I_charge, **kwargs):
+    def experiment(
+        t,
+        u,
+        I_charge,
+        c_bounds=[0.05, 0.99],
+        c_of_y=c_of_y,
+        stop_at_empty=True,
+        stop_on_full=True,
+        cycling=True,
+        logging=False,
+    ):
 
-        return charge_discharge_stop(t, u, I_charge, c_of_y=c_of_y, **kwargs)
+        coords = ufl.SpatialCoordinate(u.function_space.mesh)
+        r = ufl.sqrt(sum([c**2 for c in coords]))
+
+        y, _ = u.split()
+
+        cs = [c_of_y(y_) for y_ in y]
+
+        # This is a bit hackish, since we just need to multiply by a function that
+        # is zero at r=0 and 1 at r=1.
+        cs_bc = [dfx.fem.form(r**2 * c_ * ufl.ds) for c_ in cs]
+        cs_bc = [dfx.fem.assemble_scalar(c_bc) for c_bc in cs_bc]
+
+        if logging:
+            print(f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]", c_bounds)
+
+        if max(cs_bc) > c_bounds[1] and I_charge.value > 0.0:
+            print(
+                ">>> charge at boundary exceeds maximum " +
+                f"(max(c) = {max(cs_bc):1.3f} > {c_bounds[1]:1.3f})."
+            )
+
+            if stop_on_full:
+                print(">>> Particle is filled.")
+
+                return True
+
+            print(">>> Start discharging.")
+            I_charge.value *= -1.0
+
+            return False
+
+        if min(cs_bc) < c_bounds[0] and I_charge.value < 0.0:
+
+            if stop_at_empty:
+                print(">>> Particle is emptied!")
+
+                return True
+
+            else:
+                if cycling:
+                    print(">>> Start charging.")
+                    I_charge.value *= -1.0
+
+                else:
+                    print(">>> Stop charging.")
+                    I_charge.value = 0.0
+
+                return False
+
+        return False
 
     event_params = dict(
         I_charge=I_charge,
@@ -454,7 +513,7 @@ if __name__ == "__main__":
         dt_max=1e-1,
         dt_min=1e-8,
         tol=1e-5,
-        event_handler=lambda *args, **kwargs: False,
+        event_handler=experiment,
         output=output_xdmf,
         runtime_analysis=rt_analysis,
         **event_params,
