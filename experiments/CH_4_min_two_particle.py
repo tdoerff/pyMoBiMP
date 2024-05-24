@@ -220,6 +220,7 @@ a = 6.0 / 4
 b = 0.2
 cc = 5
 
+
 def free_energy(u, log, sin):
     return (
         u * log(u)
@@ -227,6 +228,7 @@ def free_energy(u, log, sin):
         + a * u * (1 - u)
         + b * sin(cc * np.pi * u)
     )
+
 
 eps = 1e-2
 
@@ -257,6 +259,7 @@ C_rate = 0.01
 I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate * num_particles)
 
 T_final = 6.0 / C_rate if C_rate > 0 else 2.0  # ending time
+
 
 def experiment(
     t,
@@ -321,6 +324,7 @@ def experiment(
 
     return False
 
+
 event_params = dict(
     I_charge=I_charge,
     stop_on_full=False,
@@ -329,12 +333,14 @@ event_params = dict(
     logging=True,
 )
 
+
 # %%
 # The variational form
 # --------------------
 
 def M(c):
     return c * (1 - c)
+
 
 theta = 1.0
 
@@ -410,9 +416,11 @@ F = sum(Fs)
 
 u_ini = dfx.fem.Function(V)
 
+
 # Constant
 def c_ini_fun(x):
     return eps * np.ones_like(x[0])
+
 
 # Store concentration-like quantity into state vector
 # ---------------------------------------------------
