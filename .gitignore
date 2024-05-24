@@ -218,3 +218,4 @@ pyrightconfig.json
 .DS_Store
 simulation_output/
 post_processing/
+Meshes/mesh.msh
