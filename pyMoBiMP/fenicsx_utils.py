@@ -9,8 +9,6 @@ import numpy as np
 
 from petsc4py import PETSc
 
-import ufl
-
 
 def evaluation_points_and_cells(mesh, x):
     """points_on_proc and cells to be used with dfx.fem.Function.eval()."""
@@ -156,7 +154,12 @@ def time_stepping(
         if logging:
             perc = (t - t_start) / (T - t_start) * 100
 
-            print(f"{perc:>3.0f} % : t[{it:06}] = {t:1.6f}, dt = {dt.value:1.3e}, its = {iterations}")
+            print(
+                f"{perc:>3.0f} % :",
+                f"t[{it:06}] = {t:1.6f}, "
+                f"dt = {dt.value:1.3e}, "
+                f"its = {iterations}"
+            )
 
     else:
 
@@ -343,8 +346,8 @@ class FileOutput(OutputBase):
             f"In {self.__class__}, get_output is not implemented!")
 
     def finalize(self):
-        pass  # File status should be clear since we
-              # use always use a context manager.
+        # File status should be clear since we use always use a context manager.
+        pass
 
 
 class Fenicx1DOutput(OutputBase):
