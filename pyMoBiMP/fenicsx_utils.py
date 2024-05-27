@@ -101,7 +101,7 @@ def time_stepping(
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
-            dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
+            dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
 
         except StopEvent as e:
 
