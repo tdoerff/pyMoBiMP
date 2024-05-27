@@ -321,8 +321,46 @@ class FileOutput(OutputBase):
             file.write_mesh(mesh)
 
     def extract_output(self, u_state, t):
-        # Borrow from VTXOutput.
-        return VTXOutput.extract_output(self, u_state, t)
+        V = self.u_state.function_space
+
+        num_vars = V.num_sub_spaces
+
+        # At top level, we should have two spaces, one for c and one for mu.
+        assert num_vars == 2
+
+        ret = []
+
+        for i in range(num_vars):
+
+            V_sub, _ = V.sub(i).collapse()
+
+            if i == 0:
+                name = "y"
+            elif i == 1:
+                name = "mu"
+            else:
+                raise ValueError(f"No component with index {i} available!")
+
+            num_comp = V_sub.num_sub_spaces
+
+            # If we have a single-particle space, we are already at the lowest
+            # level where the individual functions for c and mu live.
+
+            if num_comp == 0:
+                func = self.u_state.sub(i)
+                func.name = name
+
+                ret.append(func)
+
+            else:
+                for j in range(num_comp):
+
+                    func = self.u_state.sub(i).sub(j)
+                    func.name = name + f"_{j}"
+
+                    ret.append(func)
+
+        return ret
 
     def save_snapshot(self, u_state, t, force=False):
 
