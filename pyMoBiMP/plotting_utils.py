@@ -15,14 +15,13 @@ import numpy.typing as npt
 
 import os
 
-import vtk  # necessary to use latex labels in pyvista
+import vtk  # noqa: 401 necessary to use latex labels in pyvista
 import pyvista
 
 import scipy as sp
 
 from typing import List, Optional, Tuple
 
-from .cahn_hilliard_utils import AnalyzeOCP
 from .fenicsx_utils import Fenicx1DOutput
 from .gmsh_utils import dfx_spherical_mesh
 
@@ -31,7 +30,8 @@ def add_arrow(line, position=None, direction="right", size=15, color=None):
     """
     add an arrow to a line.
 
-    Copied from https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot (2024/02/28)
+    Copied from
+    https://stackoverflow.com/questions/34017866/arrow-on-a-line-plot (2024/02/28)
 
     line:       Line2D object
     position:   x-position of the arrow. If None, mean of xdata is taken
@@ -308,14 +308,14 @@ class PyvistaAnimation:
 
         it_max, update = self.it_max_and_update()
 
-        it_slider=ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0)
+        it_slider = ipywidgets.IntSlider(min=0, max=it_max - 1, step=1, value=0)
 
         widget = ipywidgets.interact(update, it=it_slider)
 
         return widget
 
     def get_gif_animation(
-        self, filename: str | os.PathLike = "anim.gif"):
+            self, filename: str | os.PathLike = "anim.gif"):
         """Stores a gif file."""
 
         it_max, update = self.it_max_and_update()
@@ -331,7 +331,7 @@ class PyvistaAnimation:
         self.plotter.close()
 
     def get_mp4_animation(
-        self, filename: str | os.PathLike = "anim.mp4"):
+            self, filename: str | os.PathLike = "anim.mp4"):
         """Stores a gif file."""
 
         it_max, update = self.it_max_and_update()
@@ -347,7 +347,7 @@ class PyvistaAnimation:
         self.plotter.close()
 
     def write_vtk_output(
-        self, filename: str | os.PathLike = "output.bp"):
+            self, filename: str | os.PathLike = "output.bp"):
 
         u = self.u_3d
         u.name = "c"
