@@ -22,7 +22,6 @@ from pyMoBiMP.cahn_hilliard_utils import (
 )
 
 from pyMoBiMP.fenicsx_utils import (
-    evaluation_points_and_cells,
     get_mesh_spacing,
     time_stepping,
     NewtonSolver,
@@ -116,10 +115,6 @@ class MultiParticleSimulation():
         dx_cell = get_mesh_spacing(mesh)
 
         print(f"Cell spacing: h = {dx_cell}")
-
-        # For later plotting use
-        x = np.linspace(0, 1, 101)
-        points_on_proc, cells = evaluation_points_and_cells(mesh, x)
 
         # Initial timestep size
         dt = dfx.fem.Constant(mesh, dx_cell * 0.01)
