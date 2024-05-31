@@ -27,35 +27,11 @@ from pyMoBiMP.fenicsx_utils import (
     time_stepping,
     NewtonSolver,
     FileOutput,
-    Fenicx1DOutput,
     RuntimeAnalysisBase,
 )
 
 
 # %%
-class Output(Fenicx1DOutput):
-
-    def extract_output(self, u_state, t):
-
-        V = self.u_state.function_space
-
-        output_snapshot = []
-
-        for i_comp in range(V.num_sub_spaces):
-
-            V_sub = V.sub(i_comp)
-
-            for k_comp in range(V_sub.num_sub_spaces):
-
-                func = u_state.sub(i_comp).sub(k_comp)
-
-                values = func.eval(self.x_eval, self.cells)
-
-                output_snapshot.append(values)
-
-        return output_snapshot
-
-
 class AnalyzeCellPotential(RuntimeAnalysisBase):
 
     def setup(
