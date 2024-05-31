@@ -119,26 +119,8 @@ class MultiParticleSimulation():
         # Initial timestep size
         dt = dfx.fem.Constant(mesh, dx_cell * 0.01)
 
-        # %%
-        elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
-
-        elem_c = elem1
-        elem_mu = elem1
-
-        multi_particle_element = ufl.MixedElement(
-            [
-                [
-                    elem_c,
-                ]
-                * num_particles,
-                [
-                    elem_mu,
-                ]
-                * num_particles,
-            ]
-        )
-
-        V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
+        # Function space.
+        V = self.create_function_space(mesh, num_particles)
 
         # %%
         # The mixed-element functions
@@ -338,6 +320,28 @@ class MultiParticleSimulation():
             runtime_analysis=rt_analysis,
             **event_params,
         )
+
+    def create_function_space(self, mesh, num_particles):
+        elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
+        elem_c = elem1
+        elem_mu = elem1
+
+        multi_particle_element = ufl.MixedElement(
+            [
+                [
+                    elem_c,
+                ]
+                * num_particles,
+                [
+                    elem_mu,
+                ]
+                * num_particles,
+            ]
+        )
+
+        V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
+        return V
 
     @staticmethod
     def free_energy(u, log, sin):
