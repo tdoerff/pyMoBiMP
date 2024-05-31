@@ -122,23 +122,9 @@ class MultiParticleSimulation():
         # Function space.
         V = self.create_function_space(mesh, num_particles)
 
-        # %%
-        # The mixed-element functions
+        # The mixed-element functions.
         u = dfx.fem.Function(V)
         u0 = dfx.fem.Function(V)
-
-        # %%
-        # Balanced state for initial data.
-
-        eps = 1e-2
-
-        res_c_left = sp.optimize.minimize_scalar(
-            lambda c: self.free_energy(c, np.log, np.sin),
-            bracket=(2 * eps, 0.05),
-            bounds=(eps, 0.05))
-
-        assert res_c_left.success
-        c_left = res_c_left.x
 
         # %%
         # Experimental setup
@@ -232,48 +218,8 @@ class MultiParticleSimulation():
         # Compose the global FEM form.
         F = sum(Fs)
 
-        # %%
         # Initial data
-        # ------------
-
-        u_ini = dfx.fem.Function(V)
-
-        # Constant
-        def c_ini_fun(x):
-            return eps * np.ones_like(x[0])
-
-        # Store concentration-like quantity into state vector
-        # ---------------------------------------------------
-
-        V_c, _ = V.sub(0).collapse()
-
-        c_ini = dfx.fem.Function(V_c)
-
-        for i_particle in range(num_particles):
-
-            c_ini.sub(i_particle).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
-
-            W = c_ini.sub(i_particle).function_space
-            x_interpolate = W.element.interpolation_points()
-
-            y_ini = dfx.fem.Expression(
-                y_of_c(c_ini.sub(i_particle)), x_interpolate)
-
-            u_ini.sub(0).sub(i_particle).interpolate(y_ini)
-
-        # Store chemical potential into state vector
-        # ------------------------------------------
-
-        for i_particle in range(num_particles):
-            c_ini_ = ufl.variable(c_ini.sub(i_particle))
-            dFdc1 = ufl.diff(self.free_energy(c_ini_, ufl.ln, ufl.sin), c_ini_)
-
-            W = u_ini.sub(1).sub(i_particle).function_space
-            u_ini.sub(1).sub(i_particle).interpolate(
-                dfx.fem.Expression(dFdc1, W.element.interpolation_points())
-            )
-
-        u_ini.x.scatter_forward()
+        u_ini = self.initial_data(V)
 
         # %%
         problem = NonlinearProblem(F, u)
@@ -342,6 +288,61 @@ class MultiParticleSimulation():
 
         V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
         return V
+
+    def initial_data(self, V):
+        # Balanced state for initial data.
+        eps = 1e-2
+
+        res_c_left = sp.optimize.minimize_scalar(
+            lambda c: self.free_energy(c, np.log, np.sin),
+            bracket=(2 * eps, 0.05),
+            bounds=(eps, 0.05))
+
+        assert res_c_left.success
+        c_left = res_c_left.x
+
+        u_ini = dfx.fem.Function(V)
+
+        num_particles = len(u_ini.split())
+
+        # Constant
+        def c_ini_fun(x):
+            return eps * np.ones_like(x[0])
+
+        # Store concentration-like quantity into state vector
+        # ---------------------------------------------------
+
+        V_c, _ = V.sub(0).collapse()
+
+        c_ini = dfx.fem.Function(V_c)
+
+        for i_particle in range(num_particles):
+
+            c_ini.sub(i_particle).interpolate(lambda x: c_left + 0 * c_ini_fun(x))
+
+            W = c_ini.sub(i_particle).function_space
+            x_interpolate = W.element.interpolation_points()
+
+            y_ini = dfx.fem.Expression(
+                y_of_c(c_ini.sub(i_particle)), x_interpolate)
+
+            u_ini.sub(0).sub(i_particle).interpolate(y_ini)
+
+        # Store chemical potential into state vector
+        # ------------------------------------------
+
+        for i_particle in range(num_particles):
+            c_ini_ = ufl.variable(c_ini.sub(i_particle))
+            dFdc1 = ufl.diff(self.free_energy(c_ini_, ufl.ln, ufl.sin), c_ini_)
+
+            W = u_ini.sub(1).sub(i_particle).function_space
+            u_ini.sub(1).sub(i_particle).interpolate(
+                dfx.fem.Expression(dFdc1, W.element.interpolation_points())
+            )
+
+        u_ini.x.scatter_forward()
+
+        return u_ini
 
     @staticmethod
     def free_energy(u, log, sin):
