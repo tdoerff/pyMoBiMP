@@ -108,23 +108,10 @@ comm_world = MPI.COMM_WORLD
 class MultiParticleSimulation():
 
     def __init__(self,
-                 n_elem=16,
+                 mesh,
                  num_particles=10,
                  n_out=501,
                  C_rate=0.01):
-        # %%
-        # Discretization
-        # --------------
-
-        # Set up the mesh
-        mesh_filename = "Meshes/line_mesh.xdmf"
-
-        if os.path.isfile(mesh_filename):
-            # Load mesh from file
-            with dfx.io.XDMFFile(comm_world, mesh_filename, 'r') as file:
-                mesh = file.read_mesh(name="Grid")
-        else:
-            mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
         dx_cell = get_mesh_spacing(mesh)
 
@@ -434,7 +421,21 @@ class MultiParticleSimulation():
 
         return False
 
-
 if __name__ == "__main__":
 
-    simulation = MultiParticleSimulation()
+    # %%
+    # Discretization
+    # --------------
+
+    # Set up the mesh
+    mesh_filename = "Meshes/line_mesh.xdmf"
+
+    if os.path.isfile(mesh_filename):
+        # Load mesh from file
+        with dfx.io.XDMFFile(comm_world, mesh_filename, 'r') as file:
+            mesh = file.read_mesh(name="Grid")
+    else:
+        n_elem = 16
+        mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
+
+    simulation = MultiParticleSimulation(mesh)
