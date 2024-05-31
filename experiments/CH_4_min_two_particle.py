@@ -164,24 +164,12 @@ class MultiParticleSimulation():
         u0 = dfx.fem.Function(V)
 
         # %%
-        # Free energy and balanced state for initial data.
-
-        def free_energy(u, log, sin):
-            a = 6.0 / 4
-            b = 0.2
-            cc = 5
-
-            return (
-                u * log(u)
-                + (1 - u) * log(1 - u)
-                + a * u * (1 - u)
-                + b * sin(cc * np.pi * u)
-            )
+        # Balanced state for initial data.
 
         eps = 1e-2
 
         res_c_left = sp.optimize.minimize_scalar(
-            lambda c: free_energy(c, np.log, np.sin),
+            lambda c: self.free_energy(c, np.log, np.sin),
             bracket=(2 * eps, 0.05),
             bounds=(eps, 0.05))
 
@@ -268,7 +256,7 @@ class MultiParticleSimulation():
                 dt,
                 M=M,
                 c_of_y=c_of_y,
-                free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
+                free_energy=lambda c: self.free_energy(c, ufl.ln, ufl.sin),
                 theta=theta,
                 lam=0.1,
                 I_charge=I_charge_,
@@ -314,7 +302,7 @@ class MultiParticleSimulation():
 
         for i_particle in range(num_particles):
             c_ini_ = ufl.variable(c_ini.sub(i_particle))
-            dFdc1 = ufl.diff(free_energy(c_ini_, ufl.ln, ufl.sin), c_ini_)
+            dFdc1 = ufl.diff(self.free_energy(c_ini_, ufl.ln, ufl.sin), c_ini_)
 
             W = u_ini.sub(1).sub(i_particle).function_space
             u_ini.sub(1).sub(i_particle).interpolate(
@@ -367,6 +355,19 @@ class MultiParticleSimulation():
             output=output_xdmf,
             runtime_analysis=rt_analysis,
             **event_params,
+        )
+
+    @staticmethod
+    def free_energy(u, log, sin):
+        a = 6.0 / 4
+        b = 0.2
+        cc = 5
+
+        return (
+            u * log(u)
+            + (1 - u) * log(1 - u)
+            + a * u * (1 - u)
+            + b * sin(cc * np.pi * u)
         )
 
     @staticmethod
