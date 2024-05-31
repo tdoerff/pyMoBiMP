@@ -112,6 +112,9 @@ class MultiParticleSimulation():
                  n_out=501,
                  C_rate=0.01):
 
+        self.mesh = mesh
+        self.C_rate = C_rate
+
         dx_cell = get_mesh_spacing(mesh)
 
         print(f"Cell spacing: h = {dx_cell}")
