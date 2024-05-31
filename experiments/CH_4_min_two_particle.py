@@ -102,14 +102,24 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
 comm_world = MPI.COMM_WORLD
 
+# %%
+# User input
+# ----------
+
+n_elem = 16
+
+num_particles = 10
+
+n_out = 501
+
+C_rate = 0.01
+
 
 # %%
 # Discretization
 # --------------
 
 # Set up the mesh
-n_elem = 16
-
 mesh_filename = "Meshes/line_mesh.xdmf"
 
 if os.path.isfile(mesh_filename):
@@ -135,8 +145,6 @@ elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
 
 elem_c = elem1
 elem_mu = elem1
-
-num_particles = 10
 
 multi_particle_element = ufl.MixedElement(
     [
@@ -195,9 +203,6 @@ c_right = res_c_right.x
 # %%
 # Experimental setup
 # ------------------
-
-#
-C_rate = 0.01
 
 # charging current
 I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate * num_particles)
@@ -411,8 +416,6 @@ solver.tol = 1e-3
 
 u.interpolate(u_ini)
 
-n_out = 501
-
 results_folder = Path("simulation_output")
 results_folder.mkdir(exist_ok=True, parents=True)
 
@@ -428,23 +431,21 @@ rt_analysis = AnalyzeCellPotential(
     c_of_y=c_of_y, filename=results_folder / (base_filename + "_rt.txt")
 )
 
+# %%
+# Run the experiment
+# ------------------
 
-if __name__ == "__main__":
-    # %%
-    # Run the experiment
-    # ------------------
-
-    time_stepping(
-        solver,
-        u,
-        u0,
-        T_final,
-        dt,
-        dt_max=1e-1,
-        dt_min=1e-8,
-        tol=1e-4,
-        event_handler=experiment,
-        output=output_xdmf,
-        runtime_analysis=rt_analysis,
-        **event_params,
-    )
+time_stepping(
+    solver,
+    u,
+    u0,
+    T_final,
+    dt,
+    dt_max=1e-1,
+    dt_min=1e-8,
+    tol=1e-4,
+    event_handler=experiment,
+    output=output_xdmf,
+    runtime_analysis=rt_analysis,
+    **event_params,
+)
