@@ -136,7 +136,7 @@ class MultiParticleSimulation():
         # charging current
         I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate * num_particles)
 
-        T_final = 6.0 / C_rate if C_rate > 0 else 2.0  # ending time
+        T_final = self.T_final
 
         event_params = dict(
             I_charge=I_charge,
@@ -346,6 +346,10 @@ class MultiParticleSimulation():
         u_ini.x.scatter_forward()
 
         return u_ini
+
+    @property
+    def T_final(self):
+        return 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
 
     @staticmethod
     def free_energy(u, log, sin):
