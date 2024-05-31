@@ -123,11 +123,11 @@ class MultiParticleSimulation():
         dt = dfx.fem.Constant(mesh, dx_cell * 0.01)
 
         # Function space.
-        V = self.create_function_space(mesh, num_particles)
+        self.V = self.create_function_space(mesh, num_particles)
 
         # The mixed-element functions.
-        u = dfx.fem.Function(V)
-        u0 = dfx.fem.Function(V)
+        u = dfx.fem.Function(self.V)
+        u0 = dfx.fem.Function(self.V)
 
         # %%
         # Experimental setup
@@ -164,7 +164,7 @@ class MultiParticleSimulation():
         mu1s = ufl.split(mu)
         mu0s = ufl.split(mu0)
 
-        v_c, v_mu = ufl.TestFunctions(V)
+        v_c, v_mu = ufl.TestFunctions(self.V)
 
         v_cs = ufl.split(v_c)
         v_mus = ufl.split(v_mu)
@@ -222,7 +222,7 @@ class MultiParticleSimulation():
         F = sum(Fs)
 
         # Initial data
-        u_ini = self.initial_data(V)
+        u_ini = self.initial_data()
 
         # %%
         problem = NonlinearProblem(F, u)
@@ -292,7 +292,7 @@ class MultiParticleSimulation():
         V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
         return V
 
-    def initial_data(self, V):
+    def initial_data(self):
         # Balanced state for initial data.
         eps = 1e-2
 
@@ -304,9 +304,7 @@ class MultiParticleSimulation():
         assert res_c_left.success
         c_left = res_c_left.x
 
-        u_ini = dfx.fem.Function(V)
-
-        num_particles = len(u_ini.split())
+        u_ini = dfx.fem.Function(self.V)
 
         # Constant
         def c_ini_fun(x):
@@ -315,9 +313,14 @@ class MultiParticleSimulation():
         # Store concentration-like quantity into state vector
         # ---------------------------------------------------
 
-        V_c, _ = V.sub(0).collapse()
+        V_c, _ = self.V.sub(0).collapse()
 
         c_ini = dfx.fem.Function(V_c)
+
+        # extract number of particles
+        y, _ = u_ini.split()
+
+        num_particles = len(y.split())
 
         for i_particle in range(num_particles):
 
