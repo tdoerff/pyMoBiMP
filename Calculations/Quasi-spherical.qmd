@@ -22,13 +22,17 @@ $$
     \end{aligned}
 $$
 
-## Numerical experiments
+## Compute a generalization of the radius
 
 ```{python}
 import dolfinx as dfx
+from dolfinx.fem.petsc import LinearProblem
 
 import gmsh
 
+import matplotlib.pyplot as plt
+
+from mpi4py import MPI
 from mpi4py.MPI import COMM_WORLD as comm
 
 import numpy as np
@@ -38,7 +42,24 @@ import pyvista as pv
 import ufl
 ```
 
-### Spherical mesh
+First, we manufacture a problem and test how it behaves:
+$$
+    u = r^2 \qquad \Rightarrow\qquad \Delta u = 4 \qquad\mbox{on } \Omega
+$$
+and in particular
+$$
+    u = r^2 \qquad\mbox{on } \partial \Omega
+$$
+
+The weak form of the PDE:
+$$
+    -\int\limits_\Omega \nabla u \cdot \nabla v \, dV = -\int\limits_{\partial\Omega} v \underbrace{\nabla u \cdot \vec n}_{r} \, dS + \int\limits_\Omega 4 v \, dV
+$$
+
+### Circular mesh
+
+We first compute a radial coordinate for a circular grid for reference.
+The boundary condition $\left. u \right|_{\partial \Omega} = 1$ determines the scaling.
 
 ```{python}
 
@@ -78,18 +99,148 @@ gmsh.finalize()
 
 ```{python}
 
-plotter = pv.Plotter()
-
 V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
 
+# Construct the FEM form
+u = ufl.TrialFunction(V)
+v = ufl.TestFunction(V)
+
+x, y, z = ufl.SpatialCoordinate(mesh)
+
+a = -ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
+L = 4 * v * ufl.dx
+
+# The boundary conditions:
+# Construct them topologically, ie, find the dofs
+# of the outer edge and set the (generalized) radius value there.
+tdim = mesh.topology.dim
+fdim = tdim - 1
+
+mesh.topology.create_connectivity(fdim, tdim)
+
+boundary_facets = dfx.mesh.exterior_facet_indices(mesh.topology)
+
+bcs = [
+    dfx.fem.dirichletbc(
+        1., dfx.fem.locate_dofs_topological(V, fdim, boundary_facets), V)]
+
+# Problem and solver setup.
+problem = LinearProblem(a, L, bcs)
+
+# The solution.
+u = problem.solve()
+
+
+# Keep the distance coordinate
+eps = 1e-8
+s = dfx.fem.Function(V)
+s.interpolate(dfx.fem.Expression(
+    ((u + eps))**0.5, V.element.interpolation_points()))
+
+radius = s.x.array.max()
+
+x = ufl.SpatialCoordinate(mesh)
+r = (x[0]**2 + x[1]**2)**0.5
+
+error = dfx.fem.Function(V)
+error.interpolate(dfx.fem.Expression(s - r, V.element.interpolation_points()))
+
+error_max = np.abs(error.x.array).max()
+```
+
+For the circular mesh, we obtain the radius $R = `{python} radius` \approx 1$. The maximum error is `{python} error_max`
+
+```{python}
+
+plotter = pv.Plotter()
+
 grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+grid.point_data["u"] = s.x.array
+grid.set_active_scalars("u")
+
+grid.point_data["s"] = s.x.array
+
+grid = grid.warp_by_scalar('s')
 
 plotter.add_mesh(grid, show_edges=True)
 
 plotter.show()
 ```
 
+As an intermediate step, we just stretch the grid by a factor of 2 and try to reproduce the radius and the radial coordinate.
+
+```{python}
+
+mesh.geometry.x[:, :] *= 2
+
+# Construct the FEM form
+u = ufl.TrialFunction(V)
+v = ufl.TestFunction(V)
+
+a = -ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
+L = v * ufl.dx
+
+# The boundary conditions:
+# Construct them topologically, ie, find the dofs
+# of the outer edge and set the (generalized) radius value there.
+tdim = mesh.topology.dim
+fdim = tdim - 1
+
+mesh.topology.create_connectivity(fdim, tdim)
+
+boundary_facets = dfx.mesh.exterior_facet_indices(mesh.topology)
+
+bcs = [
+    dfx.fem.dirichletbc(
+        1., dfx.fem.locate_dofs_topological(V, fdim, boundary_facets), V)]
+
+# Problem and solver setup.
+problem = LinearProblem(a, L, bcs)
+
+# The solution.
+u = problem.solve()
+
+# Keep the distance coordinate
+eps = 1e-8
+s = dfx.fem.Function(V)
+s.interpolate(dfx.fem.Expression(
+    ((u + eps))**0.5, V.element.interpolation_points()))
+
+radius = s.x.array.max()
+
+x = ufl.SpatialCoordinate(mesh)
+r = (x[0]**2 + x[1]**2)**0.5
+
+error = dfx.fem.Function(V)
+error.interpolate(dfx.fem.Expression(s - 0.5 * r, V.element.interpolation_points()))
+
+error_max = np.abs(error.x.array).max()
+```
+
+```{python}
+
+plotter = pv.Plotter()
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+grid.point_data["u"] = u.x.array
+grid.set_active_scalars("u")
+
+grid.point_data["s"] = s.x.array
+
+grid = grid.warp_by_scalar('s')
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
+```
+
+Now, we obtain the radius $R = `{python} radius` \approx 2$. The maximum error is `{python} error_max`
+
 ### Distorted mesh
+
+Now, we do the same as above but for a distorted mesh. To this end, first distort the mesh by a small perturbation.
 
 ```{python}
 
@@ -111,17 +262,206 @@ e_r = np.array([
     np.sin(phi).squeeze()]).T
 
 mesh.geometry.x[:, :2] += r * 0.2 * e_r * np.sin(phi)
+# mesh.geometry.x[:, :2] += r * 0.2 * e_r * np.sin(0.5 * phi)
+```
 
-plotter = pv.Plotter()
+Again, we solve the problem $\Delta u = 4$ s.t. $u = s^2$.
+
+```{python}
 
 V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
 
+# Construct the form with Neumann conditions
+
+u = ufl.TrialFunction(V)
+v = ufl.TestFunction(V)
+
+x, y, z = ufl.SpatialCoordinate(mesh)
+
+a = -ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
+L = 4 * v * ufl.dx
+
+
+from dolfinx.fem.petsc import LinearProblem
+
+# a == L
+problem = LinearProblem(a, L, bcs)
+
+u = problem.solve()
+
+# u_min_loc = u.x.array.min()
+# min_u = u.function_space.mesh.comm.allreduce(u_min_loc, op=MPI.MIN)
+# u_max_loc = u.x.array.max()
+# max_u = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+
+# u.x.array[:] += min_u
+
+# Keep the distance coordinate
+s = dfx.fem.Function(V)
+s.interpolate(dfx.fem.Expression(
+    u**0.5, V.element.interpolation_points()))
+
+radius_loc = s.x.array.max()
+radius = mesh.comm.allreduce(radius_loc, op=MPI.MAX)
+```
+
+For the distorted mesh, we obtain the radius $R = `{python} radius`$.
+
+```{python}
+
+plotter = pv.Plotter()
+
 grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+# grid.point_data["u"] = u.x.array
+# grid.set_active_scalars("u")
+
+# grid.point_data["s"] = s.x.array
+
+# grid = grid.warp_by_scalar('s')
 
 plotter.add_mesh(grid, show_edges=True)
 
 plotter.show()
+```
 
-print(e_r.shape)
-print(phi.shape)
+## Use the quasi-radial coordinate
+
+We want to use the quasi-radial coordinate $s$ computed previously to solve a quasi-symmetric boundary-value problem.
+
+Thus, we want so solve the problem
+$$
+    \Delta u = f \qquad\mbox{on}\quad \partial \Omega
+$$
+where $f = f(s)$ is a function purely dependent on the quasi-radial coordinate.
+
+First, we solve on the 2D grid:
+```{python}
+
+# The right-hand side source.
+f = dfx.fem.Function(V)
+
+f.interpolate(dfx.fem.Expression(
+    ufl.exp(-s**2), V.element.interpolation_points()))
+
+u = ufl.TrialFunction(V)
+v = ufl.TestFunction(V)
+
+a = -ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
+L = f * v * ufl.dx
+
+# a == L
+problem = LinearProblem(a, L, bcs)
+
+u_2d = problem.solve()
+
+```
+
+```{python}
+
+plotter = pv.Plotter()
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+grid.point_data["u"] = u_2d.x.array
+grid.set_active_scalars("u")
+
+grid.point_data["s"] = s.x.array
+
+grid = grid.warp_by_scalar('u')
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
+```
+
+Next, we try to solve the 1D problem and remap to the 2D grid.
+
+```{python}
+
+mesh_1d = dfx.mesh.create_interval(MPI.COMM_WORLD, 128, (0, radius))
+
+V_1d = dfx.fem.FunctionSpace(mesh_1d, ("CG", 1))
+```
+
+```{python}
+
+# The right-hand side source.
+r = dfx.fem.Function(V_1d)
+r.interpolate(lambda x: x[0])
+
+f = ufl.exp(-r**2)
+
+u = ufl.TrialFunction(V_1d)
+v = ufl.TestFunction(V_1d)
+
+a = - r * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
+L = r * f * v * ufl.dx
+
+def outer(x):
+    return np.isclose(x[0], radius)
+
+dofs = dfx.fem.locate_dofs_geometrical(V_1d, outer)
+
+bcs = [
+    dfx.fem.dirichletbc(1., dofs, V_1d)
+]
+
+# a == L
+problem = LinearProblem(a, L, bcs)
+
+u_1d = problem.solve()
+
+# Plot the 1D solution
+plt.figure()
+
+plt.plot(mesh_1d.geometry.x[:, 0], u_1d.x.array)
+
+plt.show()
+
+```
+
+```{python}
+import scipy as sp
+
+poly = sp.interpolate.interp1d(mesh_1d.geometry.x[:, 0], u_1d.x.array, fill_value="extrapolate")
+
+u_interp = dfx.fem.Function(V)
+u_interp.x.array[:] = poly(s.x.array[:])
+```
+
+```{python}
+
+plotter = pv.Plotter()
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+grid.point_data["u"] = u_interp.x.array
+grid.set_active_scalars("u")
+
+grid.point_data["s"] = s.x.array
+
+grid = grid.warp_by_scalar('u')
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
+```
+
+```{python}
+
+plotter = pv.Plotter()
+
+grid = pv.UnstructuredGrid(*dfx.plot.vtk_mesh(V))
+
+grid.point_data["u"] = u_interp.x.array - u_2d.x.array
+grid.set_active_scalars("u")
+
+grid.point_data["s"] = s.x.array
+
+grid = grid.warp_by_scalar('u')
+
+plotter.add_mesh(grid, show_edges=True)
+
+plotter.show()
 ```

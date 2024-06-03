@@ -1,2 +1,5 @@
 *_files/*
 *.html
+*.h5
+*.xdmf
+*.msh
