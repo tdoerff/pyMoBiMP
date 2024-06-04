@@ -42,7 +42,11 @@ def assemble_plot_grid(num_particles: int):
     Nx = math.floor(N)
     Ny = math.ceil(N)
 
-    if Nx * Ny < N:
+    # Anyhow, make sure that we have enough grid positions for all particles.
+    # Round-off errors might cause situations where N**2 = num_particles - eps
+    # s.t. there might be one row missing in the resulting grid.
+    # E.g.: sqrt(9) ~ 2.99999 => Nx = 2, Ny = 3 => Nx * Ny < num_particles.
+    if Nx * Ny < num_particles:
         Nx += 1
 
     x, y = np.meshgrid(np.arange(Nx), np.arange(Ny))
