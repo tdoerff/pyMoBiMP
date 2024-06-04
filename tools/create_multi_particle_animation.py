@@ -17,6 +17,11 @@ import tqdm
 from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
 
 
+# open issues
+# [ ] add r-c plot
+# [ ] add q-V plot
+# [ ] make it a class
+
 def assemble_plot_grid(num_particles: int):
     """Find an arrangement for closest to a square for a given number of particles.
 
