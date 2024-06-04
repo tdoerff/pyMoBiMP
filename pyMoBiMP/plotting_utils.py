@@ -6,6 +6,8 @@ import dolfinx
 
 import ipywidgets
 
+import math
+
 from matplotlib import pyplot as plt
 
 from mpi4py.MPI import COMM_WORLD
@@ -149,7 +151,44 @@ def animate_time_series(output, c_of_y):
     )
 
 
+def assemble_plot_grid(num_particles: int):
+    """Find an arrangement for closest to a square for a given number of particles.
+
+    Parameters
+    ----------
+    num_particles : int
+        number of particles to distribute
+
+    Returns
+    -------
+    plot_grid : np.array
+        Index mapping returning the plot coordinates for a given particle index.
+    """
+
+    N = num_particles**0.5
+
+    # Note that this construction ensures that Nx * Ny > num_particles.
+    Nx = math.floor(N)
+    Ny = math.ceil(N)
+
+    # Anyhow, make sure that we have enough grid positions for all particles.
+    # Round-off errors might cause situations where N**2 = num_particles - eps
+    # s.t. there might be one row missing in the resulting grid.
+    # E.g.: sqrt(9) ~ 2.99999 => Nx = 2, Ny = 3 => Nx * Ny < num_particles.
+    if Nx * Ny < num_particles:
+        Nx += 1
+
+    x, y = np.meshgrid(np.arange(Nx), np.arange(Ny))
+    plot_grid = np.array([x.flatten(), y.flatten()]).T
+
+    return plot_grid
+
+
 class PyvistaAnimation:
+
+    # FIXMEs:
+    # [ ] fix t-c plots for multiple particles
+    # [ ] get back the clipped-sphere plots
 
     def __init__(
         self,
@@ -158,9 +197,10 @@ class PyvistaAnimation:
         plot_c_of_r: bool = True,
         c_of_y: Callable[[npt.ArrayLike], npt.ArrayLike] = lambda y: y,
         f_of_q: Optional[Callable[[npt.ArrayLike], npt.ArrayLike]] = None,
-        mesh_3d: Optional[dolfinx.mesh.Mesh] = None,
-        res: float = 1.0,
+        meshes: Optional[dolfinx.mesh.Mesh] = None,
         specular: float = 1.0,
+        auto_close=False,
+        interactive_update=True,
         **plotter_kwargs
     ):
 
@@ -186,18 +226,11 @@ class PyvistaAnimation:
         self.r = np.array(r)[:, 0]
 
         self.data_out = np.array(data_out)
-        self.data_out[:, 0, :] = c_of_y(self.data_out[:, 0, :])
+        self.data_out[..., 0, :] = c_of_y(self.data_out[..., 0, :])
 
         self.t_out = np.array(t_out)
 
-        if mesh_3d is None:
-            mesh_3d, _, _ = dfx_spherical_mesh(COMM_WORLD, resolution=res)
-
-        # Create the function space and Function object for holding the data
-        # ------------------------------------------------------------------
-        V_3d = dolfinx.fem.functionspace(mesh_3d, ("CG", 1))
-
-        self.u_3d = dolfinx.fem.Function(V_3d)
+        self.meshes = meshes
 
         # Initialize pyvista plotter
         # ==========================
@@ -231,14 +264,9 @@ class PyvistaAnimation:
             self.plotter.subplot(self.num_plots - 1)
 
         # The unclipped grid.
-        self.grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(V_3d))
+        self.grids = self.set_up_pv_grids()
 
-        self._update_data_on_grid(0)
-
-        grid_clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
-
-        self.plotter.add_mesh(grid_clipped, **plotter_kwargs)
-
+        # TODO: optionally clip grids
         self.time_label = self.plotter.add_text(f"t = {self.t_out[0]:1.3f}")
 
         # radial charge distribution
@@ -248,7 +276,7 @@ class PyvistaAnimation:
 
             chart = pyvista.Chart2D()
 
-            c = self.data_out[0, 0, :]
+            c = self.data_out[0, ..., 0, :]
 
             chart.line(r, c, color=(0, 0, 0))
 
@@ -261,7 +289,7 @@ class PyvistaAnimation:
 
             # Initialized actors
             self.c_t_chart = chart
-            self.c_t_line = chart.line(r, c, 'r')
+            self.c_t_lines = [chart.line(self.r, c_i, 'r') for c_i in c]
 
         # cell voltage plot
         # -----------------
@@ -296,7 +324,34 @@ class PyvistaAnimation:
             self.q_mu_chart = chart
             self.q_mu_scatter = chart.scatter([], [])
 
-        self.show()
+        self.show(auto_close=auto_close, interactive_update=interactive_update)
+
+    def set_up_pv_grids(self,
+                        shift: float = 2.):
+
+        grids = []
+
+        num_particles = len(self.meshes)
+
+        plot_grid = assemble_plot_grid(num_particles)
+
+        for i_particle in range(num_particles):
+
+            V = dolfinx.fem.FunctionSpace(self.meshes[i_particle], ("CG", 1))
+
+            topology, cell_types, x = dolfinx.plot.vtk_mesh(V)
+
+            x[:, :2] += shift * plot_grid[i_particle]
+
+            grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+
+            self.update_on_grid(i_particle, 0, V.mesh, grid)
+
+            grids.append(grid)
+
+            self.plotter.add_mesh(grid, **self.plotter_kwargs)
+
+        return grids
 
     def it_max_and_update(self):
         """Returns it_max and update to be used, e.g., in ipywidget"""
@@ -369,19 +424,17 @@ class PyvistaAnimation:
 
         file.close()
 
-    def show(self):
-        self.plotter.show()
+    def show(self, **kwargs):
+        self.plotter.show(**kwargs)
 
     def update(self, it):
 
-        self._update_data_on_grid(it)
-
-        self._update_clipped_grid()
+        self._update_data_on_all_grids(it)
 
         self._update_time_label(it)
 
-        if self.plot_c_of_r:
-            self._update_c_t(it)
+        # if self.plot_c_of_r:
+            # self._update_c_t(it)
 
         if self.plot_cell_voltage:
             self._update_q_mu(it)
@@ -398,15 +451,21 @@ class PyvistaAnimation:
 
         self.time_label = self.plotter.add_text(f"t = {self.t_out[it]:1.3f}")
 
-    def _update_data_on_grid(self, it):
+    def update_on_grid(self, i_particle, i_t, dfx_mesh, pv_grid):
 
-        c = self.data_out[it, 0, :]
+        r_sphere = np.sqrt((dfx_mesh.geometry.x[:, :]**2).sum(axis=-1))
 
-        poly = sp.interpolate.interp1d(self.r, c, fill_value="extrapolate")
+        c = self.data_out[i_t, i_particle, 0, :]
 
-        self.u_3d.interpolate(lambda x: poly((x[0]**2 + x[1]**2 + x[2]**2)**0.5))
+        u_3d = np.interp(r_sphere, self.r, c)
 
-        self.grid["u"] = self.u_3d.x.array
+        pv_grid["u"] = u_3d
+
+    def _update_data_on_all_grids(self, it):
+
+        for i_particle, (grid, dfx_mesh) in enumerate(zip(self.grids, self.meshes)):
+
+            self.update_on_grid(i_particle, it, dfx_mesh, grid)
 
     def _update_clipped_grid(self):
 
