@@ -3,11 +3,17 @@ import abc
 import dolfinx as dfx
 from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
+import h5py
+
 from mpi4py import MPI
 
 import numpy as np
 
+import os
+
 from petsc4py import PETSc
+
+import shutil
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -463,3 +469,97 @@ class RuntimeAnalysisBase(abc.ABC):
 
 class StopEvent(Exception):
     pass
+
+
+class SimulationFile(h5py.File):
+    """A file handler class to open pyMoBiMP simulation output.
+
+    The main purpose of the class is to wrap a copy operation to the
+    standard h5py file handler to avoid deadlocks when opening files
+    from a running simulation.
+
+    Attributes
+    ----------
+    _file_name : str
+        file name pointing to the simulation output
+    _file_name_tmp : str
+        the temporary file name of the copied file
+    """
+
+    def __init__(self, file_name_base):
+        """Construct file name and temporary file name.
+
+        Parameters
+        ----------
+        file_name_base : str | pathlib.Path
+            file name pointing to the file name base or XDMF or H5 file.
+        """
+
+        # Strip off the file ending for uniform file handling
+        if file_name_base[-3:] == ".h5":
+            file_name_base[-3:]
+
+        elif file_name_base[-5:] == ".xdmf":
+            file_name_base[-5:]
+
+        # Make sure we have to absolute file name at hand.
+        file_name_base = os.path.abspath(file_name_base)
+
+        self._file_name = file_name_base + ".h5"
+        self._file_name_tmp = file_name_base + "_tmp" + ".h5"
+
+        # To avoid file locks, copy the current version of the file to a tmp file.
+        shutil.copy(self._file_name, self._file_name_tmp)
+
+        # Advise base class to open the tmp file.
+        super().__init__(self._file_name_tmp)
+
+    def __exit__(self, *args, **kwargs):
+        """
+        Ensures that after the file operation is done, the temporary file is deleted.
+        """
+
+        super().__exit__(self, *args, **kwargs)
+
+        # ... and remove it
+        os.remove(self._file_name_tmp)
+
+
+def read_data(filebasename):
+
+    print(f"Read data from {filebasename} ...")
+
+    with SimulationFile(filebasename) as f:
+        print(f["Function"].keys())
+
+        num_particles = len(f["Function"].keys()) // 2
+
+        print(f"Found {num_particles} particles.")
+
+        # grid coordinates
+        x_data = f["Mesh/mesh/geometry"][()]
+
+        t_keys = f["Function/y_0"].keys()
+
+        # time steps (convert from string to float)
+        t = [float(t.replace("_", ".")) for t in t_keys]
+
+        # list of data stored as numpy arrays
+        u_data = np.array([
+            [(f[f"Function/y_{i_part}"][u_key][()].squeeze(),
+              f[f"Function/mu_{i_part}"][u_key][()].squeeze())
+             for i_part in range(num_particles)] for u_key in t_keys])
+
+    # It is necessary to sort the input by the time.
+    sorted_indx = np.argsort(t)
+
+    t = np.array(t)[sorted_indx]
+    u_data = np.array(u_data)[sorted_indx]
+
+    # Read the runtime analysis output.
+    rt_data = np.loadtxt(filebasename + "_rt.txt")
+
+    # Total charge is not normalized.
+    rt_data[:, 1] /= num_particles
+
+    return num_particles, t, x_data, u_data, rt_data

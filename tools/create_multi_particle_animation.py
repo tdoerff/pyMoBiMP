@@ -5,190 +5,14 @@ Usage: python create_multi_particle_animation.py <simulation_base_name>
 
 import argparse
 import dolfinx as dfx
-import h5py
-import math
 from mpi4py.MPI import COMM_WORLD as comm
 import numpy as np
 import os
-import pyvista as pv
-import shutil
 import tqdm
 
+from pyMoBiMP.fenicsx_utils import read_data
 from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
-
-
-# open issues
-# [ ] add r-c plot
-# [ ] add q-V plot
-# [ ] make it a class
-
-def assemble_plot_grid(num_particles: int):
-    """Find an arrangement for closest to a square for a given number of particles.
-
-    Parameters
-    ----------
-    num_particles : int
-        number of particles to distribute
-
-    Returns
-    -------
-    plot_grid : np.array
-        Index mapping returning the plot coordinates for a given particle index.
-    """
-
-    N = num_particles**0.5
-
-    # Note that this construction ensures that Nx * Ny > num_particles.
-    Nx = math.floor(N)
-    Ny = math.ceil(N)
-
-    # Anyhow, make sure that we have enough grid positions for all particles.
-    # Round-off errors might cause situations where N**2 = num_particles - eps
-    # s.t. there might be one row missing in the resulting grid.
-    # E.g.: sqrt(9) ~ 2.99999 => Nx = 2, Ny = 3 => Nx * Ny < num_particles.
-    if Nx * Ny < num_particles:
-        Nx += 1
-
-    x, y = np.meshgrid(np.arange(Nx), np.arange(Ny))
-    plot_grid = np.array([x.flatten(), y.flatten()]).T
-
-    return plot_grid
-
-
-def set_up_pv_grids(meshes: list[dfx.mesh.Mesh],
-                    plotter: pv.Plotter,
-                    i_t0: int = 0,
-                    **plotter_kwargs):
-
-    grids = []
-
-    num_particles = len(meshes)
-
-    plot_grid = assemble_plot_grid(num_particles)
-
-    for i_particle in range(num_particles):
-
-        V = dfx.fem.FunctionSpace(meshes[i_particle], ("CG", 1))
-
-        topology, cell_types, x = dfx.plot.vtk_mesh(V)
-
-        x[:, :2] += 2. * plot_grid[i_particle]
-
-        grid = pv.UnstructuredGrid(topology, cell_types, x)
-
-        update_on_grid(i_particle, i_t0, V.mesh, grid)
-
-        grids.append(grid)
-
-        plotter.add_mesh(grid, **plotter_kwargs)
-
-    return grids
-
-
-def update_on_grid(i_particle, i_t, dfx_mesh, pv_grid):
-
-    r_sphere = np.sqrt((dfx_mesh.geometry.x[:, :]**2).sum(axis=-1))
-
-    # TODO: make this replaceable.
-    def c_of_y(y): return np.exp(y) / (1 + np.exp(y))
-
-    c = c_of_y(u_data[i_t, i_particle, 0, :])
-    r = x_data[:, 0]
-
-    u_3d = np.interp(r_sphere, r, c)
-
-    pv_grid["u"] = u_3d
-
-
-class SimulationFile(h5py.File):
-    """A file handler class to open pyMoBiMP simulation output.
-
-    The main purpose of the class is to wrap a copy operation to the
-    standard h5py file handler to avoid deadlocks when opening files
-    from a running simulation.
-
-    Attributes
-    ----------
-    _file_name : str
-        file name pointing to the simulation output
-    _file_name_tmp : str
-        the temporary file name of the copied file
-    """
-
-    def __init__(self, file_name_base):
-        """Construct file name and temporary file name.
-
-        Parameters
-        ----------
-        file_name_base : str | pathlib.Path
-            file name pointing to the file name base or XDMF or H5 file.
-        """
-
-        # Strip off the file ending for uniform file handling
-        if file_name_base[-3:] == ".h5":
-            file_name_base[-3:]
-
-        elif file_name_base[-5:] == ".xdmf":
-            file_name_base[-5:]
-
-        # Make sure we have to absolute file name at hand.
-        file_name_base = os.path.abspath(file_name_base)
-
-        self._file_name = file_name_base + ".h5"
-        self._file_name_tmp = file_name_base + "_tmp" + ".h5"
-
-        # To avoid file locks, copy the current version of the file to a tmp file.
-        shutil.copy(self._file_name, self._file_name_tmp)
-
-        # Advise base class to open the tmp file.
-        super().__init__(self._file_name_tmp)
-
-    def __exit__(self, *args, **kwargs):
-        """
-        Ensures that after the file operation is done, the temporary file is deleted.
-        """
-
-        super().__exit__(self, *args, **kwargs)
-
-        # ... and remove it
-        os.remove(self._file_name_tmp)
-
-
-def read_data(filebasename):
-
-    print(f"Read data from {filebasename} ...")
-
-    with SimulationFile(filebasename) as f:
-        print(f["Function"].keys())
-
-        num_particles = len(f["Function"].keys()) // 2
-
-        print(f"Found {num_particles} particles.")
-
-        # grid coordinates
-        x_data = f["Mesh/mesh/geometry"][()]
-
-        t_keys = f["Function/y_0"].keys()
-
-        # time steps (convert from string to float)
-        t = [float(t.replace("_", ".")) for t in t_keys]
-
-        # list of data stored as numpy arrays
-        u_data = np.array([
-            [(f[f"Function/y_{i_part}"][u_key][()].squeeze(),
-              f[f"Function/mu_{i_part}"][u_key][()].squeeze())
-             for i_part in range(num_particles)] for u_key in t_keys])
-
-    # It is necessary to sort the input by the time.
-    sorted_indx = np.argsort(t)
-
-    t = np.array(t)[sorted_indx]
-    u_data = np.array(u_data)[sorted_indx]
-
-    # Read the runtime analysis output.
-    rt_data = np.loadtxt(filebasename + "_rt.txt")
-
-    return num_particles, t, x_data, u_data, rt_data
+from pyMoBiMP.plotting_utils import PyvistaAnimation
 
 
 def f_of_q(q):
@@ -253,58 +77,24 @@ if __name__ == "__main__":
     # Create visualization
     # --------------------
 
-    plotter = pv.Plotter(shape="1/1")
+    pbar = tqdm.tqdm(len(t))
 
-    plotter.subplot(1)
-    grids = set_up_pv_grids(meshes, plotter, clim=args.clim, cmap=args.cmap)
+    class MyPyvistaAnimation(PyvistaAnimation):
 
-    plotter.show(auto_close=args.close, interactive_update=True)
+        def update(self, i):
 
-    plotter.subplot(0)
+            super().update(i)
+            pbar.update(1)
 
-    chart = pv.Chart2D()
+    anim = MyPyvistaAnimation(
+        (x_data, t, u_data),
+        rt_data,
+        c_of_y=lambda y: np.exp(y) / (1 + np.exp(y)),
+        f_of_q=f_of_q,
+        meshes=meshes,
+        cmap=args.cmap,
+        clim=args.clim,
+        auto_close=args.close
+    )
 
-    q = rt_data[:, 1] / num_particles
-    mu = rt_data[:, 3]
-
-    chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
-
-    chart.x_range = [0, 1]
-    eps = 0.5
-    chart.y_range = [min(mu) - eps, max(mu) + eps]
-
-    if f_of_q is not None:
-        eps = 1e-3
-        q = np.linspace(eps, 1 - eps, 101)
-
-        chart.line(q, -f_of_q(q), color="tab:orange", style="--", label=r"$f_A$")
-
-        eps = 0.5
-        chart.y_range = \
-            [min(chart.y_range[0], min(-f_of_q(q) - eps)),
-                max(chart.y_range[1], max(-f_of_q(q) + eps))]
-
-    plotter.add_chart(chart)
-
-    # Write to file
-    # -------------
-
-    plotter.open_movie(args.output)
-
-    def update_all_grid(i_t, grids):
-        for i_particle in range(num_particles):
-            update_on_grid(i_particle, i_t, meshes[i_particle], grids[i_particle])
-
-    def update(i):
-        update_all_grid(i, grids)
-        plotter.update()
-
-    for it in tqdm.trange(len(t)):
-
-        update(it)
-
-        plotter.write_frame()
-
-
-    # TODO: arrive at interface
-    # anim = Animation(**args)
+    anim.get_mp4_animation(args.output)
