@@ -213,7 +213,8 @@ if __name__ == "__main__":
     parser.add_argument("filename", type=str)
     parser.add_argument("-m", "--mesh-file", type=str)
     parser.add_argument("-r", "--mesh-resolution", type=float, default=1.0)
-    parser.add_argument("-o", "--output", type=str, default="multi_particle_anim.mpeg")
+    parser.add_argument("-o", "--output", type=str,
+                        default="multi_particle_anim.mp4")
     parser.add_argument("-c", "--clim", type=float, nargs=2, default=[0., 1.])
     parser.add_argument("--cmap", type=str, default="fire")
     parser.add_argument("--close", action="store_true")
@@ -248,6 +249,7 @@ if __name__ == "__main__":
             mesh_3d = file.read_mesh()
 
     meshes = [mesh_3d, ] * num_particles
+
     # Create visualization
     # --------------------
 
