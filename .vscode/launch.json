@@ -11,6 +11,15 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "cwd": "${fileDirname}"
+        },
+        {
+            "name": "Python Debugger: animation tool",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${fileDirname}",
+            "args": ["../simulation_output/CH_4_min_2_particle", "-r", "1."]
         }
     ]
 }
