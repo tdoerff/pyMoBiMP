@@ -225,7 +225,11 @@ class PyvistaAnimation:
 
         self.r = np.array(r)[:, 0]
 
-        self.data_out = np.array(data_out)
+        # make sure even for a single particle we can use the upcoming code
+        shape = len(t_out), -1, 2, len(self.r)
+        self.data_out = np.array(data_out).reshape(shape)
+
+        # Convert y to c.
         self.data_out[..., 0, :] = c_of_y(self.data_out[..., 0, :])
 
         self.t_out = np.array(t_out)
@@ -496,7 +500,8 @@ class PyvistaAnimation:
         q = np.array([sp.integrate.trapezoid(
             3 * self.r**2 * c, self.r, axis=-1) for c in cs]).sum(axis=0) / num_particles
 
-        mu = self.data_out[it, 1, -1]
+        # chemical potential time series at the outer edge for each particle.
+        mu = self.data_out[it, ..., 1, -1]
 
         self.q_mu_chart.remove_plot(self.q_mu_scatter)
 
