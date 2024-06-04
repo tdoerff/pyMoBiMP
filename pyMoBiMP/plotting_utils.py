@@ -299,7 +299,7 @@ class PyvistaAnimation:
             chart = pyvista.Chart2D(x_label=r"$q$", y_label=r"$\mu$")
 
             q = rt_data[:, 1]
-            mu = rt_data[:, 3]
+            mu = rt_data[:, -1]
 
             chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
 
