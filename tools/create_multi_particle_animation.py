@@ -297,3 +297,7 @@ if __name__ == "__main__":
         update(it)
 
         plotter.write_frame()
+
+
+    # TODO: arrive at interface
+    # anim = Animation(**args)
