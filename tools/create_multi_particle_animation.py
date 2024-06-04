@@ -257,7 +257,7 @@ if __name__ == "__main__":
 
     chart = pv.Chart2D()
 
-    q = rt_data[:, 1]
+    q = rt_data[:, 1] / num_particles
     mu = rt_data[:, 3]
 
     chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
