@@ -433,8 +433,8 @@ class PyvistaAnimation:
 
         self._update_time_label(it)
 
-        # if self.plot_c_of_r:
-            # self._update_c_t(it)
+        if self.plot_c_of_r:
+            self._update_c_t(it)
 
         if self.plot_cell_voltage:
             self._update_q_mu(it)
@@ -479,16 +479,15 @@ class PyvistaAnimation:
 
     def _update_c_t(self, it):
 
-        r = self.r
-        c = self.data_out[it, 0, :]
+        c = self.data_out[it, ..., 0, :]
 
-        self.c_t_chart.remove_plot(self.c_t_line)
+        [self.c_t_chart.remove_plot(c_t_line) for c_t_line in self.c_t_lines]
 
-        self.c_t_line = self.c_t_chart.line(r, c, color='r')
+        self.c_t_lines = [self.c_t_chart.line(self.r, c_i, 'r') for c_i in c]
 
     def _update_q_mu(self, it):
 
-        c = self.data_out[it, 0, :]
+        c = self.data_out[it, ..., 0, :]
 
         q = sp.integrate.trapezoid(3 * self.r**2 * c, self.r, axis=-1)
         mu = self.data_out[it, 1, -1]
