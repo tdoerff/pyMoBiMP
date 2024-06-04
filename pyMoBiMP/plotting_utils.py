@@ -487,9 +487,15 @@ class PyvistaAnimation:
 
     def _update_q_mu(self, it):
 
-        c = self.data_out[it, ..., 0, :]
+        # The list of all radial charge distributions at each time.
+        cs = self.data_out[it, ..., 0, :].reshape(-1, len(self.r))
 
-        q = sp.integrate.trapezoid(3 * self.r**2 * c, self.r, axis=-1)
+        num_particles = self.data_out.shape[1]
+
+        # Compute charge ratio to maximum charge.
+        q = np.array([sp.integrate.trapezoid(
+            3 * self.r**2 * c, self.r, axis=-1) for c in cs]).sum(axis=0) / num_particles
+
         mu = self.data_out[it, 1, -1]
 
         self.q_mu_chart.remove_plot(self.q_mu_scatter)
