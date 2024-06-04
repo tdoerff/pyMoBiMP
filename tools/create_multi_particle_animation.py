@@ -186,6 +186,14 @@ def read_data(filebasename):
     return num_particles, t, x_data, u_data, rt_data
 
 
+def f_of_q(q):
+    a = 1.5
+    b = 0.2
+    cc = 5.
+
+    return np.log(q / (1 - q)) + a * (1 - 2 * q) + b * np.pi * cc * np.cos(np.pi * cc * q)
+
+
 if __name__ == "__main__":
 
     # Parse input arguments
@@ -238,11 +246,38 @@ if __name__ == "__main__":
     # Create visualization
     # --------------------
 
-    plotter = pv.Plotter()
+    plotter = pv.Plotter(shape="1/1")
 
+    plotter.subplot(1)
     grids = set_up_pv_grids(meshes, plotter, clim=args.clim, cmap=args.cmap)
 
     plotter.show(auto_close=args.close, interactive_update=True)
+
+    plotter.subplot(0)
+
+    chart = pv.Chart2D()
+
+    q = rt_data[:, 1]
+    mu = rt_data[:, 3]
+
+    chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
+
+    chart.x_range = [0, 1]
+    eps = 0.5
+    chart.y_range = [min(mu) - eps, max(mu) + eps]
+
+    if f_of_q is not None:
+        eps = 1e-3
+        q = np.linspace(eps, 1 - eps, 101)
+
+        chart.line(q, -f_of_q(q), color="tab:orange", style="--", label=r"$f_A$")
+
+        eps = 0.5
+        chart.y_range = \
+            [min(chart.y_range[0], min(-f_of_q(q) - eps)),
+                max(chart.y_range[1], max(-f_of_q(q) + eps))]
+
+    plotter.add_chart(chart)
 
     # Write to file
     # -------------
