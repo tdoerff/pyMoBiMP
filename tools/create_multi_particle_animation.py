@@ -150,6 +150,9 @@ class SimulationFile(h5py.File):
 
 
 def read_data(filebasename):
+
+    print(f"Read data from {filebasename} ...")
+
     with SimulationFile(filebasename) as f:
         print(f["Function"].keys())
 
