@@ -38,6 +38,7 @@ def assemble_plot_grid(num_particles: int):
 
     N = num_particles**0.5
 
+    # Note that this construction ensures that Nx * Ny > num_particles.
     Nx = math.floor(N)
     Ny = math.ceil(N)
 
