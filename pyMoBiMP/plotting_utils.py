@@ -186,10 +186,6 @@ def assemble_plot_grid(num_particles: int):
 
 class PyvistaAnimation:
 
-    # FIXMEs:
-    # [ ] fix t-c plots for multiple particles
-    # [ ] get back the clipped-sphere plots
-
     def __init__(
         self,
         output: Fenicx1DOutput | List[npt.NDArray] | Tuple[npt.NDArray],
