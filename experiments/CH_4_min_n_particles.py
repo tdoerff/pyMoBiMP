@@ -110,7 +110,7 @@ class MultiParticleSimulation():
     def __init__(self,
                  mesh,
                  output_destination,
-                 num_particles=10,
+                 num_particles=12,
                  n_out=501,
                  C_rate=0.01):
 
