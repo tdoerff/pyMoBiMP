@@ -183,6 +183,8 @@ def assemble_plot_grid(num_particles: int):
 
 class PyvistaAnimation:
 
+    # FIXME: We don't we see phase separation within the particles?
+
     def __init__(
         self,
         output: Fenicx1DOutput | List[npt.NDArray] | Tuple[npt.NDArray],
@@ -269,7 +271,6 @@ class PyvistaAnimation:
 
         self.grids = self.set_up_pv_grids(clipped)
 
-        # TODO: optionally clip grids
         self.time_label = self.plotter.add_text(f"t = {self.t_out[0]:1.3f}")
 
         # radial charge distribution
