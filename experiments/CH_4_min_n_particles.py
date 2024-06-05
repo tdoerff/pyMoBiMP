@@ -140,7 +140,7 @@ class MultiParticleSimulation():
 
         T_final = self.T_final
 
-        event_params = dict(
+        self.event_params = dict(
             I_charge=I_charge,
             stop_on_full=False,
             stop_at_empty=False,
@@ -245,9 +245,7 @@ class MultiParticleSimulation():
         results_folder = Path(os.path.dirname(str(results_file)))
         results_folder.mkdir(exist_ok=True, parents=True)
 
-        base_filename = os.path.basename(str(results_file))
-
-        xdmf_filename = results_folder / (base_filename + ".xdmf")
+        xdmf_filename = results_file
         rt_filename = output_destination + "_rt.txt"
 
         self.output_xdmf = FileOutput(
