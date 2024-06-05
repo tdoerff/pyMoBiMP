@@ -471,6 +471,27 @@ class StopEvent(Exception):
     pass
 
 
+def strip_off_xdmf_file_ending(file_name):
+
+    # Strip off the file ending for uniform file handling
+    if file_name[-3:] == ".h5":
+        file_name_base = file_name[:-3]
+
+    elif file_name[-5:] == ".xdmf":
+        file_name_base = file_name[:-5]
+
+    else:
+        if "." in os.path.basename(file_name):
+            raise ValueError(f"Unrecognized file ending: {file_name}!")
+        else:
+            file_name_base = file_name
+
+    # Make sure we have to absolute file name at hand.
+    file_name_base = os.path.abspath(file_name_base)
+
+    return file_name_base
+
+
 class SimulationFile(h5py.File):
     """A file handler class to open pyMoBiMP simulation output.
 
@@ -486,24 +507,16 @@ class SimulationFile(h5py.File):
         the temporary file name of the copied file
     """
 
-    def __init__(self, file_name_base):
+    def __init__(self, file_name):
         """Construct file name and temporary file name.
 
         Parameters
         ----------
-        file_name_base : str | pathlib.Path
-            file name pointing to the file name base or XDMF or H5 file.
+        file_name : str | pathlib.Path
+            File name pointing to the file name base or XDMF or H5 file, the
+            ending can be omitted.
         """
-
-        # Strip off the file ending for uniform file handling
-        if file_name_base[-3:] == ".h5":
-            file_name_base[-3:]
-
-        elif file_name_base[-5:] == ".xdmf":
-            file_name_base[-5:]
-
-        # Make sure we have to absolute file name at hand.
-        file_name_base = os.path.abspath(file_name_base)
+        file_name_base = strip_off_xdmf_file_ending(file_name)
 
         self._file_name = file_name_base + ".h5"
         self._file_name_tmp = file_name_base + "_tmp" + ".h5"
@@ -555,6 +568,8 @@ def read_data(filebasename):
 
     t = np.array(t)[sorted_indx]
     u_data = np.array(u_data)[sorted_indx]
+
+    filebasename = strip_off_xdmf_file_ending(filebasename)
 
     # Read the runtime analysis output.
     rt_data = np.loadtxt(filebasename + "_rt.txt")
