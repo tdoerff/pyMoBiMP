@@ -387,7 +387,7 @@ class MultiParticleSimulation():
         t,
         u,
         I_charge,
-        c_bounds=[0.05, 0.99],
+        c_bounds=[0.01, 0.999],
         c_of_y=c_of_y,
         stop_at_empty=True,
         stop_on_full=True,
