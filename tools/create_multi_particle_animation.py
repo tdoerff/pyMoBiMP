@@ -42,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--clim", type=float, nargs=2, default=[0., 1.])
     parser.add_argument("--cmap", type=str, default="fire")
     parser.add_argument("--close", action="store_true")
+    parser.add_argument("--clipped", action="store_true")
 
     args = parser.parse_args()
 
@@ -94,7 +95,8 @@ if __name__ == "__main__":
         meshes=meshes,
         cmap=args.cmap,
         clim=args.clim,
-        auto_close=args.close
+        auto_close=args.close,
+        clipped=args.clipped
     )
 
     anim.get_mp4_animation(args.output)
