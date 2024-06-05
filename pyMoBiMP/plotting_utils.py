@@ -10,8 +10,6 @@ import math
 
 from matplotlib import pyplot as plt
 
-from mpi4py.MPI import COMM_WORLD
-
 import numpy as np
 import numpy.typing as npt
 
@@ -25,7 +23,6 @@ import scipy as sp
 from typing import List, Optional, Tuple
 
 from .fenicsx_utils import Fenicx1DOutput
-from .gmsh_utils import dfx_spherical_mesh
 
 
 def add_arrow(line, position=None, direction="right", size=15, color=None):
