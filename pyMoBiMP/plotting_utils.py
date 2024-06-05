@@ -356,7 +356,7 @@ class PyvistaAnimation:
             if clipped:
                 grid = grid.clip_box([x0[0], x0[0]+1, x0[1], x0[1]+1, 0, 0+1])
 
-            self.update_on_grid(i_particle, 0, V.mesh, grid)
+            self.update_on_grid(i_particle, 0, grid)
 
             grids.append(grid)
 
@@ -462,7 +462,7 @@ class PyvistaAnimation:
 
         self.time_label = self.plotter.add_text(f"t = {self.t_out[it]:1.3f}")
 
-    def update_on_grid(self, i_particle, i_t, dfx_mesh, pv_grid):
+    def update_on_grid(self, i_particle, i_t, pv_grid):
 
         x = pv_grid.cast_to_pointset().points
 
@@ -476,17 +476,9 @@ class PyvistaAnimation:
 
     def _update_data_on_all_grids(self, it):
 
-        for i_particle, (grid, dfx_mesh) in enumerate(zip(self.grids, self.meshes)):
+        for i_particle, grid in enumerate(self.grids):
 
-            self.update_on_grid(i_particle, it, dfx_mesh, grid)
-
-    def _update_clipped_grid(self):
-
-        clipped = self.grid.clip_box([0., 1., 0., 1., 0., 1.], crinkle=False)
-
-        # This should do the trick to update the clipped
-        # data without re-plotting whole grid.
-        self.plotter.mesh["u"] = clipped["u"]
+            self.update_on_grid(i_particle, it, grid)
 
         self.plotter.update()
 
