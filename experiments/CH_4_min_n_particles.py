@@ -27,6 +27,7 @@ from pyMoBiMP.fenicsx_utils import (
     NewtonSolver,
     FileOutput,
     RuntimeAnalysisBase,
+    strip_off_xdmf_file_ending
 )
 
 
@@ -108,6 +109,7 @@ class MultiParticleSimulation():
 
     def __init__(self,
                  mesh,
+                 output_destination,
                  num_particles=10,
                  n_out=501,
                  C_rate=0.01):
@@ -236,19 +238,25 @@ class MultiParticleSimulation():
 
         u.interpolate(u_ini)
 
-        results_folder = Path("simulation_output")
+        output_destination = strip_off_xdmf_file_ending(output_destination)
+
+        results_file = Path(output_destination + ".xdmf")
+
+        results_folder = Path(os.path.dirname(str(results_file)))
         results_folder.mkdir(exist_ok=True, parents=True)
 
-        base_filename = "CH_4_min_2_particle"
+        base_filename = os.path.basename(str(results_file))
 
-        filename = results_folder / (base_filename + ".xdmf")
+        xdmf_filename = results_folder / (base_filename + ".xdmf")
+        rt_filename = output_destination + "_rt.txt"
 
         output_xdmf = FileOutput(
-            u, np.linspace(0, T_final, n_out), filename=filename)
+            u, np.linspace(0, T_final, n_out), filename=xdmf_filename)
 
         rt_analysis = AnalyzeCellPotential(
             Ls, As, I_charge,
-            c_of_y=c_of_y, filename=results_folder / (base_filename + "_rt.txt")
+            c_of_y=c_of_y,
+            filename=rt_filename
         )
 
         # %%
@@ -449,4 +457,6 @@ if __name__ == "__main__":
         n_elem = 16
         mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
-    simulation = MultiParticleSimulation(mesh)
+    simulation = MultiParticleSimulation(
+        mesh,
+        output_destination="simulation_output/CH_4_min_10_particles")
