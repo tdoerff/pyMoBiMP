@@ -299,12 +299,15 @@ class PyvistaAnimation:
         if self.plot_cell_voltage:
             self.plotter.subplot(int(plot_c_of_r))
 
-            chart = pyvista.Chart2D(x_label=r"$q$", y_label=r"$\mu$")
+            chart = pyvista.Chart2D(x_label=r"$q$", y_label=r"$V$")
 
+            # Retrieve the charge.
             q = rt_data[:, 1]
+
+            # take the last column which is either voltage or mu.
             mu = rt_data[:, -1]
 
-            chart.line(q, -mu, color="k", label=r"$\mu\vert_{\partial\omega_I}$")
+            chart.line(q, -mu, color="k", label=r"$V_{cell}$")
 
             chart.x_range = [0, 1]
             eps = 0.5
@@ -314,7 +317,8 @@ class PyvistaAnimation:
                 eps = 1e-3
                 q = np.linspace(eps, 1 - eps, 101)
 
-                chart.line(q, -f_of_q(q), color="tab:orange", style="--", label=r"$f_A$")
+                chart.line(q, -f_of_q(q),
+                           color="tab:orange", style="--", label=r"$f_A$")
 
                 eps = 0.5
                 chart.y_range = \
