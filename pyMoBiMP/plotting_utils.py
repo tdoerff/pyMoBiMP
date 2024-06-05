@@ -201,6 +201,7 @@ class PyvistaAnimation:
         specular: float = 1.0,
         auto_close=False,
         interactive_update=True,
+        clipped: Optional[bool] = None,
         **plotter_kwargs
     ):
 
@@ -267,8 +268,13 @@ class PyvistaAnimation:
         if num_plots > 1:
             self.plotter.subplot(self.num_plots - 1)
 
-        # The unclipped grid.
-        self.grids = self.set_up_pv_grids()
+        # The contruct the (clipped) grids.
+        if clipped is None:
+            num_particles = shape[1]
+
+            clipped = (num_particles == 1)
+
+        self.grids = self.set_up_pv_grids(clipped)
 
         # TODO: optionally clip grids
         self.time_label = self.plotter.add_text(f"t = {self.t_out[0]:1.3f}")
@@ -331,6 +337,7 @@ class PyvistaAnimation:
         self.show(auto_close=auto_close, interactive_update=interactive_update)
 
     def set_up_pv_grids(self,
+                        clipped: bool,
                         shift: float = 2.):
 
         grids = []
@@ -345,9 +352,16 @@ class PyvistaAnimation:
 
             topology, cell_types, x = dolfinx.plot.vtk_mesh(V)
 
-            x[:, :2] += shift * plot_grid[i_particle]
+            # center point of the current grid.
+            x0 = shift * plot_grid[i_particle]
+
+            # Shift grid to center
+            x[:, :2] += x0
 
             grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+
+            if clipped:
+                grid = grid.clip_box([x0[0], x0[0]+1, x0[1], x0[1]+1, 0, 0+1])
 
             self.update_on_grid(i_particle, 0, V.mesh, grid)
 
@@ -457,11 +471,13 @@ class PyvistaAnimation:
 
     def update_on_grid(self, i_particle, i_t, dfx_mesh, pv_grid):
 
-        r_sphere = np.sqrt((dfx_mesh.geometry.x[:, :]**2).sum(axis=-1))
+        x = pv_grid.cast_to_pointset().points
+
+        r_grid = np.sqrt((x**2).sum(axis=-1))
 
         c = self.data_out[i_t, i_particle, 0, :]
 
-        u_3d = np.interp(r_sphere, self.r, c)
+        u_3d = np.interp(r_grid, self.r, c)
 
         pv_grid["u"] = u_3d
 
