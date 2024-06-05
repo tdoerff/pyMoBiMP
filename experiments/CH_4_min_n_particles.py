@@ -229,9 +229,9 @@ class MultiParticleSimulation():
         # %%
         problem = NonlinearProblem(F, u)
 
-        solver = NewtonSolver(comm_world, problem)
+        self.solver = NewtonSolver(comm_world, problem)
 
-        solver.tol = 1e-3
+        self.solver.tol = 1e-3
         # %%
         # Set up experiment
         # -----------------
@@ -250,32 +250,41 @@ class MultiParticleSimulation():
         xdmf_filename = results_folder / (base_filename + ".xdmf")
         rt_filename = output_destination + "_rt.txt"
 
-        output_xdmf = FileOutput(
+        self.output_xdmf = FileOutput(
             u, np.linspace(0, T_final, n_out), filename=xdmf_filename)
 
-        rt_analysis = AnalyzeCellPotential(
+        self.rt_analysis = AnalyzeCellPotential(
             Ls, As, I_charge,
             c_of_y=c_of_y,
             filename=rt_filename
         )
 
+        # Finalize with some variables that need to be attached to the class instance.
+        self.u = u
+        self.u0 = u0
+        self.dt = dt
+
+    def run(self,
+            dt_max=1e-1,
+            dt_min=1e-8,
+            tol=1e-4):
         # %%
         # Run the experiment
         # ------------------
 
         time_stepping(
-            solver,
-            u,
-            u0,
-            T_final,
-            dt,
-            dt_max=1e-1,
-            dt_min=1e-8,
-            tol=1e-4,
+            self.solver,
+            self.u,
+            self.u0,
+            self.T_final,
+            self.dt,
+            dt_max=dt_max,
+            dt_min=dt_min,
+            tol=tol,
             event_handler=self.experiment,
-            output=output_xdmf,
-            runtime_analysis=rt_analysis,
-            **event_params,
+            output=self.output_xdmf,
+            runtime_analysis=self.rt_analysis,
+            **self.event_params,
         )
 
     def create_function_space(self, mesh, num_particles):
@@ -460,3 +469,5 @@ if __name__ == "__main__":
     simulation = MultiParticleSimulation(
         mesh,
         output_destination="simulation_output/CH_4_min_10_particles")
+
+    simulation.run()
