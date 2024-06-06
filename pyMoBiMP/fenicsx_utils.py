@@ -86,6 +86,9 @@ def time_stepping(
 
         it += 1
 
+        if runtime_analysis is not None:
+            runtime_analysis.analyze(u, t)
+
         try:
             u.x.scatter_forward()
             u0.x.array[:] = u.x.array[:]
@@ -151,9 +154,6 @@ def time_stepping(
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
-
-        if runtime_analysis is not None:
-            runtime_analysis.analyze(u, t)
 
         if logging:
             perc = (t - t_start) / (T - t_start) * 100
