@@ -94,7 +94,9 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
-            stop = event_handler(t, u, **event_pars)
+            voltage = runtime_analysis.data[-1][-1]
+
+            stop = event_handler(t, u, cell_voltage=voltage, **event_pars)
 
             if stop:
                 break
