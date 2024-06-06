@@ -118,7 +118,7 @@ def compute_particle_current_densities(mus, As, Ls, I_charge):
     # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
     term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mus)])
 
-    # Here must ne a negative sign since with the I_charges, we measure
+    # Here must be a negative sign since with the I_charges, we measure
     # what flows out of the particle.
     Voltage = - I_charge / L - term / L
 
@@ -126,7 +126,7 @@ def compute_particle_current_densities(mus, As, Ls, I_charge):
     # code to work. I think, I_charge as constructed here is the current
     # OUT OF the particle.
     I_charges = [
-        -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mus, As)]
+        -L_ * (mu_ + Voltage) for L_, mu_ in zip(Ls, mus)]
 
     return I_charges
 
