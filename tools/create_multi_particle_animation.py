@@ -56,7 +56,6 @@ if __name__ == "__main__":
 
     # Create or get the mesh(es)
     # --------------------------
-    # TODO: add the option for individual particle meshes.
 
     # Create or read-in a single particle mesh
     if args.mesh_file is None or os.path.isfile(args.mesh_file):

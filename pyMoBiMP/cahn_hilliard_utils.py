@@ -127,7 +127,6 @@ def cahn_hilliard_form(
 
         assert psi.function_space is psi0.function_space
 
-        #   [ ] Assert whether psi, psi0, and v are on the same mesh
         V = psi.function_space
         mesh = V.mesh
 
@@ -345,9 +344,6 @@ def _free_energy(
     )
 
     return fe
-
-
-# [ ] make it possible to hand over pre-configured output class or object
 
 
 class Simulation:

@@ -111,8 +111,6 @@ def time_stepping(
 
         except StopEvent as e:
 
-            # TODO: Fix the event handler.
-
             print(e)
             print(">>> Stop integration.")
 
@@ -409,7 +407,6 @@ class Fenicx1DOutput(OutputBase):
 
     def extract_output(self, u_state, t):
 
-        # TODO: Make sure self.u_state and u_state are consistent.
         V = self.u_state.function_space
 
         num_comp = V.num_sub_spaces

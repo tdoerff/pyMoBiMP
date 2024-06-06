@@ -457,7 +457,6 @@ class PyvistaAnimation:
 
     def _update_time_label(self, it):
 
-        # FIXME: adjust in case of less than three plots
         if self.num_plots > 1:
             self.plotter.subplot(self.num_plots - 1)
 
@@ -515,9 +514,6 @@ class PyvistaAnimation:
 
 
 def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
-
-    # [ ] adjust plot size
-    # [ ] adjust spacing around x=0 and x=1
 
     # chart = pyvista.Chart2D()
 
