@@ -136,7 +136,7 @@ class MultiParticleSimulation():
         # ------------------
 
         # charging current
-        I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate * num_particles)
+        I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
 
         T_final = self.T_final
 
