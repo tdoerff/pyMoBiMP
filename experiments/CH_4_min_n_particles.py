@@ -105,6 +105,32 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 comm_world = MPI.COMM_WORLD
 
 
+def compute_particle_current_densities(mus, As, Ls, I_charge):
+
+    A = sum(As)
+
+    # fraction of the total surface
+    a_ratios = As / A
+
+    # Coupling parameters between particle surface potential.
+    L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
+
+    # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
+    term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mus)])
+
+    # Here must be a negative sign since with the I_charges, we measure
+    # what flows out of the particle.
+    Voltage = - I_charge / L - term / L
+
+    # TODO: Check the sign! Somehow, there must be a minus for the
+    # code to work. I think, I_charge as constructed here is the current
+    # OUT OF the particle.
+    I_charges = [
+        -L_ * (mu_ + Voltage) for L_, mu_ in zip(Ls, mus)]
+
+    return I_charges
+
+
 class MultiParticleSimulation():
 
     def __init__(self,
@@ -136,7 +162,7 @@ class MultiParticleSimulation():
         # ------------------
 
         # charging current
-        I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate * num_particles)
+        I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
 
         T_final = self.T_final
 
@@ -179,27 +205,11 @@ class MultiParticleSimulation():
 
         As = 4 * np.pi * Rs
 
-        A = sum(As)
-
-        # fraction of the total surface
-        a_ratios = As / A
-
-        # Coupling parameters between particle surface potential.
         Ls = 1.e1 * (1 + 0.1 * (2 * np.random.random(num_particles) - 1))
-        L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
 
-        # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
-        term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mu_theta)])
-
-        # Here must ne a negative sign since with the I_charges, we measure
-        # what flows out of the particle.
-        Voltage = - I_charge / L - term / L
-
-        # TODO: Check the sign! Somehow, there must be a minus for the
-        # code to work. I think, I_charge as constructed here is the current
-        # OUT OF the particle.
-        I_charges = [
-            -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mu_theta, As)]
+        I_charges = compute_particle_current_densities(
+            mu_theta, As, Ls, I_charge
+        )
 
         # Assemble the individual particle forms.
         Fs = [
@@ -387,7 +397,8 @@ class MultiParticleSimulation():
         t,
         u,
         I_charge,
-        c_bounds=[0.01, 0.999],
+        c_bounds=[-3.7, 3.7],
+        cell_voltage=None,
         c_of_y=c_of_y,
         stop_at_empty=True,
         stop_on_full=True,
@@ -410,7 +421,11 @@ class MultiParticleSimulation():
         if logging:
             print(f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]", c_bounds)
 
-        if max(cs_bc) > c_bounds[1] and I_charge.value > 0.0:
+        # Whenever you may ask yourself whether this works, mind the sign!
+        # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
+        # it increases with chemical potential at the surface of the particles.
+        # The actual cell voltage as measured is the negative of it.
+        if cell_voltage > c_bounds[1] and I_charge.value > 0.0:
             print(
                 ">>> charge at boundary exceeds maximum " +
                 f"(max(c) = {max(cs_bc):1.3f} > {c_bounds[1]:1.3f})."
@@ -426,7 +441,7 @@ class MultiParticleSimulation():
 
             return False
 
-        if min(cs_bc) < c_bounds[0] and I_charge.value < 0.0:
+        if cell_voltage < c_bounds[0] and I_charge.value < 0.0:
 
             if stop_at_empty:
                 print(">>> Particle is emptied!")
