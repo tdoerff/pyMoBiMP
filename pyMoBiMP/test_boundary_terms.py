@@ -12,7 +12,7 @@ import numpy as np
 
 import ufl
 
-from fenicsx_utils import evaluation_points_and_cells
+from pyMoBiMP.fenicsx_utils import evaluation_points_and_cells
 
 
 # %%
