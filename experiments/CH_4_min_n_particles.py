@@ -105,6 +105,32 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 comm_world = MPI.COMM_WORLD
 
 
+def compute_particle_current_densities(mus, As, Ls, I_charge):
+
+    A = sum(As)
+
+    # fraction of the total surface
+    a_ratios = As / A
+
+    # Coupling parameters between particle surface potential.
+    L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
+
+    # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
+    term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mus)])
+
+    # Here must ne a negative sign since with the I_charges, we measure
+    # what flows out of the particle.
+    Voltage = - I_charge / L - term / L
+
+    # TODO: Check the sign! Somehow, there must be a minus for the
+    # code to work. I think, I_charge as constructed here is the current
+    # OUT OF the particle.
+    I_charges = [
+        -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mus, As)]
+
+    return I_charges
+
+
 class MultiParticleSimulation():
 
     def __init__(self,
@@ -179,27 +205,11 @@ class MultiParticleSimulation():
 
         As = 4 * np.pi * Rs
 
-        A = sum(As)
-
-        # fraction of the total surface
-        a_ratios = As / A
-
-        # Coupling parameters between particle surface potential.
         Ls = 1.e1 * (1 + 0.1 * (2 * np.random.random(num_particles) - 1))
-        L = sum([a_ * L_ for a_, L_ in zip(a_ratios, Ls)])
 
-        # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
-        term = sum([L_ * a_ * mu_ for L_, a_, mu_ in zip(Ls, a_ratios, mu_theta)])
-
-        # Here must ne a negative sign since with the I_charges, we measure
-        # what flows out of the particle.
-        Voltage = - I_charge / L - term / L
-
-        # TODO: Check the sign! Somehow, there must be a minus for the
-        # code to work. I think, I_charge as constructed here is the current
-        # OUT OF the particle.
-        I_charges = [
-            -L_ * (mu_ + Voltage) / A_ for L_, mu_, A_ in zip(Ls, mu_theta, As)]
+        I_charges = compute_particle_current_densities(
+            mu_theta, As, Ls, I_charge
+        )
 
         # Assemble the individual particle forms.
         Fs = [
