@@ -387,7 +387,8 @@ class MultiParticleSimulation():
         t,
         u,
         I_charge,
-        c_bounds=[0.01, 0.999],
+        c_bounds=[-3.7, 3.7],
+        cell_voltage=None,
         c_of_y=c_of_y,
         stop_at_empty=True,
         stop_on_full=True,
@@ -410,7 +411,11 @@ class MultiParticleSimulation():
         if logging:
             print(f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]", c_bounds)
 
-        if max(cs_bc) > c_bounds[1] and I_charge.value > 0.0:
+        # Whenever you may ask yourself whether this works, mind the sign!
+        # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
+        # it increases with chemical potential at the surface of the particles.
+        # The actual cell voltage as measured is the negative of it.
+        if cell_voltage > c_bounds[1] and I_charge.value > 0.0:
             print(
                 ">>> charge at boundary exceeds maximum " +
                 f"(max(c) = {max(cs_bc):1.3f} > {c_bounds[1]:1.3f})."
@@ -426,7 +431,7 @@ class MultiParticleSimulation():
 
             return False
 
-        if min(cs_bc) < c_bounds[0] and I_charge.value < 0.0:
+        if cell_voltage < c_bounds[0] and I_charge.value < 0.0:
 
             if stop_at_empty:
                 print(">>> Particle is emptied!")
