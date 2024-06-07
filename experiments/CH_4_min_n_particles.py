@@ -462,6 +462,9 @@ class MultiParticleSimulation():
         return False
 
 
+Simulation = MultiParticleSimulation
+
+
 if __name__ == "__main__":
 
     # %%
@@ -479,7 +482,7 @@ if __name__ == "__main__":
         n_elem = 16
         mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
-    simulation = MultiParticleSimulation(
+    simulation = Simulation(
         mesh,
         output_destination="simulation_output/CH_4_min_10_particles")
 
