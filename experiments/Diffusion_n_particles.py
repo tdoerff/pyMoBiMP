@@ -6,11 +6,16 @@ import numpy as np
 
 import os
 
+import sys
+
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import y_of_c
 
-from CH_4_min_n_particles import MultiParticleSimulation as SimulationBase
+file_dir = os.path.dirname(__file__)
+sys.path.append(file_dir)
+
+from CH_4_min_n_particles import Simulation as SimulationBase  # noqa 402
 
 
 class Simulation(SimulationBase):
