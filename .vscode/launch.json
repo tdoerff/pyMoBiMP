@@ -18,8 +18,10 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "${fileDirname}",
-            "args": ["../simulation_output/CH_4_min_2_particle", "-r", "1."]
+            "args": ["simulation_output/Diff_10_particles",
+                     "-r", "1.",
+                     "-e", "experiments.Diffusion_n_particles",
+                     "-o", "post_processing/test_output.mp4"]
         }
     ]
 }
