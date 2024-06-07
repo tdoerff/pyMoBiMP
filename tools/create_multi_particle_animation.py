@@ -5,22 +5,75 @@ Usage: python create_multi_particle_animation.py <simulation_base_name>
 
 import argparse
 import dolfinx as dfx
+import importlib
 from mpi4py.MPI import COMM_WORLD as comm
 import numpy as np
 import os
+import scipy as sp
 import tqdm
+import ufl
 
 from pyMoBiMP.fenicsx_utils import read_data
 from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
 from pyMoBiMP.plotting_utils import PyvistaAnimation
 
 
-def f_of_q(q):
+def f_of_q_default(q):
     a = 1.5
     b = 0.2
     cc = 5.
 
     return np.log(q / (1 - q)) + a * (1 - 2 * q) + b * np.pi * cc * np.cos(np.pi * cc * q)
+
+
+def identity_function(n_points):
+    """Creates a identity dfx.fem.Function on a unit intervall"""
+
+    # Create a linspace array.
+    mesh = dfx.mesh.create_unit_interval(comm, n_points)
+    V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+
+    c = dfx.fem.Function(V)
+    c.interpolate(lambda x: x[0])
+
+    return c
+
+
+def get_chemical_potential(experiment):
+    """
+    Extract the chemical potential function from the given experiment script.
+    """
+
+    experiment = importlib.import_module(args.experiment)
+    free_energy = experiment.Simulation.free_energy
+
+    # Get a function get an identity function [0,1] -> [0,1]
+    c = identity_function(128)
+    V = c.function_space
+
+    # Hold the function values for later use as coordinate while
+    # interpolation.
+    c_val = c.x.array[:]
+
+    # Compute chemical potential as derivative of free energy
+    # w.r.t. c.
+    c = ufl.variable(c)
+    chem_pot_expr = dfx.fem.Expression(
+        ufl.diff(free_energy(c, ufl.ln, ufl.sin), c),
+        V.element.interpolation_points())
+
+    # Map the expression to a dfx.fem.Function.
+    chem_pot = dfx.fem.Function(V)
+    chem_pot.interpolate(
+        chem_pot_expr)
+
+    # Retrieve the function values.
+    f_val = chem_pot.x.array[:]
+
+    # Construct the interpolation polynomial.
+    f_of_q = sp.interpolate.interp1d(c_val, f_val)
+
+    return f_of_q
 
 
 if __name__ == "__main__":
@@ -43,6 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--cmap", type=str, default="fire")
     parser.add_argument("--close", action="store_true")
     parser.add_argument("--clipped", action="store_true")
+    parser.add_argument("-e", "--experiment", type=str)
 
     args = parser.parse_args()
 
@@ -53,6 +107,20 @@ if __name__ == "__main__":
     filebasename = args.filename
 
     num_particles, t, x_data, u_data, rt_data = read_data(filebasename)
+
+    # read chemical potential from experiment script
+    if args.experiment is not None:
+        try:
+            f_of_q = get_chemical_potential(args.experiment)
+
+        except ImportError as e:
+
+            print(e)
+            print(
+                f"import `{args.experiment}` not found. Fall back to default.")
+
+            # Use default chemical potential
+            f_of_q = f_of_q_default
 
     # Create or get the mesh(es)
     # --------------------------
