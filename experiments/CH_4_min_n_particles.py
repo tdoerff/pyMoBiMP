@@ -483,4 +483,4 @@ if __name__ == "__main__":
         mesh,
         output_destination="simulation_output/CH_4_min_10_particles")
 
-    simulation.run()
+    simulation.run(tol=1e-5)
