@@ -76,6 +76,47 @@ def get_chemical_potential(experiment):
     return f_of_q
 
 
+# The follwowing two helper functions are taken from:
+# https://stackoverflow.com/a/52014520
+def parse_var(s):
+    """
+    Parse a key, value pair, separated by '='
+    That's the reverse of ShellArgs.
+
+    On the command line (argparse) a declaration will typically look like:
+        foo=hello
+    or
+        foo="hello world"
+    """
+    items = s.split('=')
+    key = items[0].strip()  # we remove blanks around keys, as is logical
+    if len(items) > 1:
+        # rejoin the rest:
+        value = '='.join(items[1:])
+
+        if value == "False":
+            value = False
+        elif value == "True":
+            value = True
+
+        print(key, value)
+
+    return (key, value)
+
+
+def parse_vars(items):
+    """
+    Parse a series of key-value pairs and return a dictionary
+    """
+    d = {}
+
+    if items:
+        for item in items:
+            key, value = parse_var(item)
+            d[key] = value
+    return d
+
+
 if __name__ == "__main__":
 
     # Parse input arguments
@@ -97,6 +138,15 @@ if __name__ == "__main__":
     parser.add_argument("--close", action="store_true")
     parser.add_argument("--clipped", action="store_true")
     parser.add_argument("-e", "--experiment", type=str)
+    parser.add_argument("--additional-args",
+                        metavar="KEY=VALUE",
+                        nargs='+',
+                        help="Set a number of key-value pairs "
+                             "(do not put spaces before or after the = sign). "
+                             "If a value contains spaces, you should define "
+                             "it with double quotes: "
+                             'foo="this is a sentence". Note that '
+                             "values are always treated as strings.")
 
     args = parser.parse_args()
 
@@ -168,17 +218,21 @@ if __name__ == "__main__":
 
     output = args.output
 
+    print(args.additional_args)
+
+    additional_args = parse_vars(args.additional_args)
+
     # Write as a movie file.
     if output[-4:] == ".mp4" or \
         output[-4:] == ".mpg" or \
             output[-5:] == ".mpeg":
 
-        anim.get_mp4_animation(output)
+        anim.get_mp4_animation(output, additional_options=additional_args)
 
     # Write as a GIF file.
     elif output[-4:] == ".gif":
 
-        anim.get_gif_animation(output)
+        anim.get_gif_animation(output, additional_options=additional_args)
 
     else:
         raise ValueError(f"Format not recognized ({output})!")

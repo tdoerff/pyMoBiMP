@@ -386,12 +386,13 @@ class PyvistaAnimation:
         return widget
 
     def get_gif_animation(
-            self, filename: str | os.PathLike = "anim.gif"):
+            self, filename: str | os.PathLike = "anim.gif",
+            additional_options: dict = dict()):
         """Stores a gif file."""
 
         it_max, update = self.it_max_and_update()
 
-        self.plotter.open_gif(str(filename))
+        self.plotter.open_gif(str(filename), **additional_options)
 
         for it in range(it_max):
 
@@ -402,12 +403,13 @@ class PyvistaAnimation:
         self.plotter.close()
 
     def get_mp4_animation(
-            self, filename: str | os.PathLike = "anim.mp4"):
+            self, filename: str | os.PathLike = "anim.mp4",
+            additional_options: dict = dict()):
         """Stores a gif file."""
 
         it_max, update = self.it_max_and_update()
 
-        self.plotter.open_movie(str(filename))
+        self.plotter.open_movie(str(filename), **additional_options)
 
         for it in range(it_max):
 
