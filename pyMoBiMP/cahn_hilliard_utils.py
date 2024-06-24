@@ -149,16 +149,9 @@ def cahn_hilliard_form(
             "cahn_hilliard_form takes either 3 or 5 positional arguments."
         )
 
-    y = ufl.variable(y)
-    c = c_of_y(y)
+    c, dcdy = compute_dcdy(y, c_of_y)
 
-    dcdy = ufl.diff(c, y)
-
-    # Differentiate the free energy function to
-    # obtain the chemical potential
-    c = ufl.variable(c)
-    dfdc = ufl.diff(free_energy(c), c)
-    mu_chem = dfdc
+    mu_chem = compute_chemical_potential(free_energy, c)
 
     mu_theta = theta * mu + (theta - 1.0) * mu0
 
@@ -189,6 +182,26 @@ def cahn_hilliard_form(
     F = F1 + F2
 
     return F
+
+
+def compute_chemical_potential(free_energy, c):
+
+    # Differentiate the free energy function to
+    # obtain the chemical potential
+    c = ufl.variable(c)
+    dfdc = ufl.diff(free_energy(c), c)
+    mu_chem = dfdc
+    return mu_chem
+
+
+def compute_dcdy(y, c_of_y):
+
+    y = ufl.variable(y)
+    c = c_of_y(y)
+
+    dcdy = ufl.diff(c, y)
+
+    return c, dcdy
 
 
 def populate_initial_data(u_ini, c_ini_fun, free_energy, y_of_c=y_of_c):
