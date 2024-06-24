@@ -39,7 +39,7 @@ def evaluation_points_and_cells(mesh, x):
     return points_on_proc, cells
 
 
-def get_mesh_spacing(mesh):
+def get_mesh_spacing(mesh, return_full=False):
 
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
@@ -47,7 +47,10 @@ def get_mesh_spacing(mesh):
 
     dx_cell = h.min()
 
-    return dx_cell
+    if return_full:
+        return h
+    else:
+        return dx_cell
 
 
 def time_stepping(
