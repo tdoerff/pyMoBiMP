@@ -3,6 +3,9 @@ import dolfinx as dfx
 from mpi4py.MPI import COMM_SELF as comm
 
 import numpy as np
+
+import pyvista as pv
+
 import scipy as sp
 
 from scipy.integrate._ivp.base import OdeSolver  # this is the class we will monkey patch
@@ -52,6 +55,28 @@ OdeSolver.__init__ = new_init
 OdeSolver.step = new_step
 
 
+def plot_solution(solution):
+
+    cell, types, x = dfx.plot.vtk_mesh(mesh)
+
+    chart = pv.Chart2D()
+
+    def c_of_y(y):
+        return np.exp(y) / (1. + np.exp(y))
+
+    for it, t in enumerate(solution.t):
+
+        y = solution.y[:, it]
+        c = c_of_y(y)
+
+        chart.line(x[:, 0], c, color=(t / solution.t[-1], 0, 0))
+
+    plotter = pv.Plotter()
+    plotter.add_chart(chart)
+
+    plotter.show()
+
+
 if __name__ == "__main__":
 
     # Discretization
@@ -78,4 +103,6 @@ if __name__ == "__main__":
         t_eval=np.linspace(0, T_final, 20),
         method='LSODA')
 
-solution.message
+    print(solution.message)
+
+    plot_solution(solution)
