@@ -579,6 +579,7 @@ class ODEProblem():
             self,
             mesh: dfx.mesh.Mesh = _mesh,
             element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
+            c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
             free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
             experiment: Callable[
                 [float, dfx.fem.Function], dfx.fem.Expression
@@ -587,15 +588,14 @@ class ODEProblem():
             M: Callable[
                 [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
             ] = lambda c: 1.0 * c * (1 - c),
-            c_ini=lambda x: 1e-3 * np.ones_like(x[0]),
-            output_file: Optional[str | os.PathLike] = None,
-            runtime_analysis: Optional[RuntimeAnalysisBase] = None,
-            logging: bool = True,):
+            c_ini=lambda x: 1e-3 * np.ones_like(x[0])):
 
         if element is None:
             element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
 
         self.V = V = dfx.fem.FunctionSpace(mesh, element)
+
+        self.c_of_y = c_of_y
 
         self.y = dfx.fem.Function(V)
         self.mu = dfx.fem.Function(V)
@@ -613,7 +613,7 @@ class ODEProblem():
             ufl.lhs(residual_mu), ufl.rhs(residual_mu))
 
         residual_dydt = cahn_hilliard_dydt_form(
-            self.y, self.mu, self.I_charge, c_of_y=c_of_y)
+            self.y, self.mu, self.I_charge, c_of_y=c_of_y, M=M)
 
         # dcdt = dcdy * dydt == div (M grad mu)
         self.problem_dydt = dfx.fem.petsc.LinearProblem(
