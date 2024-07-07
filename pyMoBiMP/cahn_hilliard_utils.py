@@ -566,3 +566,94 @@ class Simulation:
             **kwargs,
             logging=self.logging,
         )
+
+
+def do_nothing(t, y, I_charge):
+    """Placeholder for experiment."""
+    pass
+
+
+class ODEProblem():
+
+    def __init__(
+            self,
+            mesh: dfx.mesh.Mesh = _mesh,
+            element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
+            free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
+            experiment: Callable[
+                [float, dfx.fem.Function], dfx.fem.Expression
+            ] = do_nothing,
+            gamma: float = 0.1,
+            M: Callable[
+                [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
+            ] = lambda c: 1.0 * c * (1 - c),
+            c_ini=lambda x: 1e-3 * np.ones_like(x[0]),
+            output_file: Optional[str | os.PathLike] = None,
+            runtime_analysis: Optional[RuntimeAnalysisBase] = None,
+            logging: bool = True,):
+
+        if element is None:
+            element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
+        self.V = V = dfx.fem.FunctionSpace(mesh, element)
+
+        self.y = dfx.fem.Function(V)
+        self.mu = dfx.fem.Function(V)
+
+        self.I_charge = dfx.fem.Constant(mesh, 1.0)
+
+        residual_mu = cahn_hilliard_mu_form(
+            self.y,
+            c_of_y=c_of_y,
+            free_energy=free_energy,
+            gamma=gamma)
+
+        # mu == f_A - gamma * Delta c
+        self.problem_mu = dfx.fem.petsc.LinearProblem(
+            ufl.lhs(residual_mu), ufl.rhs(residual_mu))
+
+        residual_dydt = cahn_hilliard_dydt_form(
+            self.y, self.mu, self.I_charge, c_of_y=c_of_y)
+
+        # dcdt = dcdy * dydt == div (M grad mu)
+        self.problem_dydt = dfx.fem.petsc.LinearProblem(
+            ufl.lhs(residual_dydt),
+            ufl.rhs(residual_dydt))
+
+        self.experiment = experiment
+
+        self.initial_data(c_ini)
+
+    def initial_data(self, c_ini_fun):
+
+        y_ini = dfx.fem.Function(self.V)
+
+        c_ini = dfx.fem.Function(self.V)
+        c_ini.interpolate(lambda x: c_ini_fun(x))
+
+        y_ini.interpolate(dfx.fem.Expression(
+            y_of_c(c_ini), self.V.element.interpolation_points()))
+
+        self.y.interpolate(y_ini)
+        mu_ini = self.problem_mu.solve()
+
+        self.mu.interpolate(mu_ini)
+
+    def rhs(self, t, y_vec):
+
+        self.y.x.array[:] = y_vec
+        mu_ = self.problem_mu.solve()
+
+        self.experiment(t, self.y, self.I_charge)
+
+        self.mu.x.array[:] = mu_.x.array[:]
+        dydt_ = self.problem_dydt.solve()
+
+        # Fix to stabilize r=0 behavior. By copying the inner-next value
+        # we enforce first-order Neuman conditions to the time derivative
+        dydt_.x.array[0] = dydt_.x.array[1]
+
+        return dydt_.x.array[:]
+
+    def __call__(self, t, y_vec):
+        return self.rhs(t, y_vec)
