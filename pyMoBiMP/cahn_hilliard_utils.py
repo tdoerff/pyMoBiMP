@@ -363,7 +363,7 @@ class Simulation:
         ] = lambda c: 1.0
         * c
         * (1 - c),
-        I: float = 1.0,
+        I: dfx.fem.Constant | float = 1.0,
         eps: float = 1e-3,
         dt_fac_ini: float = 1e-2,
         c_ini=lambda x, eps: eps * np.ones_like(x[0]),
@@ -389,10 +389,25 @@ class Simulation:
 
         V = dfx.fem.FunctionSpace(mesh, mixed_element)
 
+        # Experimental setup
+        # ------------------
+
+        # Charging current goes into the form and is recomputed in experiment
+        if isinstance(I, float):
+            I_charge = dfx.fem.Constant(mesh, I)
+        elif isinstance(I, dfx.fem.Constant):
+            I_charge = I
+        else:
+            raise TypeError(f"I of unsupported type {type(I)}")
+
+        self.event_params = dict(I_charge=I_charge)
+
+        self.experiment = experiment
+
         # (initial) timestep
         # ------------------
         dx = get_mesh_spacing(mesh)
-        self.dt = dfx.fem.Constant(mesh, dt_fac_ini * dx / I)
+        self.dt = dfx.fem.Constant(mesh, dt_fac_ini * dx / I_charge.value)
 
         self.T_final = T_final
 
@@ -400,16 +415,6 @@ class Simulation:
         # ---------------------------
         self.u = dfx.fem.Function(V)
         self.u0 = dfx.fem.Function(V)
-
-        # Experimental setup
-        # ------------------
-
-        # Charging current goes into the form and is recomputed in experiment
-        I_charge = dfx.fem.Constant(mesh, I)
-
-        self.event_params = dict(I_charge=I_charge)
-
-        self.experiment = experiment
 
         # The weak form of the problem
         # ----------------------------
