@@ -62,6 +62,7 @@ def time_stepping(
     t_start=0,
     dt_max=10.0,
     dt_min=1e-9,
+    dt_increase=1.1,
     tol=1e-6,
     event_handler=lambda t, u, **pars: None,
     output=None,
@@ -74,7 +75,7 @@ def time_stepping(
     assert tol > 0.
 
     t = t_start
-    dt.value = dt_min * 1.1
+    dt.value = dt_min * dt_increase
 
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
@@ -104,14 +105,14 @@ def time_stepping(
             if stop:
                 break
 
-            if float(dt) <= dt_min:
+            if float(dt) < dt_min:
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
 
             # Adaptive timestepping a la Yibao Li et al. (2017)
-            u_max_loc = np.abs(u.x.array - u0.x.array).max()
+            u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
