@@ -118,6 +118,11 @@ def time_stepping(
 
             dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
 
+            # Find the minimum timestep among all processes.
+            # Note that we explicitly use COMM_WORLD since the mesh communicator
+            # only groups the processes belonging to one particle.
+            MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
         except StopEvent as e:
 
             print(e)
@@ -164,12 +169,13 @@ def time_stepping(
         if logging:
             perc = (t - t_start) / (T - t_start) * 100
 
-            print(
-                f"{perc:>3.0f} % :",
-                f"t[{it:06}] = {t:1.6f}, "
-                f"dt = {dt.value:1.3e}, "
-                f"its = {iterations}"
-            )
+            if MPI.COMM_WORLD.rank == 0:
+                print(
+                    f"{perc:>3.0f} % :",
+                    f"t[{it:06}] = {t:1.6f}, "
+                    f"dt = {dt.value:1.3e}, "
+                    f"its = {iterations}"
+                )
 
     else:
 
