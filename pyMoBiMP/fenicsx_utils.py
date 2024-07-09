@@ -1,7 +1,6 @@
 import abc
 
 import dolfinx as dfx
-from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
 import h5py
 
@@ -14,6 +13,8 @@ import os
 from petsc4py import PETSc
 
 import shutil
+
+import ufl
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -186,23 +187,85 @@ def time_stepping(
     return
 
 
-class NewtonSolver(NewtonSolverBase):
+class NonlinearProblem():
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, F, c):
 
-        super().__init__(*args, **kwargs)
+        self.F = F
+        self.c = c
+
+        self.residual = dfx.fem.form(F)
+
+        self.J = J = ufl.derivative(F, c)
+        self.jacobian = dfx.fem.form(J)
+
+
+class NewtonSolver():
+
+    def __init__(self, comm, problem, max_iterations=1000, tol=1e-10):
 
         self.convergence_criterion = "incremental"
         self.rtol = 1e-9
 
-        # # We can customize the linear solver used inside the NewtonSolver by
-        # # modifying the PETSc options
-        ksp = self.krylov_solver
-        opts = PETSc.Options()  # type: ignore
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "lu"
-        ksp.setFromOptions()
+        self.problem = problem
+
+        self.max_iterations = max_iterations
+        self.tol = tol
+
+        self.A = dfx.fem.petsc.create_matrix(problem.jacobian)
+        self.L = dfx.fem.petsc.create_vector(problem.residual)
+
+        self.linear_solver = PETSc.KSP().create(comm)
+        self.linear_solver.setOperators(self.A)
+
+    def solve(self, ch):
+
+        V = ch.function_space
+
+        dc = dfx.fem.Function(V)
+
+        residual = self.problem.residual
+        jacobian = self.problem.jacobian
+
+        A = self.A
+        L = self.L
+
+        it = 0
+        success = False
+        while it < self.max_iterations:
+
+            # Assemble Jacobian and residual
+            with L.localForm() as loc_L:
+                loc_L.set(0)
+            A.zeroEntries()
+            dfx.fem.petsc.assemble_matrix(A, jacobian)
+            A.assemble()
+            dfx.fem.petsc.assemble_vector(L, residual)
+            L.ghostUpdate(
+                addv=PETSc.InsertMode.ADD_VALUES,
+                mode=PETSc.ScatterMode.REVERSE)
+
+            # Scale residual by -1
+            L.scale(-1)
+            L.ghostUpdate(
+                addv=PETSc.InsertMode.INSERT_VALUES,
+                mode=PETSc.ScatterMode.FORWARD)
+
+            # Solve linear problem
+            self.linear_solver.solve(L, dc.vector)
+            dc.x.scatter_forward()
+            # Update u_{i+1} = u_i + delta u_i
+            ch.x.array[:] += dc.x.array
+            it += 1
+
+            # Compute norm of update
+            correction_norm = dc.vector.norm(0)
+            print(f"Iteration {it}: Correction norm {correction_norm}")
+            if correction_norm < self.tol:
+                success = True
+                break
+
+        return it, success
 
 
 class OutputBase(abc.ABC):
