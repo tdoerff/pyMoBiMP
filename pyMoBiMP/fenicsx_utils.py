@@ -270,7 +270,7 @@ class NewtonSolver():
 
             # Compute norm of update
             correction_norm = dc.vector.norm(0)
-            print(f"Iteration {it}: Correction norm {correction_norm}")
+            # print(f"Iteration {it}: Correction norm {correction_norm}")
             if correction_norm < self.tol:
                 success = True
                 break

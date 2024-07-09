@@ -126,15 +126,18 @@ if __name__ == "__main__":
     it = 0
     while t < T_final:
 
-        if comm_world.rank == 0:
-            print(f"t = {t:2.4}", flush=True)
-
         cn.interpolate(c_)
 
         # c = problem.solve()
-        iteration, success = solver.solve(c_)
+        iterations, success = solver.solve(c_)
 
         assert success
+
+        if comm_world.rank == 0:
+
+            iterations = comm_world.allreduce(iterations, op=MPI.MAX)
+
+            print(f"t = {t:2.4} : iterations: {iterations}", flush=True)
 
         if it % 100 == 0:
 
