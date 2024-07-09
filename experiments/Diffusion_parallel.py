@@ -10,9 +10,13 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+from petsc4py import PETSc
+
 import random
 
 import ufl
+
+from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
 
 if __name__ == "__main__":
@@ -61,7 +65,7 @@ if __name__ == "__main__":
 
     # The FEM form
     # ------------
-    c_ = ufl.TrialFunction(V)
+    c_ = dfx.fem.Function(V)
     v = ufl.TestFunction(V)
 
     cn = dfx.fem.Function(V)
@@ -97,16 +101,16 @@ if __name__ == "__main__":
     residual += ufl.dot(ufl.grad(c_), ufl.grad(v)) * ufl.dx
     residual -= i_k * v * x[0] * ds_right
 
-    problem = LinearProblem(ufl.lhs(residual),
-                            ufl.rhs(residual))
+    problem = NonlinearProblem(residual, c_)
 
-    c = dfx.fem.Function(V)
+    solver = NewtonSolver(comm_self, problem)
+
     random.seed(comm_world.rank)
-    c.x.array[:] = random.random()  # <- initial data
+    c_.x.array[:] = random.random()  # <- initial data
 
     fig, ax = plt.subplots()
 
-    line, = ax.plot(c.x.array[:], color=(0, 0, 0))
+    line, = ax.plot(c_.x.array[:], color=(0, 0, 0))
 
     it = 0
     while t < T_final:
@@ -114,22 +118,25 @@ if __name__ == "__main__":
         if comm_world.rank == 0:
             print(f"t = {t:2.4}", flush=True)
 
-        cn.interpolate(c)
+        cn.interpolate(c_)
 
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c * x[0] * ds_right))
+        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ds_right))
 
         term = L_k * a_k * c_bc.value
         term_sum = comm_world.allreduce(term, op=MPI.SUM)
 
         cell_voltage.value = - (I_total.value + term_sum) / L
 
-        c = problem.solve()
+        # c = problem.solve()
+        iteration, success = solver.solve(c_)
+
+        assert success
 
         if it % 100 == 0:
 
             color = (t / T_final, 0, 0)
 
-            ax.plot(c.x.array[:], color=color)
+            ax.plot(c_.x.array[:], color=color)
 
         # line.set_ydata(c.x.array[:])
         # fig.canvas.draw()
