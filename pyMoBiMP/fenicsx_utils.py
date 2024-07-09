@@ -202,7 +202,7 @@ class NonlinearProblem():
 
 class NewtonSolver():
 
-    def __init__(self, comm, problem, max_iterations=1000, tol=1e-10):
+    def __init__(self, comm, problem, max_iterations=10, tol=1e-10):
 
         self.convergence_criterion = "incremental"
         self.rtol = 1e-9
@@ -215,7 +215,8 @@ class NewtonSolver():
         self.A = dfx.fem.petsc.create_matrix(problem.jacobian)
         self.L = dfx.fem.petsc.create_vector(problem.residual)
 
-        self.linear_solver = PETSc.KSP().create(comm)
+        self.ksp = PETSc.KSP()
+        self.linear_solver = self.ksp.create(comm)
         self.linear_solver.setOperators(self.A)
 
     def solve(self, ch):

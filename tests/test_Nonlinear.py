@@ -4,16 +4,21 @@ from mpi4py.MPI import COMM_WORLD as comm, MIN, SUM
 
 import numpy as np
 
+from petsc4py import PETSc
+
+import pytest
+
 import ufl
 
 from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
 
-def test_nonlinear_algebraic():
+@pytest.mark.parametrize("order", [1, 2, 5, 9])
+def test_nonlinear_algebraic(order):
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", order))
 
     uh = dfx.fem.Function(V)
 
@@ -50,11 +55,12 @@ def test_nonlinear_algebraic():
     assert np.isclose(L2_err0, 0.) or np.isclose(L2_err1, 0.)
 
 
-def test_differential():
+@pytest.mark.parametrize("order", [1, 2, 5])
+def test_differential(order):
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", order))
 
     uh = dfx.fem.Function(V)
 
@@ -69,10 +75,39 @@ def test_differential():
 
     problem = NonlinearProblem(F, uh)
 
-    solver = NewtonSolver(comm, problem)
+    solver = NewtonSolver(comm, problem, max_iterations=100)
 
-    uh.interpolate(u_ex)
-    solver.solve(uh)
+    const = dfx.fem.Function(V)
+    const.interpolate(lambda x: np.ones_like(x[0]))
+
+    C = dfx.fem.petsc.assemble_vector(dfx.fem.form(const * v * ufl.dx))
+    C.scale(1. / C.norm())
+
+    assert np.isclose(C.norm(), 1.0)
+
+    # Create the PETSc nullspace vector and check
+    # that it is a valid nullspace of A
+    nullspace = PETSc.NullSpace().create(vectors=[C], comm=mesh.comm)
+    solver.A.setNullSpace(nullspace)
+
+    # assert nullspace.test(solver.A)
+
+    ksp = solver.ksp
+
+    ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.getPC().setFactorSolverType("mumps")
+    ksp.getPC().setFactorSetUpSolverType()
+    ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=24, ival=1)  # detect null pivots
+    ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)  # do not compute null space again
+    ksp.setFromOptions()
+
+    # solver.A.setOption(PETSc.Mat.Option.SYMMETRIC, True)
+    # solver.A.setOption(PETSc.Mat.Option.SYMMETRY_ETERNAL, True)
+
+    _, success = solver.solve(uh)
+
+    assert success
 
     min_uh_loc = uh.x.array.min()
     min_uh = mesh.comm.allreduce(min_uh_loc, op=MIN)
