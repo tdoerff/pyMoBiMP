@@ -103,7 +103,18 @@ if __name__ == "__main__":
 
     problem = NonlinearProblem(residual, c_)
 
-    solver = NewtonSolver(comm_self, problem)
+    def callback(solver, ch):
+        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ds_right))
+
+        term = L_k * a_k * c_bc.value
+        term_sum = comm_world.allreduce(term, op=MPI.SUM)
+
+        cell_voltage.value = - (I_total.value + term_sum) / L
+
+    solver = NewtonSolver(comm_self,
+                          problem,
+                          max_iterations=1000,
+                          callback=callback)
 
     random.seed(comm_world.rank)
     c_.x.array[:] = random.random()  # <- initial data
@@ -119,13 +130,6 @@ if __name__ == "__main__":
             print(f"t = {t:2.4}", flush=True)
 
         cn.interpolate(c_)
-
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ds_right))
-
-        term = L_k * a_k * c_bc.value
-        term_sum = comm_world.allreduce(term, op=MPI.SUM)
-
-        cell_voltage.value = - (I_total.value + term_sum) / L
 
         # c = problem.solve()
         iteration, success = solver.solve(c_)

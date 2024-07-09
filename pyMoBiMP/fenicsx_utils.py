@@ -202,7 +202,12 @@ class NonlinearProblem():
 
 class NewtonSolver():
 
-    def __init__(self, comm, problem, max_iterations=10, tol=1e-10):
+    def __init__(self,
+                 comm,
+                 problem,
+                 max_iterations=10,
+                 tol=1e-10,
+                 callback=lambda solver, uh: None):
 
         self.convergence_criterion = "incremental"
         self.rtol = 1e-9
@@ -211,6 +216,8 @@ class NewtonSolver():
 
         self.max_iterations = max_iterations
         self.tol = tol
+
+        self.callback = callback
 
         self.A = dfx.fem.petsc.create_matrix(problem.jacobian)
         self.L = dfx.fem.petsc.create_vector(problem.residual)
@@ -234,6 +241,8 @@ class NewtonSolver():
         it = 0
         success = False
         while it < self.max_iterations:
+
+            self.callback(self, ch)
 
             # Assemble Jacobian and residual
             with L.localForm() as loc_L:
