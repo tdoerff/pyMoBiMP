@@ -542,7 +542,7 @@ class RuntimeAnalysisBase(abc.ABC):
 
         self.t.append(t)
 
-        if self.filename is not None:
+        if self.filename is not None and MPI.COMM_WORLD.rank == 0:
             with open(self.filename, "a") as file:
                 np.savetxt(file, np.array([[t, *self.data[-1]]]))
 
