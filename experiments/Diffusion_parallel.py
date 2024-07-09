@@ -2,7 +2,6 @@
 """
 
 import dolfinx as dfx
-from dolfinx.fem.petsc import LinearProblem
 
 from mpi4py import MPI
 
@@ -10,7 +9,6 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-from petsc4py import PETSc
 
 import random
 
