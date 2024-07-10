@@ -70,23 +70,6 @@ if __name__ == "__main__":
 
     dt = dfx.fem.Constant(mesh, 0.001)
 
-    # Get an integral measure for the right boundary.
-    boundaries = [(1, lambda x: np.isclose(x[0], 1.)),]
-
-    facet_indices, facet_markers = [], []
-    fdim = mesh.topology.dim - 1
-    for (marker, locator) in boundaries:
-        facets = dfx.mesh.locate_entities(mesh, fdim, locator)
-        facet_indices.append(facets)
-        facet_markers.append(np.full_like(facets, marker))
-    facet_indices = np.hstack(facet_indices).astype(np.int32)
-    facet_markers = np.hstack(facet_markers).astype(np.int32)
-    sorted_facets = np.argsort(facet_indices)
-    facet_tag = dfx.mesh.meshtags(
-        mesh, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
-
-    ds_right = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
-
     x = ufl.SpatialCoordinate(mesh)
 
     # Initialize constants for particle current computation during time stepping.
@@ -97,12 +80,12 @@ if __name__ == "__main__":
     # An implicit Euler time step.
     residual = (c_ - cn) * v / dt * ufl.dx
     residual += ufl.dot(ufl.grad(c_), ufl.grad(v)) * ufl.dx
-    residual -= i_k * v * x[0] * ds_right
+    residual -= i_k * v * x[0] * ufl.ds
 
     problem = NonlinearProblem(residual, c_)
 
     def callback(solver, ch):
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ds_right))
+        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ufl.ds))
 
         term = L_k * a_k * c_bc.value
         term_sum = comm_world.allreduce(term, op=MPI.SUM)
