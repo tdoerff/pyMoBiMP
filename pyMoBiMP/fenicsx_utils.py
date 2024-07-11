@@ -129,7 +129,9 @@ def time_stepping(
             # Find the minimum timestep among all processes.
             # Note that we explicitly use COMM_WORLD since the mesh communicator
             # only groups the processes belonging to one particle.
-            MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+            dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
+            dt.value = dt_global
 
             callback(u)
 
