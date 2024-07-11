@@ -7,6 +7,8 @@ from mpi4py import MPI
 
 import matplotlib.pyplot as plt
 
+from mpi4py import MPI
+
 import numpy as np
 
 import random
@@ -14,9 +16,74 @@ import random
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import cahn_hilliard_form
+from pyMoBiMP.cahn_hilliard_utils import c_of_y
 from pyMoBiMP.cahn_hilliard_utils import _free_energy as free_energy_base
 from pyMoBiMP.cahn_hilliard_utils import populate_initial_data
-from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
+from pyMoBiMP.cahn_hilliard_utils import RuntimeAnalysisBase
+from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem, time_stepping
+
+
+class AnalyzeCellPotential(RuntimeAnalysisBase):
+
+    def setup(
+        self,
+        comm,
+        L,
+        A,
+        I_charge,
+        *args,
+        c_of_y,
+        free_energy=free_energy_base,
+        filename=None,
+        **kwargs
+    ):
+        self.comm = comm
+
+        self.free_energy = free_energy
+        self.c_of_y = c_of_y
+
+        self.filename = filename
+
+        self.L_k = L
+        self.A_k = A
+
+        self.I_charge = I_charge
+
+        self.A = comm.allreduce(self.A_k, op=MPI.SUM)
+
+        self.a_k = self.A_k / A
+
+        self.L = comm.allreduce(self.L_k * self.a_k, op=MPI.SUM)
+
+        return super().setup(*args, **kwargs)
+
+    def analyze(self, u_state, t):
+
+        V = u_state.function_space
+        mesh = V.mesh
+
+        y, mu = u_state.split()
+
+        c = self.c_of_y(y)
+
+        # TODO: this can be done at initialization.
+        coords = ufl.SpatialCoordinate(mesh)
+        r = ufl.sqrt(sum([co**2 for co in coords]))
+
+        charge_k = dfx.fem.assemble_scalar(dfx.fem.form(3 * c * r**2 * ufl.dx))
+
+        charge = self.comm.allreduce(charge_k, op=MPI.SUM)
+
+        mu_bc = dfx.fem.assemble_scalar(dfx.fem.form(mu * r**2 * ufl.ds))
+
+        particle_voltage = self.L_k / self.L * self.a_k * mu_bc
+
+        cell_voltage = self.comm.allreduce(particle_voltage, op=MPI.SUM)
+        cell_voltage += self.I_charge.value / self.L
+
+        self.data.append([charge, cell_voltage])
+
+        return super().analyze(u_state, t)
 
 
 if __name__ == "__main__":
@@ -79,6 +146,7 @@ if __name__ == "__main__":
     v = ufl.TestFunction(V)
 
     un = dfx.fem.Function(V)
+    un.interpolate(u_)
 
     dt = dfx.fem.Constant(mesh, 0.001)
 
@@ -114,40 +182,13 @@ if __name__ == "__main__":
                           max_iterations=1000,
                           callback=callback)
 
-    random.seed(comm_world.rank)
-    u_.sub(0).x.array[:] = random.random()  # <- initial data
-
     fig, ax = plt.subplots()
 
-    line, = ax.plot(u_.sub(0).collapse().x.array[:], color=(0, 0, 0))
+    rt_analysis = AnalyzeCellPotential(
+        comm_world, L_k, A_k, I_total, c_of_y=c_of_y,
+        filename="simulation_output/Diffusion_parallel_rt.txt")
 
-    it = 0
-    while t < T_final:
-
-        un.interpolate(u_)
-
-        # c = problem.solve()
-        iterations, success = solver.solve(u_)
-
-        assert success
-
-        if comm_world.rank == 0:
-
-            iterations = comm_world.allreduce(iterations, op=MPI.MAX)
-
-            print(f"t = {t:2.4} : iterations: {iterations}", flush=True)
-
-        if it % 100 == 0:
-
-            color = (t / T_final, 0, 0)
-
-            ax.plot(u_.sub(0).collapse().x.array[:], color=color)
-
-        # line.set_ydata(c.x.array[:])
-        # fig.canvas.draw()
-
-        t += dt.value
-        it += 1
+    time_stepping(solver, u_, un, T_final, dt, runtime_analysis=rt_analysis)
 
     plt.show()
 
