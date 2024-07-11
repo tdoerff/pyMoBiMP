@@ -69,6 +69,7 @@ def time_stepping(
     output=None,
     runtime_analysis=None,
     logging=True,
+    callback=lambda u: None,
     **event_pars,
 ):
 
@@ -129,6 +130,8 @@ def time_stepping(
             # Note that we explicitly use COMM_WORLD since the mesh communicator
             # only groups the processes belonging to one particle.
             MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
+            callback(u)
 
         except StopEvent as e:
 
