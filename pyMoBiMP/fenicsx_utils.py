@@ -215,8 +215,7 @@ class NewtonSolver():
                  tol=1e-10,
                  callback=lambda solver, uh: None):
 
-        self.convergence_criterion = "incremental"
-        self.rtol = 1e-9
+        self.comm = comm
 
         self.problem = problem
 
