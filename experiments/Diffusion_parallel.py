@@ -9,11 +9,13 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-
 import random
 
 import ufl
 
+from pyMoBiMP.cahn_hilliard_utils import cahn_hilliard_form
+from pyMoBiMP.cahn_hilliard_utils import _free_energy as free_energy_base
+from pyMoBiMP.cahn_hilliard_utils import populate_initial_data
 from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
 
@@ -41,11 +43,15 @@ if __name__ == "__main__":
     # ----------
     mesh = dfx.mesh.create_unit_interval(comm_self, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+    element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+    V = dfx.fem.FunctionSpace(mesh, element * element)
 
     # Simulation parameters
     # ---------------------
-    I_total = dfx.fem.Constant(mesh, 1.0)
+    def free_energy(c):
+        return free_energy_base(c, a=0, b=0, c=0)
+
+    I_total = dfx.fem.Constant(mesh, 0.01)
 
     T_final = 1.0
 
@@ -63,10 +69,16 @@ if __name__ == "__main__":
 
     # The FEM form
     # ------------
-    c_ = dfx.fem.Function(V)
+    u_ = dfx.fem.Function(V)
+
+    y_, mu_ = ufl.split(u_)
+    populate_initial_data(u_, lambda x: 1e-3 * np.ones_like(x[0]), free_energy)
+
+    V0, dofmap_V0 = V.sub(0).collapse()
+
     v = ufl.TestFunction(V)
 
-    cn = dfx.fem.Function(V)
+    un = dfx.fem.Function(V)
 
     dt = dfx.fem.Constant(mesh, 0.001)
 
@@ -77,14 +89,19 @@ if __name__ == "__main__":
     cell_voltage = dfx.fem.Constant(mesh, 0.)
     i_k = - L_k * (c_bc + cell_voltage)
 
-    # An implicit Euler time step.
-    residual = (c_ - cn) * v / dt * ufl.dx
-    residual += ufl.dot(ufl.grad(c_), ufl.grad(v)) * ufl.dx
-    residual -= i_k * v * x[0] * ufl.ds
+    residual = cahn_hilliard_form(
+        u_, un, dt, M=lambda c: (1 - c) * c,
+        free_energy=free_energy,
+        lam=0.1,
+        I_charge=i_k
+    )
 
-    problem = NonlinearProblem(residual, c_)
+    problem = NonlinearProblem(residual, u_)
 
-    def callback(solver, ch):
+    def callback(solver, u_):
+
+        c_, _ = u_.split()
+
         c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ufl.ds))
 
         term = L_k * a_k * c_bc.value
@@ -98,19 +115,19 @@ if __name__ == "__main__":
                           callback=callback)
 
     random.seed(comm_world.rank)
-    c_.x.array[:] = random.random()  # <- initial data
+    u_.sub(0).x.array[:] = random.random()  # <- initial data
 
     fig, ax = plt.subplots()
 
-    line, = ax.plot(c_.x.array[:], color=(0, 0, 0))
+    line, = ax.plot(u_.sub(0).collapse().x.array[:], color=(0, 0, 0))
 
     it = 0
     while t < T_final:
 
-        cn.interpolate(c_)
+        un.interpolate(u_)
 
         # c = problem.solve()
-        iterations, success = solver.solve(c_)
+        iterations, success = solver.solve(u_)
 
         assert success
 
@@ -124,7 +141,7 @@ if __name__ == "__main__":
 
             color = (t / T_final, 0, 0)
 
-            ax.plot(c_.x.array[:], color=color)
+            ax.plot(u_.sub(0).collapse().x.array[:], color=color)
 
         # line.set_ydata(c.x.array[:])
         # fig.canvas.draw()
