@@ -144,7 +144,7 @@ def time_stepping(
             # reset and continue with smaller time step.
             u.x.array[:] = u0.x.array[:]
 
-            iterations = solver.max_it
+            iterations = solver.max_iterations
 
             if dt.value > dt_min:
                 dt.value *= 0.5
