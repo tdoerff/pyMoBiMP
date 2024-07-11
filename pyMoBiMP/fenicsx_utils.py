@@ -115,6 +115,9 @@ def time_stepping(
 
             iterations, success = solver.solve(u)
 
+            if not success:
+                raise RuntimeError("Newton solver did not converge.")
+
             # Adaptive timestepping a la Yibao Li et al. (2017)
             u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
 
