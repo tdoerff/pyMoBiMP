@@ -40,7 +40,9 @@ if __name__ == "__main__":
     # ----------
     mesh = dfx.mesh.create_unit_interval(comm_self, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+    element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
+    V = dfx.fem.FunctionSpace(mesh, element * element)
 
     # Simulation parameters
     # ---------------------
@@ -62,10 +64,10 @@ if __name__ == "__main__":
 
     # The FEM form
     # ------------
-    c_ = dfx.fem.Function(V)
+    u_ = dfx.fem.Function(V)
     v = ufl.TestFunction(V)
 
-    cn = dfx.fem.Function(V)
+    un = dfx.fem.Function(V)
 
     dt = dfx.fem.Constant(mesh, 0.001)
 
@@ -76,15 +78,24 @@ if __name__ == "__main__":
     cell_voltage = dfx.fem.Constant(mesh, 0.)
     i_k = - L_k * (c_bc + cell_voltage)
 
+    c_, mu_ = ufl.split(u_)
+    cn, mun = ufl.split(un)
+    v_c, v_mu = ufl.split(v)
+
     # An implicit Euler time step.
-    residual = (c_ - cn) * v / dt * ufl.dx
-    residual += ufl.dot(ufl.grad(c_), ufl.grad(v)) * ufl.dx
-    residual -= i_k * v * x[0] * ufl.ds
+    residual = (c_ - cn) * v_c / dt * ufl.dx
+    residual += ufl.dot(ufl.grad(c_), ufl.grad(v_c)) * ufl.dx
+    residual -= i_k * v_c * x[0] * ufl.ds
 
-    problem = NonlinearProblem(residual, c_)
+    residual += (mu_ - c_) * v_mu * ufl.dx
 
-    def callback(solver, ch):
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(ch * x[0] * ufl.ds))
+    problem = NonlinearProblem(residual, u_)
+
+    def callback(solver, uh):
+
+        _, muh = uh.split()
+
+        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(muh * x[0] * ufl.ds))
 
         term = L_k * a_k * c_bc.value
         term_sum = comm_world.allreduce(term, op=MPI.SUM)
@@ -96,11 +107,16 @@ if __name__ == "__main__":
                           max_iterations=1000)
 
     random.seed(comm_world.rank)
-    c_.x.array[:] = random.random()  # <- initial data
+    u_.sub(0).x.array[:] = random.random()  # <- initial data
 
     fig, ax = plt.subplots()
 
-    line, = ax.plot(c_.x.array[:], color=(0, 0, 0))
+    V0, _ = u_.function_space.sub(0).collapse()
+    c = dfx.fem.Function(V0)
+
+    c.interpolate(u_.sub(0))
+
+    line, = ax.plot(c.x.array[:], color=(0, 0, 0))
 
     it = 0
 
@@ -110,12 +126,12 @@ if __name__ == "__main__":
 
     while t < T_final:
 
-        cn.interpolate(c_)
+        un.interpolate(u_)
 
-        callback(solver, c_)  # <- this means the boundary conditions is explicit
+        callback(solver, u_)  # <- this means the boundary conditions is explicit
 
         # c = problem.solve()
-        iterations, success = solver.solve(c_)
+        iterations, success = solver.solve(u_)
 
         assert success
 
@@ -129,15 +145,17 @@ if __name__ == "__main__":
 
             color = (t / T_final, 0, 0)
 
-            ax.plot(c_.x.array[:], color=color)
+            c.interpolate(u_.sub(0))
+
+            ax.plot(c.x.array[:], color=color)
 
             # Adaptive timestepping a la Yibao Li et al. (2017)
-            c_max_loc = np.abs(c_.x.array - cn.x.array).max()
+            u_max_loc = np.abs(u_.x.array - un.x.array).max()
 
-            c_err_max = comm_world.allreduce(
-                c_max_loc, op=MPI.MAX)
+            u_err_max = comm_world.allreduce(
+                u_max_loc, op=MPI.MAX)
 
-            dt.value = min(max(tol / c_err_max, dt_min),
+            dt.value = min(max(tol / u_err_max, dt_min),
                            dt_max,
                            1.1 * dt.value)
 
