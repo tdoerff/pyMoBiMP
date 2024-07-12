@@ -129,8 +129,8 @@ if __name__ == "__main__":
     L_k = 1.e1 * (1 + 0.1 * (2 * random.random() - 1))
 
     # Get global information on cell
-    A = comm_world.allreduce(A_k, op=MPI.SUM)
-    a_k = A_k / A
+    A = comm_world.allreduce(A_k, op=MPI.SUM)  # total surface
+    a_k = A_k / A  # partial surface of current particle
 
     L = comm_world.allreduce(a_k * L_k, op=MPI.SUM)
 
@@ -140,8 +140,6 @@ if __name__ == "__main__":
 
     y_, mu_ = ufl.split(u_)
     populate_initial_data(u_, lambda x: 1e-3 * np.ones_like(x[0]), free_energy)
-
-    V0, dofmap_V0 = V.sub(0).collapse()
 
     v = ufl.TestFunction(V)
 
