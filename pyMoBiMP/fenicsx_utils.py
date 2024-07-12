@@ -118,6 +118,8 @@ def time_stepping(
 
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
+            else:
+                iterations = MPI.COMM_WORLD.allreduce(iterations, op=MPI.MAX)
 
             # Adaptive timestepping a la Yibao Li et al. (2017)
             u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
@@ -125,13 +127,6 @@ def time_stepping(
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
             dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
-
-            # Find the minimum timestep among all processes.
-            # Note that we explicitly use COMM_WORLD since the mesh communicator
-            # only groups the processes belonging to one particle.
-            dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
-
-            dt.value = dt_global
 
             callback(it, t, u)
 
@@ -172,8 +167,14 @@ def time_stepping(
 
             break
 
+        # Find the minimum timestep among all processes.
+        # Note that we explicitly use COMM_WORLD since the mesh communicator
+        # only groups the processes belonging to one particle.
+        dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
+        dt.value = dt_global
+
         t += float(dt)
-        it += 1
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
@@ -186,7 +187,8 @@ def time_stepping(
                     f"{perc:>3.0f} % :",
                     f"t[{it:06}] = {t:1.6f}, "
                     f"dt = {dt.value:1.3e}, "
-                    f"its = {iterations}"
+                    f"its = {iterations}",
+                    flush=True
                 )
 
     else:
