@@ -140,7 +140,9 @@ if __name__ == "__main__":
 
         if comm_world.rank == 0:
 
-            print(f"t = {t:2.4} : iterations: {iterations}", flush=True)
+            print(f"t = {t:2.4} : " +
+                  f"dt = {dt.value:1.3e} ; " +
+                  f"iterations: {iterations}", flush=True)
 
         if it % 100 == 0:
 
