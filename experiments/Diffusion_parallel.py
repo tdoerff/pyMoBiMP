@@ -104,7 +104,8 @@ if __name__ == "__main__":
 
     solver = NewtonSolver(comm_self,
                           problem,
-                          max_iterations=1000)
+                          max_iterations=1000,
+                          callback=callback)
 
     random.seed(comm_world.rank)
     u_.sub(0).x.array[:] = random.random()  # <- initial data
