@@ -69,7 +69,7 @@ def time_stepping(
     output=None,
     runtime_analysis=None,
     logging=True,
-    callback=lambda u: None,
+    callback=lambda it, t, u: None,
     **event_pars,
 ):
 
@@ -133,7 +133,7 @@ def time_stepping(
 
             dt.value = dt_global
 
-            callback(u)
+            callback(it, t, u)
 
         except StopEvent as e:
 
