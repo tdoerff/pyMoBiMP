@@ -110,17 +110,22 @@ if __name__ == "__main__":
     # ----------
     mesh = dfx.mesh.create_unit_interval(comm_self, 128)
 
+    coords = ufl.SpatialCoordinate(mesh)
+    r = ufl.sqrt(sum([co**2 for co in coords]))
+
     element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
     V = dfx.fem.FunctionSpace(mesh, element * element)
+
+    V0 = dfx.fem.FunctionSpace(mesh, element)
 
     # Simulation parameters
     # ---------------------
     def free_energy(c):
-        return free_energy_base(c, a=0, b=0, c=0)
+        return free_energy_base(c)
 
     I_total = dfx.fem.Constant(mesh, 0.01)
 
-    T_final = 1.0
+    T_final = 0.1
 
     t = T_start = 0.
 
@@ -138,6 +143,8 @@ if __name__ == "__main__":
     # ------------
     u_ = dfx.fem.Function(V)
 
+    c_ = dfx.fem.Function(V0)  # For plotting purposes.
+
     y_, mu_ = ufl.split(u_)
     populate_initial_data(u_, lambda x: 1e-3 * np.ones_like(x[0]), free_energy)
 
@@ -146,38 +153,48 @@ if __name__ == "__main__":
     un = dfx.fem.Function(V)
     un.interpolate(u_)
 
-    dt = dfx.fem.Constant(mesh, 0.001)
-
-    x = ufl.SpatialCoordinate(mesh)
+    dt = dfx.fem.Constant(mesh, 1e-5)
 
     # Initialize constants for particle current computation during time stepping.
-    c_bc = dfx.fem.Constant(mesh, 0.)
-    cell_voltage = dfx.fem.Constant(mesh, 0.)
-    i_k = - L_k * (c_bc + cell_voltage)
+    i_k = dfx.fem.Constant(mesh, 0.1)
 
     residual = cahn_hilliard_form(
-        u_, un, dt, M=lambda c: (1 - c) * c,
+        u_, un, dt,
+        M=lambda c: (1 - c) * c,
+        c_of_y=c_of_y,
         free_energy=free_energy,
         lam=0.1,
-        I_charge=i_k
+        I_charge=i_k,
+        theta=1.0
     )
 
     problem = NonlinearProblem(residual, u_)
 
-    def callback(solver, u_):
+    def callback(_, u):
 
-        c_, _ = u_.split()
+        _, mu_ = u.split()
 
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(c_ * x[0] * ufl.ds))
+        mu_bc = dfx.fem.assemble_scalar(dfx.fem.form(mu_ * r**2 * ufl.ds))
 
-        term = L_k * a_k * c_bc.value
+        term = L_k * a_k * mu_bc
         term_sum = comm_world.allreduce(term, op=MPI.SUM)
 
-        cell_voltage.value = - (I_total.value + term_sum) / L
+        cell_voltage = (I_total.value + term_sum) / L
+
+        i_k.value = L_k * (-mu_bc + cell_voltage)
+
+        i_sum = comm_world.allreduce(i_k.value * a_k, op=MPI.SUM)
+
+        if abs(i_sum - I_total.value) > 1e-6:
+            raise RuntimeError(
+                "partial currents do not add up to total current: " +
+                f"{i_sum} != {I_total.value}")
+
+        # print(comm_world.rank, i_k.value, i_sum, mu_bc, flush=True)
 
     solver = NewtonSolver(comm_self,
                           problem,
-                          max_iterations=1000,
+                          max_iterations=100,
                           callback=callback)
 
     fig, ax = plt.subplots()
@@ -186,9 +203,20 @@ if __name__ == "__main__":
         comm_world, L_k, A_k, I_total, c_of_y=c_of_y,
         filename="simulation_output/Diffusion_parallel_rt.txt")
 
-    time_stepping(solver, u_, un, T_final, dt, runtime_analysis=rt_analysis)
+    def callback(it, t, u):
+
+        if it % 100 == 0:
+
+            y = u.sub(0).collapse()
+
+            c_expr = dfx.fem.Expression(c_of_y(y),
+                                        V0.element.interpolation_points())
+            c_.interpolate(c_expr)
+
+            ax.plot(c_.x.array)
+
+    time_stepping(solver, u_, un, T_final, dt,
+                  runtime_analysis=rt_analysis,
+                  callback=callback)
 
     plt.show()
-
-    if comm_world.rank == 0:
-        input("Press any key to exit ...")
