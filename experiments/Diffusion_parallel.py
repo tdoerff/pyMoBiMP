@@ -103,11 +103,16 @@ if __name__ == "__main__":
     line, = ax.plot(c_.x.array[:], color=(0, 0, 0))
 
     it = 0
+
+    dt_min = 1e-9
+    dt_max = 1e-2
+    tol = 1e-4
+
     while t < T_final:
 
         cn.interpolate(c_)
 
-        callback(solver, c_)
+        callback(solver, c_)  # <- this means the boundary conditions is explicit
 
         # c = problem.solve()
         iterations, success = solver.solve(c_)
@@ -126,8 +131,15 @@ if __name__ == "__main__":
 
             ax.plot(c_.x.array[:], color=color)
 
-        # line.set_ydata(c.x.array[:])
-        # fig.canvas.draw()
+            # Adaptive timestepping a la Yibao Li et al. (2017)
+            c_max_loc = np.abs(c_.x.array - cn.x.array).max()
+
+            c_err_max = comm_world.allreduce(
+                c_max_loc, op=MPI.MAX)
+
+            dt.value = min(max(tol / c_err_max, dt_min),
+                           dt_max,
+                           1.1 * dt.value)
 
         t += dt.value
         it += 1
