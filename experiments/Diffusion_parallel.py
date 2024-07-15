@@ -13,6 +13,7 @@ import random
 
 import ufl
 
+from pyMoBiMP.cahn_hilliard_utils import c_of_y, _free_energy
 from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
 
@@ -46,7 +47,12 @@ if __name__ == "__main__":
 
     # Simulation parameters
     # ---------------------
-    I_total = dfx.fem.Constant(mesh, 1.0)
+    def M(c): return c * (1 + c)
+
+    def free_energy(c):
+        return _free_energy(c, a=0., b=0., c=0.)
+
+    I_total = dfx.fem.Constant(mesh, 0.1)
 
     T_final = 1.0
 
@@ -69,25 +75,43 @@ if __name__ == "__main__":
 
     un = dfx.fem.Function(V)
 
-    dt = dfx.fem.Constant(mesh, 0.001)
+    dt = dfx.fem.Constant(mesh, 1e-8)
 
     x = ufl.SpatialCoordinate(mesh)
 
     # Initialize constants for particle current computation during time stepping.
-    c_bc = dfx.fem.Constant(mesh, 0.)
+    mu_bc = dfx.fem.Constant(mesh, 0.)
     cell_voltage = dfx.fem.Constant(mesh, 0.)
-    i_k = - L_k * (c_bc + cell_voltage)
+    i_k = - L_k * (mu_bc + cell_voltage)
 
-    c_, mu_ = ufl.split(u_)
-    cn, mun = ufl.split(un)
+    y_, mu_ = ufl.split(u_)
+    yn, mun = ufl.split(un)
     v_c, v_mu = ufl.split(v)
 
-    # An implicit Euler time step.
-    residual = (c_ - cn) * v_c / dt * ufl.dx
-    residual += ufl.dot(ufl.grad(c_), ufl.grad(v_c)) * ufl.dx
-    residual -= i_k * v_c * x[0] * ufl.ds
+    y_ = ufl.variable(y_)
+    c_ = c_of_y(y_)
 
-    residual += (mu_ - c_) * v_mu * ufl.dx
+    dcdy = ufl.diff(c_, y_)
+
+    # Differentiate the free energy function to
+    # obtain the chemical potential
+    c_ = ufl.variable(c_)
+    dfdc = ufl.diff(free_energy(c_), c_)
+    mu_chem = dfdc
+
+    # TODO: add geometric weights to form
+    coords = ufl.SpatialCoordinate(mesh)
+    r = sum(co**2 for co in coords)
+
+    s_V = 4 * np.pi * r**2
+    s_A = 2 * np.pi * r**2
+
+    # An implicit Euler time step.
+    residual = s_V * dcdy * (y_ - yn) * v_c / dt * ufl.dx
+    residual += s_V * ufl.dot(M(c_) * ufl.grad(mu_), ufl.grad(v_c)) * ufl.dx
+    residual -= s_A * I_total * v_c * ufl.ds
+
+    residual += (mu_ - mu_chem) * v_mu * ufl.dx
 
     problem = NonlinearProblem(residual, u_)
 
@@ -95,9 +119,10 @@ if __name__ == "__main__":
 
         _, muh = uh.split()
 
-        c_bc.value = dfx.fem.assemble_scalar(dfx.fem.form(muh * x[0] * ufl.ds))
+        mu_bc.value = dfx.fem.assemble_scalar(
+            dfx.fem.form(muh * r**2 * ufl.ds))
 
-        term = L_k * a_k * c_bc.value
+        term = L_k * a_k * mu_bc.value
         term_sum = comm_world.allreduce(term, op=MPI.SUM)
 
         cell_voltage.value = - (I_total.value + term_sum) / L
@@ -107,22 +132,25 @@ if __name__ == "__main__":
                           max_iterations=1000,
                           callback=callback)
 
-    random.seed(comm_world.rank)
-    u_.sub(0).x.array[:] = random.random()  # <- initial data
+    u_.sub(0).x.array[:] = -6. * comm_world.rank  # <- initial data
 
     fig, ax = plt.subplots()
 
     V0, _ = u_.function_space.sub(0).collapse()
     c = dfx.fem.Function(V0)
 
-    c.interpolate(u_.sub(0))
+    c_expr = dfx.fem.Expression(
+        c_of_y(u_.sub(0).collapse()),
+        V0.element.interpolation_points())
+
+    c.interpolate(c_expr)
 
     line, = ax.plot(c.x.array[:], color=(0, 0, 0))
 
     it = 0
 
     dt_min = 1e-9
-    dt_max = 1e-2
+    dt_max = 1e-3
     tol = 1e-4
 
     while t < T_final:
@@ -136,36 +164,36 @@ if __name__ == "__main__":
 
         assert success
 
-        iterations = comm_world.allreduce(iterations, op=MPI.MAX)
+        iterations_global = comm_world.allreduce(iterations, op=MPI.MAX)
 
         if comm_world.rank == 0:
 
             print(f"t = {t:2.4} : " +
                   f"dt = {dt.value:1.3e} ; " +
-                  f"iterations: {iterations}", flush=True)
+                  f"iterations: {iterations_global}", flush=True)
 
         if it % 100 == 0:
 
             color = (t / T_final, 0, 0)
 
-            c.interpolate(u_.sub(0))
+            c_expr = dfx.fem.Expression(
+                c_of_y(u_.sub(0).collapse()),
+                V0.element.interpolation_points())
+            c.interpolate(c_expr)
 
             ax.plot(c.x.array[:], color=color)
 
-            # Adaptive timestepping a la Yibao Li et al. (2017)
-            u_max_loc = np.abs(u_.x.array - un.x.array).max()
+        # Adaptive timestepping a la Yibao Li et al. (2017)
+        u_max_loc = np.abs(u_.x.array - un.x.array).max()
 
-            u_err_max = comm_world.allreduce(
-                u_max_loc, op=MPI.MAX)
+        u_err_max = comm_world.allreduce(
+            u_max_loc, op=MPI.MAX)
 
-            dt.value = min(max(tol / u_err_max, dt_min),
-                           dt_max,
-                           1.1 * dt.value)
+        dt.value = min(max(tol / u_err_max, dt_min),
+                       dt_max,
+                       1.1 * dt.value)
 
         t += dt.value
         it += 1
 
     plt.show()
-
-    if comm_world.rank == 0:
-        input("Press any key to exit ...")
