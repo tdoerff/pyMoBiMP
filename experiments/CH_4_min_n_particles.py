@@ -43,6 +43,8 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         c_of_y=c_of_y,
         free_energy=lambda u: 0.5 * u**2,
         filename=None,
+        u_state=None,
+        num_particles=None,
         **kwargs,
     ):
         self.free_energy = free_energy
@@ -58,9 +60,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         self.L = sum(Ls * self.aas)
 
-        return super().setup(*args, **kwargs)
-
-    def analyze(self, u_state, t):
+        self.n = num_particles
 
         V = u_state.function_space
         mesh = V.mesh
@@ -74,24 +74,24 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         mu = mus[0]
 
         coords = ufl.SpatialCoordinate(mesh)
-        r = ufl.sqrt(sum([co**2 for co in coords]))
+        r_square = ufl.inner(coords, coords)
 
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
 
-        charge = sum(
-            [dfx.fem.assemble_scalar(
-                dfx.fem.form(3 * c * r**2 * ufl.dx)) for c in cs])
+        self.chem_pot_form = dfx.fem.form(3 * dFdc * r_square * ufl.dx)
+        self.mu_bc_form = dfx.fem.form(mu * r_square * ufl.ds)
+        self.charge_form = [dfx.fem.form(3 * c * r_square * ufl.dx) for c in cs]
+        self.mus_bc_form = [dfx.fem.form(mu_ * r_square * ufl.ds) for mu_ in mus]
+        return super().setup(*args, **kwargs)
 
-        chem_pot = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
-        chem_pot = dfx.fem.assemble_scalar(chem_pot)
+    def analyze(self, u_state, t):
+        charge = sum([dfx.fem.assemble_scalar(self.charge_form[i]) for i in range(self.n)])
 
-        mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
-        mu_bc = dfx.fem.assemble_scalar(mu_bc)
+        chem_pot = dfx.fem.assemble_scalar(self.chem_pot_form)
+        mu_bc = dfx.fem.assemble_scalar(self.mu_bc_form)
 
-        mus_bc = [
-            dfx.fem.assemble_scalar(dfx.fem.form(mu_ * r**2 * ufl.ds)) for mu_ in mus
-        ]
+        mus_bc = [dfx.fem.assemble_scalar(self.mus_bc_form[i]) for i in range(self.n)]
 
         cell_voltage = self.I_charge.value / self.L + sum(
             L_ / self.L * a_ * mu_ for L_, a_, mu_ in zip(self.Ls, self.aas, mus_bc)
@@ -166,13 +166,7 @@ class MultiParticleSimulation():
 
         T_final = self.T_final
 
-        self.event_params = dict(
-            I_charge=I_charge,
-            stop_on_full=False,
-            stop_at_empty=False,
-            cycling=False,
-            logging=True,
-        )
+
 
         # %%
         # The variational form
@@ -264,13 +258,36 @@ class MultiParticleSimulation():
         self.rt_analysis = AnalyzeCellPotential(
             Ls, As, I_charge,
             c_of_y=c_of_y,
-            filename=rt_filename
+            filename=rt_filename,
+            u_state=u,
+            num_particles=num_particles,
         )
 
         # Finalize with some variables that need to be attached to the class instance.
         self.u = u
         self.u0 = u0
         self.dt = dt
+
+        coords = ufl.SpatialCoordinate(u.function_space.mesh)
+        r_square = ufl.inner(coords, coords)
+
+        y, _ = u.split()
+
+        cs = [c_of_y(y_) for y_ in y]
+
+        # This is a bit hackish, since we just need to multiply by a function that
+        # is zero at r=0 and 1 at r=1.
+        cs_bc_form = [dfx.fem.form(r_square * c_ * ufl.ds) for c_ in cs]
+
+        self.event_params = dict(
+            I_charge=I_charge,
+            stop_on_full=False,
+            stop_at_empty=False,
+            cycling=False,
+            logging=True,
+            num_particles=num_particles,
+            cs_bc_form=cs_bc_form
+        )
 
     def run(self,
             dt_max=1e-1,
@@ -290,7 +307,7 @@ class MultiParticleSimulation():
             dt_min=dt_min,
             tol=tol,
             event_handler=self.experiment,
-            output=self.output_xdmf,
+            output=None,#self.output_xdmf,
             runtime_analysis=self.rt_analysis,
             **self.event_params,
         )
@@ -377,7 +394,8 @@ class MultiParticleSimulation():
 
     @property
     def T_final(self):
-        return 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
+        T = 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
+        return T / 100.0
 
     @staticmethod
     def free_energy(u, log, sin):
@@ -404,19 +422,11 @@ class MultiParticleSimulation():
         stop_on_full=True,
         cycling=True,
         logging=False,
+        num_particles=None,
+        cs_bc_form=None
     ):
 
-        coords = ufl.SpatialCoordinate(u.function_space.mesh)
-        r = ufl.sqrt(sum([c**2 for c in coords]))
-
-        y, _ = u.split()
-
-        cs = [c_of_y(y_) for y_ in y]
-
-        # This is a bit hackish, since we just need to multiply by a function that
-        # is zero at r=0 and 1 at r=1.
-        cs_bc = [dfx.fem.form(r**2 * c_ * ufl.ds) for c_ in cs]
-        cs_bc = [dfx.fem.assemble_scalar(c_bc) for c_bc in cs_bc]
+        cs_bc = [dfx.fem.assemble_scalar(cs_bc_form[i]) for i in range(num_particles)]
 
         if logging:
             print(f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]", c_bounds)
