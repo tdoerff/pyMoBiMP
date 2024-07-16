@@ -219,3 +219,5 @@ pyrightconfig.json
 simulation_output/
 post_processing/
 Meshes/mesh.msh
+*.h5
+*.xdmf
