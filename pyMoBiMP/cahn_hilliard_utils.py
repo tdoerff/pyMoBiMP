@@ -2,8 +2,6 @@ from collections.abc import Callable
 
 import dolfinx as dfx
 
-from dolfinx.fem.petsc import NonlinearProblem
-
 from mpi4py import MPI
 
 import numpy as np
@@ -23,6 +21,7 @@ from .exceptions import WrongNumberOfArguments
 from .fenicsx_utils import (
     get_mesh_spacing,
     NewtonSolver,
+    NonlinearProblem,
     RuntimeAnalysisBase,
     time_stepping,
     FileOutput,
