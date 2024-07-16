@@ -225,6 +225,7 @@ def charge_discharge_stop(
     t,
     u,
     I_charge,
+    c_bc_form,
     c_bounds=[0.05, 0.99],
     c_of_y=c_of_y,
     stop_at_empty=True,
@@ -233,17 +234,9 @@ def charge_discharge_stop(
     logging=False,
 ):
 
-    coords = ufl.SpatialCoordinate(u.function_space.mesh)
-    r = ufl.sqrt(sum([c**2 for c in coords]))
-
-    y, _ = u.split()
-
-    c = c_of_y(y)
-
     # This is a bit hackish, since we just need to multiply by a function that
     # is zero at r=0 and 1 at r=1.
-    c_bc = dfx.fem.form(r**2 * c * ufl.ds)
-    c_bc = dfx.fem.assemble_scalar(c_bc)
+    c_bc = dfx.fem.assemble_scalar(c_bc_form)
 
     if logging:
         print(f"t={t:1.5f} ; c_bc = {c_bc:1.3e}", c_bounds)
@@ -302,12 +295,12 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         return super().setup(*args, **kwargs)
 
-    def analyze(self, u_state, t):
+    def analyze(self, t):
 
-        V = u_state.function_space
+        V = self.u_state.function_space
         mesh = V.mesh
 
-        y, mu = u_state.split()
+        y, mu = self.u_state.split()
 
         c = self.c_of_y(y)
 
@@ -328,7 +321,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         self.data.append([charge, chem_pot, mu_bc])
 
-        return super().analyze(u_state, t)
+        return super().analyze(t)
 
 
 # Defaults for the Simulation class
