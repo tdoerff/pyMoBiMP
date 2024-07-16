@@ -449,7 +449,7 @@ class RuntimeAnalysisBase(abc.ABC):
 
         self.filename = None
 
-        self.setup(*args, **kwargs)
+        self.setup(u_state, *args, **kwargs)
 
         # Touch the file to make sure it exists.
         if self.filename is not None:
@@ -457,7 +457,7 @@ class RuntimeAnalysisBase(abc.ABC):
                 pass
 
     @abc.abstractmethod
-    def setup(self, *args, **kwargs):
+    def setup(self, u_state, *args, **kwargs):
         pass
 
     @abc.abstractmethod
