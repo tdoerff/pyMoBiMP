@@ -307,7 +307,7 @@ class MultiParticleSimulation():
             dt_min=dt_min,
             tol=tol,
             event_handler=self.experiment,
-            output=None,#self.output_xdmf,
+            output=self.output_xdmf,
             runtime_analysis=self.rt_analysis,
             **self.event_params,
         )
@@ -395,7 +395,7 @@ class MultiParticleSimulation():
     @property
     def T_final(self):
         T = 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
-        return T / 100.0
+        return T
 
     @staticmethod
     def free_energy(u, log, sin):
