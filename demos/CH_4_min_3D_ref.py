@@ -14,17 +14,21 @@ import numpy as np
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
+    AnalyzeOCP,
     cahn_hilliard_form,
     charge_discharge_stop,
-    AnalyzeOCP,
     c_of_y,
+    _free_energy as free_energy,
     populate_initial_data,
+    y_of_c,
 )
 
 from pyMoBiMP.fenicsx_utils import (
     get_mesh_spacing,
     time_stepping,
     FileOutput,
+    # NewtonSolver,
+    # NonlinearProblem
 )
 
 from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
@@ -69,25 +73,6 @@ u = dfx.fem.Function(V)
 u0 = dfx.fem.Function(V)
 
 # %%
-# Compute the chemical potential df/dc
-a = 6.0 / 4
-b = 0.2
-cc = 5
-
-# a = 5. # 6. / 4
-# b = 0. # 0.2
-# cc = 0 # 5
-
-eps = 1e-3
-
-free_energy = (
-    lambda u, log, sin: u * log(u)
-    + (1 - u) * log(1 - u)
-    + a * u * (1 - u)
-    + b * sin(cc * np.pi * u)
-)
-
-# %%
 # Experimental setup
 # ------------------
 
@@ -123,7 +108,7 @@ F = cahn_hilliard_form(
     u,
     u0,
     dt,
-    free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
+    free_energy=free_energy,
     theta=0.75,
     c_of_y=c_of_y,
     M=lambda c: 1.0 * c * (1 - c),
@@ -141,12 +126,11 @@ log(">>> Setting up initial data ...")
 u_ini = dfx.fem.Function(V)
 
 # Constant
-c_ini_fun = lambda x: eps * np.ones_like(x[0])
+eps = 1e-3
+def c_ini_fun(x): return eps * np.ones_like(x[0])
 
-# Initial charge distribution.
-# c_ini_fun = lambda x: eps + 0.5 * np.sin(np.pi * x[0])
 
-populate_initial_data(u_ini, c_ini_fun, lambda c: free_energy(c, ufl.ln, ufl.sin))
+populate_initial_data(u_ini, c_ini_fun, free_energy, y_of_c=y_of_c)
 
 # %%
 
