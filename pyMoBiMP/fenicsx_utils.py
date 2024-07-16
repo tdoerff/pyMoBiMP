@@ -231,8 +231,11 @@ class NewtonSolver():
 
         self.callback = callback
 
-        self.A = dfx.fem.petsc.create_matrix(problem.jacobian)
-        self.L = dfx.fem.petsc.create_vector(problem.residual)
+        from dolfinx.fem.petsc import create_matrix
+        from dolfinx.fem.petsc import create_vector
+
+        self.A = create_matrix(problem.jacobian)
+        self.L = create_vector(problem.residual)
 
         self.ksp = PETSc.KSP()
         self.linear_solver = self.ksp.create(comm)
