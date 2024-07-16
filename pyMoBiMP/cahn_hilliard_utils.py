@@ -592,6 +592,7 @@ class MultiParticleSimulation():
                  n_out=501,
                  C_rate=0.01,
                  gamma=0.1,
+                 c_of_y=c_of_y,
                  comm=MPI.COMM_WORLD):
 
         self.mesh = mesh
@@ -614,6 +615,7 @@ class MultiParticleSimulation():
         # %%
         # Experimental setup
         # ------------------
+        self.c_of_y = c_of_y
 
         # charging current
         I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
@@ -666,7 +668,7 @@ class MultiParticleSimulation():
                 (v_c_, v_mu_),
                 dt,
                 M=M,
-                c_of_y=c_of_y,
+                c_of_y=self.c_of_y,
                 free_energy=lambda c: self.free_energy(c, ufl.ln, ufl.sin),
                 theta=theta,
                 lam=gamma,
@@ -709,7 +711,7 @@ class MultiParticleSimulation():
 
         self.rt_analysis = AnalyzeCellPotential(
             u, Ls, As, I_charge,
-            c_of_y=c_of_y,
+            c_of_y=self.c_of_y,
             filename=rt_filename,
             num_particles=num_particles,
         )
@@ -724,7 +726,7 @@ class MultiParticleSimulation():
 
         y, _ = u.split()
 
-        cs = [c_of_y(y_) for y_ in y]
+        cs = [self.c_of_y(y_) for y_ in y]
 
         # This is a bit hackish, since we just need to multiply by a function that
         # is zero at r=0 and 1 at r=1.
@@ -868,7 +870,6 @@ class MultiParticleSimulation():
         I_charge,
         c_bounds=[-3.7, 3.7],
         cell_voltage=None,
-        c_of_y=c_of_y,
         stop_at_empty=True,
         stop_on_full=True,
         cycling=True,
