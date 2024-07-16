@@ -346,7 +346,7 @@ def _free_energy(
     return fe
 
 
-class Simulation:
+class SingleParticleSimulation:
 
     def __init__(
         self,
