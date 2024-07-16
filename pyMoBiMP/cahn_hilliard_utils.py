@@ -557,9 +557,6 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         return super().analyze(t)
 
 
-comm_world = MPI.COMM_WORLD
-
-
 def compute_particle_current_densities(mus, As, Ls, I_charge):
 
     A = sum(As)
@@ -593,7 +590,9 @@ class MultiParticleSimulation():
                  output_destination,
                  num_particles=12,
                  n_out=501,
-                 C_rate=0.01):
+                 C_rate=0.01,
+                 gamma=0.1,
+                 comm=MPI.COMM_WORLD):
 
         self.mesh = mesh
         self.C_rate = C_rate
@@ -670,7 +669,7 @@ class MultiParticleSimulation():
                 c_of_y=c_of_y,
                 free_energy=lambda c: self.free_energy(c, ufl.ln, ufl.sin),
                 theta=theta,
-                lam=0.1,
+                lam=gamma,
                 I_charge=I_charge_,
             ) for y1_, mu1_, y0_, mu0_, v_c_, v_mu_, I_charge_ in zip(
                 y1s, mu1s, y0s, mu0s, v_cs, v_mus, I_charges
@@ -686,7 +685,7 @@ class MultiParticleSimulation():
         # %%
         problem = NonlinearProblem(F, u)
 
-        self.solver = NewtonSolver(comm_world, problem)
+        self.solver = NewtonSolver(comm, problem)
 
         self.solver.tol = 1e-3
         # %%
