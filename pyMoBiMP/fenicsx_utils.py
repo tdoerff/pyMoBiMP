@@ -1,7 +1,6 @@
 import abc
 
 import dolfinx as dfx
-from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
 import h5py
 
@@ -14,6 +13,8 @@ import os
 from petsc4py import PETSc
 
 import shutil
+
+import ufl
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -62,11 +63,13 @@ def time_stepping(
     t_start=0,
     dt_max=10.0,
     dt_min=1e-9,
+    dt_increase=1.1,
     tol=1e-6,
     event_handler=lambda t, u, **pars: None,
     output=None,
     runtime_analysis=None,
     logging=True,
+    callback=lambda it, t, u: None,
     **event_pars,
 ):
 
@@ -74,7 +77,7 @@ def time_stepping(
     assert tol > 0.
 
     t = t_start
-    dt.value = dt_min * 1.1
+    dt.value = dt_min * dt_increase
 
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
@@ -97,25 +100,35 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
-            voltage = runtime_analysis.data[-1][-1]
+            if runtime_analysis is not None:
+                voltage = runtime_analysis.data[-1][-1]
+            else:
+                voltage = 0.
 
             stop = event_handler(t, u, cell_voltage=voltage, **event_pars)
 
             if stop:
                 break
 
-            if float(dt) <= dt_min:
+            if float(dt) < dt_min:
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
 
+            if not success:
+                raise RuntimeError("Newton solver did not converge.")
+            else:
+                iterations = MPI.COMM_WORLD.allreduce(iterations, op=MPI.MAX)
+
             # Adaptive timestepping a la Yibao Li et al. (2017)
-            u_max_loc = np.abs(u.x.array - u0.x.array).max()
+            u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
             dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
+
+            callback(it, t, u)
 
         except StopEvent as e:
 
@@ -131,7 +144,7 @@ def time_stepping(
             # reset and continue with smaller time step.
             u.x.array[:] = u0.x.array[:]
 
-            iterations = solver.max_it
+            iterations = solver.max_iterations
 
             if dt.value > dt_min:
                 dt.value *= 0.5
@@ -154,8 +167,14 @@ def time_stepping(
 
             break
 
+        # Find the minimum timestep among all processes.
+        # Note that we explicitly use COMM_WORLD since the mesh communicator
+        # only groups the processes belonging to one particle.
+        dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
+        dt.value = dt_global
+
         t += float(dt)
-        it += 1
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
@@ -163,12 +182,14 @@ def time_stepping(
         if logging:
             perc = (t - t_start) / (T - t_start) * 100
 
-            print(
-                f"{perc:>3.0f} % :",
-                f"t[{it:06}] = {t:1.6f}, "
-                f"dt = {dt.value:1.3e}, "
-                f"its = {iterations}"
-            )
+            if MPI.COMM_WORLD.rank == 0:
+                print(
+                    f"{perc:>3.0f} % :",
+                    f"t[{it:06}] = {t:1.6f}, "
+                    f"dt = {dt.value:1.3e}, "
+                    f"its = {iterations}",
+                    flush=True
+                )
 
     else:
 
@@ -179,23 +200,98 @@ def time_stepping(
     return
 
 
-class NewtonSolver(NewtonSolverBase):
+class NonlinearProblem():
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, F, c):
 
-        super().__init__(*args, **kwargs)
+        self.F = F
+        self.c = c
 
-        self.convergence_criterion = "incremental"
-        self.rtol = 1e-9
+        self.residual = dfx.fem.form(F)
 
-        # # We can customize the linear solver used inside the NewtonSolver by
-        # # modifying the PETSc options
-        ksp = self.krylov_solver
-        opts = PETSc.Options()  # type: ignore
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "lu"
-        ksp.setFromOptions()
+        self.J = J = ufl.derivative(F, c)
+        self.jacobian = dfx.fem.form(J)
+
+
+class NewtonSolver():
+
+    def __init__(self,
+                 comm,
+                 problem,
+                 max_iterations=10,
+                 tol=1e-10,
+                 callback=lambda solver, uh: None):
+
+        self.comm = comm
+
+        self.problem = problem
+
+        self.max_iterations = max_iterations
+        self.tol = tol
+
+        self.callback = callback
+
+        self.A = dfx.fem.petsc.create_matrix(problem.jacobian)
+        self.L = dfx.fem.petsc.create_vector(problem.residual)
+
+        self.ksp = PETSc.KSP()
+        self.linear_solver = self.ksp.create(comm)
+        self.linear_solver.setOperators(self.A)
+
+    def solve(self, ch):
+
+        V = ch.function_space
+
+        dc = dfx.fem.Function(V)
+
+        residual = self.problem.residual
+        jacobian = self.problem.jacobian
+
+        A = self.A
+        L = self.L
+
+        it = 0
+        success = False
+        while it < self.max_iterations:
+
+            self.callback(self, ch)
+
+            # Assemble Jacobian and residual
+            with L.localForm() as loc_L:
+                loc_L.set(0)
+            A.zeroEntries()
+            dfx.fem.petsc.assemble_matrix(A, jacobian)
+            A.assemble()
+            dfx.fem.petsc.assemble_vector(L, residual)
+            L.ghostUpdate(
+                addv=PETSc.InsertMode.ADD_VALUES,
+                mode=PETSc.ScatterMode.REVERSE)
+
+            # Scale residual by -1
+            L.scale(-1)
+            L.ghostUpdate(
+                addv=PETSc.InsertMode.INSERT_VALUES,
+                mode=PETSc.ScatterMode.FORWARD)
+
+            # Solve linear problem
+            self.linear_solver.solve(L, dc.vector)
+            dc.x.scatter_forward()
+            # Update u_{i+1} = u_i + delta u_i
+            ch.x.array[:] += dc.x.array
+            it += 1
+
+            # Compute norm of update
+            correction_norm = dc.vector.norm(0)
+
+            if np.isnan(correction_norm) or np.isinf(correction_norm):
+                raise RuntimeError("NaNs in NewtonSolver!")
+
+            # print(f"Iteration {it}: Correction norm {correction_norm}")
+            if correction_norm < self.tol:
+                success = True
+                break
+
+        return it, success
 
 
 class OutputBase(abc.ABC):
@@ -465,7 +561,7 @@ class RuntimeAnalysisBase(abc.ABC):
 
         self.t.append(t)
 
-        if self.filename is not None:
+        if self.filename is not None and MPI.COMM_WORLD.rank == 0:
             with open(self.filename, "a") as file:
                 np.savetxt(file, np.array([[t, *self.data[-1]]]))
 

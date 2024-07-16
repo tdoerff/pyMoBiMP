@@ -342,6 +342,61 @@ def _free_energy(
     return fe
 
 
+class ParticleCurrentDensity(dfx.fem.Constant):
+    def __init__(self, comm, mesh, A_k, L_k, I_charge):
+
+        super().__init__(mesh, 0.0)
+
+        self.comm = comm
+        self.mesh = mesh
+
+        coords = ufl.SpatialCoordinate(mesh)
+        self.r = ufl.sqrt(sum([co**2 for co in coords]))
+
+        self.A_k = A_k
+        self.L_k = L_k
+
+        self.A = A = comm.allreduce(A_k, op=MPI.SUM)
+
+        # fraction of the total surface
+        self.a_k = a_k = A_k / A
+
+        # Coupling parameters between particle surface potential.
+        self.L = comm.allreduce(a_k * L_k, op=MPI.SUM)
+
+        self.I_charge = I_charge
+
+    def attach_mu(self, mu_k):
+
+        self.mu_k = mu_k
+
+    @property
+    def value(self):
+
+        # CAUTION: This trick only works if R=1!
+        # TODO: Replace by more robust expression.
+        mu_bc = dfx.fem.assemble_scalar(dfx.fem.form(self.mu_k * self.r**2 * ufl.ds))
+
+        # I * (A_1 + A_2) = I_1 * A_1 + I_2 * A_2
+        term = self.comm.allreduce(self.L_k * self.a_k * mu_bc, op=MPI.SUM)
+
+        # Here must be a negative sign since with the I_charges, we measure
+        # what flows out of the particle.
+        Voltage = - (self.I_charge.value + term) / self.L
+
+        # TODO: Check the sign! Somehow, there must be a minus for the
+        # code to work. I think, I_charge as constructed here is the current
+        # OUT OF the particle.
+        I_charge_k = - self.L_k * (mu_bc + Voltage)
+
+        # I think that's the magic: Inplace-copying the current to
+        # _cpp_object.value updates the Constant object everytime the
+        # property method value() is called.
+        np.copyto(self._cpp_object.value, np.asarray(I_charge_k))
+
+        return I_charge_k
+
+
 class SingleParticleSimulation:
 
     def __init__(
@@ -359,7 +414,7 @@ class SingleParticleSimulation:
         ] = lambda c: 1.0
         * c
         * (1 - c),
-        I: float = 1.0,
+        I: dfx.fem.Constant | float = 1.0,
         eps: float = 1e-3,
         dt_fac_ini: float = 1e-2,
         c_ini=lambda x, eps: eps * np.ones_like(x[0]),
@@ -385,10 +440,25 @@ class SingleParticleSimulation:
 
         V = dfx.fem.FunctionSpace(mesh, mixed_element)
 
+        # Experimental setup
+        # ------------------
+
+        # Charging current goes into the form and is recomputed in experiment
+        if isinstance(I, float):
+            I_charge = dfx.fem.Constant(mesh, I)
+        elif isinstance(I, dfx.fem.Constant):
+            I_charge = I
+        else:
+            raise TypeError(f"I of unsupported type {type(I)}")
+
+        self.event_params = dict(I_charge=I_charge)
+
+        self.experiment = experiment
+
         # (initial) timestep
         # ------------------
         dx = get_mesh_spacing(mesh)
-        self.dt = dfx.fem.Constant(mesh, dt_fac_ini * dx / I)
+        self.dt = dfx.fem.Constant(mesh, dt_fac_ini * dx / I_charge.value)
 
         self.T_final = T_final
 
@@ -396,16 +466,6 @@ class SingleParticleSimulation:
         # ---------------------------
         self.u = dfx.fem.Function(V)
         self.u0 = dfx.fem.Function(V)
-
-        # Experimental setup
-        # ------------------
-
-        # Charging current goes into the form and is recomputed in experiment
-        I_charge = dfx.fem.Constant(mesh, I)
-
-        self.event_params = dict(I_charge=I_charge)
-
-        self.experiment = experiment
 
         # The weak form of the problem
         # ----------------------------
