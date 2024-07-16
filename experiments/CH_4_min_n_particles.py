@@ -36,6 +36,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
     def setup(
         self,
+        u_state,
         Ls,
         As,
         I_charge,
@@ -43,7 +44,6 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         c_of_y=c_of_y,
         free_energy=lambda u: 0.5 * u**2,
         filename=None,
-        u_state=None,
         num_particles=None,
         **kwargs,
     ):
@@ -83,9 +83,10 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         self.mu_bc_form = dfx.fem.form(mu * r_square * ufl.ds)
         self.charge_form = [dfx.fem.form(3 * c * r_square * ufl.dx) for c in cs]
         self.mus_bc_form = [dfx.fem.form(mu_ * r_square * ufl.ds) for mu_ in mus]
-        return super().setup(*args, **kwargs)
 
-    def analyze(self, u_state, t):
+        return super().setup(u_state, *args, **kwargs)
+
+    def analyze(self, t):
         charge = sum([dfx.fem.assemble_scalar(
             self.charge_form[i]) for i in range(self.n)])
 
@@ -100,7 +101,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         self.data.append([charge, chem_pot, mu_bc, cell_voltage])
 
-        return super().analyze(u_state, t)
+        return super().analyze(self.u_state, t)
 
 
 comm_world = MPI.COMM_WORLD

@@ -90,7 +90,7 @@ def time_stepping(
         it += 1
 
         if runtime_analysis is not None:
-            runtime_analysis.analyze(u, t)
+            runtime_analysis.analyze(t)
 
         try:
             u.x.scatter_forward()
@@ -438,7 +438,10 @@ class Fenicx1DOutput(OutputBase):
 
 class RuntimeAnalysisBase(abc.ABC):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, u_state, *args, **kwargs):
+
+        # Attach the Function object
+        self.u_state = u_state
 
         # Initialize empty containers
         self.t = []
@@ -458,7 +461,7 @@ class RuntimeAnalysisBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def analyze(self, u_state, t):
+    def analyze(self, t):
 
         self.t.append(t)
 
