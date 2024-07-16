@@ -154,7 +154,7 @@ u.interpolate(u_ini)
 
 n_out = 51
 
-output = FileOutput(u, np.linspace(0, T_final, 51), filename="simulation_output/CH_4_true_3d.bp")
+output = FileOutput(u, np.linspace(0, T_final, 51), filename="simulation_output/CH_4_true_3d.xdmf")
 
 rt_analysis = AnalyzeOCP(c_of_y=c_of_y)
 
