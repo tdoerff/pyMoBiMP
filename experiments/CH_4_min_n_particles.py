@@ -86,7 +86,8 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         return super().setup(*args, **kwargs)
 
     def analyze(self, u_state, t):
-        charge = sum([dfx.fem.assemble_scalar(self.charge_form[i]) for i in range(self.n)])
+        charge = sum([dfx.fem.assemble_scalar(
+            self.charge_form[i]) for i in range(self.n)])
 
         chem_pot = dfx.fem.assemble_scalar(self.chem_pot_form)
         mu_bc = dfx.fem.assemble_scalar(self.mu_bc_form)
@@ -165,8 +166,6 @@ class MultiParticleSimulation():
         I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
 
         T_final = self.T_final
-
-
 
         # %%
         # The variational form
