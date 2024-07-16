@@ -4,39 +4,38 @@
 
 # %%
 import dolfinx as dfx
-
 from dolfinx.fem.petsc import NonlinearProblem
-
-# %matplotlib widget
-from matplotlib import pyplot as plt
-# plt.style.use('fivethirtyeight')
+from dolfinx.nls.petsc import NewtonSolver
 
 from mpi4py import MPI
 
 import numpy as np
 
-import pyvista
-
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
+    cahn_hilliard_form,
     charge_discharge_stop,
     AnalyzeOCP,
     c_of_y,
-    populate_initial_data)
+    populate_initial_data,
+)
 
-from pyMoBiMP.fenicsx_utils import (get_mesh_spacing,
-                           time_stepping,
-                           NewtonSolver,
-                           FileOutput)
+from pyMoBiMP.fenicsx_utils import (
+    get_mesh_spacing,
+    time_stepping,
+    FileOutput,
+)
 
 from pyMoBiMP.gmsh_utils import dfx_spherical_mesh
 
 comm_world = MPI.COMM_WORLD
 
+
 def log(*args, **kwargs):
     if comm_world.rank == 0:
         print(*args, **kwargs)
+
 
 # %%
 # create the mesh
@@ -71,7 +70,7 @@ u0 = dfx.fem.Function(V)
 
 # %%
 # Compute the chemical potential df/dc
-a = 6. / 4
+a = 6.0 / 4
 b = 0.2
 cc = 5
 
@@ -81,32 +80,44 @@ cc = 5
 
 eps = 1e-3
 
-free_energy = lambda u, log, sin: u * log(u) + (1-u) * log(1-u) + a * u * (1 - u) + b * sin(cc * np.pi * u)
+free_energy = (
+    lambda u, log, sin: u * log(u)
+    + (1 - u) * log(1 - u)
+    + a * u * (1 - u)
+    + b * sin(cc * np.pi * u)
+)
 
 # %%
 # Experimental setup
 # ------------------
 
-T_final = 0.2 # ending time
+T_final = 0.2  # ending time
 
 # charging current
 I_charge = dfx.fem.Constant(mesh, 0.01)
 
-def experiment(t, u, I_charge, **kwargs):
+coords = ufl.SpatialCoordinate(mesh)
+r2 = ufl.dot(coords, coords)
 
-    return charge_discharge_stop(t, u, I_charge, c_of_y=c_of_y, **kwargs)
+y, mu = u.split()
+c = c_of_y(y)
+
+c_bc_form = dfx.fem.form(r2 * c * ufl.ds)
+
+
+def experiment(t, u, I_charge, cell_voltage, **kwargs):
+
+    return charge_discharge_stop(t, u, I_charge, c_bc_form, c_of_y=c_of_y)
+
 
 event_params = dict(I_charge=I_charge, stop_at_empty=False, cycling=False)
 
 # %%
 # The variational form
 # --------------------
-from pyMoBiMP.cahn_hilliard_utils import cahn_hilliard_form
-# c_of_y=lambda y: y
-
 params = dict(I_charge=I_charge)
 
-form_weights = dict(surface=1., volume=1.)
+form_weights = dict(surface=1.0, volume=1.0)
 
 F = cahn_hilliard_form(
     u,
@@ -115,10 +126,10 @@ F = cahn_hilliard_form(
     free_energy=lambda c: free_energy(c, ufl.ln, ufl.sin),
     theta=0.75,
     c_of_y=c_of_y,
-    M=lambda c: 1. * c * (1 - c),
+    M=lambda c: 1.0 * c * (1 - c),
     lam=0.1,
     form_weights=form_weights,
-    **params
+    **params,
 )
 
 # %%
@@ -135,8 +146,7 @@ c_ini_fun = lambda x: eps * np.ones_like(x[0])
 # Initial charge distribution.
 # c_ini_fun = lambda x: eps + 0.5 * np.sin(np.pi * x[0])
 
-populate_initial_data(
-    u_ini, c_ini_fun, lambda c: free_energy(c, ufl.ln, ufl.sin))
+populate_initial_data(u_ini, c_ini_fun, lambda c: free_energy(c, ufl.ln, ufl.sin))
 
 # %%
 
@@ -154,9 +164,11 @@ u.interpolate(u_ini)
 
 n_out = 51
 
-output = FileOutput(u, np.linspace(0, T_final, 51), filename="simulation_output/CH_4_true_3d.xdmf")
+output = FileOutput(
+    u, np.linspace(0, T_final, 51), filename="simulation_output/CH_4_true_3d.xdmf"
+)
 
-rt_analysis = AnalyzeOCP(c_of_y=c_of_y)
+rt_analysis = AnalyzeOCP(u, c_of_y=c_of_y)
 
 time_stepping(
     solver,
