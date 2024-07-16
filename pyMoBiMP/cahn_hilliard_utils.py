@@ -398,6 +398,9 @@ class ParticleCurrentDensity(dfx.fem.Constant):
 
 class SingleParticleSimulation:
 
+    NewtonSolver = NewtonSolver
+    NonlinearProblem = NonlinearProblem
+
     def __init__(
         self,
         mesh: dfx.mesh.Mesh = _mesh,
@@ -487,9 +490,9 @@ class SingleParticleSimulation:
 
         # Problem and solver setup
         # ------------------------
-        problem = NonlinearProblem(F, self.u)
+        problem = self.NonlinearProblem(F, self.u)
 
-        self.solver = NewtonSolver(mesh.comm, problem)
+        self.solver = self.NewtonSolver(mesh.comm, problem)
 
         # Setup output
         # ------------
@@ -637,6 +640,9 @@ def compute_particle_current_densities(mus, As, Ls, I_charge):
 
 class MultiParticleSimulation():
 
+    NewtonSolver = NewtonSolver
+    NonlinearProblem = NonlinearProblem
+
     def __init__(self,
                  mesh,
                  output_destination,
@@ -737,9 +743,9 @@ class MultiParticleSimulation():
         u_ini = self.initial_data()
 
         # %%
-        problem = NonlinearProblem(F, u)
+        problem = self.NonlinearProblem(F, u)
 
-        self.solver = NewtonSolver(comm, problem)
+        self.solver = self.NewtonSolver(comm, problem)
 
         self.solver.tol = 1e-3
         # %%
