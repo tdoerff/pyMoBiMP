@@ -553,7 +553,12 @@ def read_data(filebasename):
         print(f"Found {num_particles} particles.")
 
         # grid coordinates
-        x_data = f["Mesh/mesh/geometry"][()]
+        if "mesh" in f["Mesh"].keys():
+            x_data = f["Mesh/mesh/geometry"][()]
+        elif "Grid" in f["Mesh"].keys():
+            x_data = f["Mesh/Grid/geometry"][()]
+        else:
+            raise ValueError("Neither 'Mesh' nor 'Grid' detected in " + filebasename)
 
         t_keys = f["Function/y_0"].keys()
 
