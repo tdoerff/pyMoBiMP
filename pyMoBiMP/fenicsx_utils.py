@@ -278,16 +278,17 @@ class NewtonSolver():
 
             # Solve linear problem
             self.linear_solver.solve(L, dc.vector)
-            dc.x.scatter_forward()
-            # Update u_{i+1} = u_i + delta u_i
-            ch.x.array[:] += dc.x.array
-            it += 1
 
             # Compute norm of update
             correction_norm = dc.vector.norm(0)
 
             if np.isnan(correction_norm) or np.isinf(correction_norm):
                 raise RuntimeError("NaNs in NewtonSolver!")
+
+            dc.x.scatter_forward()
+            # Update u_{i+1} = u_i + delta u_i
+            ch.x.array[:] += dc.x.array
+            it += 1
 
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if correction_norm < self.tol:
