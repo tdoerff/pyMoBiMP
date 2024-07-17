@@ -253,9 +253,9 @@ class NewtonSolver():
         A = self.A
         L = self.L
 
-        it = 0
         success = False
-        while it < self.max_iterations:
+
+        for it in range(self.max_iterations):
 
             self.callback(self, ch)
 
