@@ -163,6 +163,8 @@ if __name__ == "__main__":
 
     I_total = dfx.fem.Constant(mesh, 0.1)
 
+    gamma = 0.1
+
     T_final = 1.0
 
     t = T_start = 0.
@@ -219,6 +221,7 @@ if __name__ == "__main__":
     residual -= s_A * i_k * v_c * dt * ufl.ds
 
     residual += (mu_ - mu_chem) * v_mu * ufl.dx
+    residual -= gamma * ufl.dot(ufl.grad(c_), ufl.grad(v_mu)) * ufl.dx
 
     mu_bc_form = dfx.fem.form(mu_ * r2 * ufl.ds)
 
