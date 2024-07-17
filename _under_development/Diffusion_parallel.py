@@ -260,7 +260,7 @@ if __name__ == "__main__":
     solver.rtol = 1e-3
     solver.convergence_criterion = "incremental"
 
-    u_.sub(0).x.array[:] = -6.  # <- initial data
+    u_.sub(0).x.array[:] = 2 * random.random() - 1  # <- initial data
 
     if comm_world.rank == 0:
         u_.sub(0).x.array[:] = 0.33
