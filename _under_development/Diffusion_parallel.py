@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import os
+
 import random
 
 import ufl
@@ -139,6 +141,15 @@ if __name__ == "__main__":
 
     # Grid setup
     # ----------
+    # Read-in stretched mesh.
+    exp_path = os.path.dirname(__file__)
+    parent_path = os.path.abspath(exp_path + "/../")
+
+    mesh_filename = parent_path + "/Meshes/line_mesh.xdmf"
+
+    with dfx.io.XDMFFile(comm_world, mesh_filename, 'r') as file:
+        mesh = file.read_mesh(name="Grid")
+
     mesh = dfx.mesh.create_unit_interval(comm_self, 128)
 
     element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
