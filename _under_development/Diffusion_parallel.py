@@ -2,6 +2,8 @@
 """
 
 import dolfinx as dfx
+from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx.nls.petsc import NewtonSolver
 
 from mpi4py import MPI
 
@@ -18,10 +20,6 @@ import ufl
 from pyMoBiMP.cahn_hilliard_utils import c_of_y, _free_energy
 from pyMoBiMP.fenicsx_utils import RuntimeAnalysisBase
 
-from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
-
-from dolfinx.fem.petsc import NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
 
