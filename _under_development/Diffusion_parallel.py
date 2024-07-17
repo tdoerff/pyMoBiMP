@@ -15,8 +15,11 @@ import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import c_of_y, _free_energy
 from pyMoBiMP.fenicsx_utils import RuntimeAnalysisBase
+
 from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
+from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx.nls.petsc import NewtonSolver
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
 
@@ -103,6 +106,11 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
             return super().analyze(u_state, t)
 
 
+def log(*msg):
+
+    print(f"[{comm_world.rank:>3}]: ", *msg, flush=True)
+
+
 if __name__ == "__main__":
 
     # MPI communicators:
@@ -117,6 +125,8 @@ if __name__ == "__main__":
 
     # Diagnostic output
     # -----------------
+
+    # dfx.log.set_log_level(dfx.log.LogLevel.INFO)
 
     # With flush=True, we force print to flush to cmd, and with barrier, we
     # make sure the first statement come first.
@@ -142,7 +152,7 @@ if __name__ == "__main__":
     def free_energy(c):
         return _free_energy(c, a=0., b=0., c=0.)
 
-    I_total = dfx.fem.Constant(mesh, 0.)
+    I_total = dfx.fem.Constant(mesh, 0.0)
 
     T_final = 1.0
 
@@ -150,7 +160,7 @@ if __name__ == "__main__":
 
     R_k = 1.
     A_k = 4 * np.pi * R_k**2
-    L_k = 1.e1 * (1 + 0.1 * (2 * random.random() - 1))
+    L_k = 1.e1 * (1. + 0.1 * (2 * random.random() - 1.))
 
     # Get global information on cell
     A = comm_world.allreduce(A_k, op=MPI.SUM)
@@ -170,7 +180,7 @@ if __name__ == "__main__":
     x = ufl.SpatialCoordinate(mesh)
 
     # Initialize constants for particle current computation during time stepping.
-    i_k = dfx.fem.Constant(mesh, 0.)
+    i_k = dfx.fem.Constant(mesh, 0.0)
 
     y_, mu_ = ufl.split(u_)
     yn, mun = ufl.split(un)
@@ -189,21 +199,19 @@ if __name__ == "__main__":
 
     # TODO: add geometric weights to form
     coords = ufl.SpatialCoordinate(mesh)
-    r = sum(co**2 for co in coords)
+    r2 = ufl.dot(coords, coords)
 
-    s_V = 4 * np.pi * r**2
-    s_A = 2 * np.pi * r**2
+    s_V = 4 * np.pi * r2
+    s_A = 2 * np.pi * r2
 
     # An implicit Euler time step.
-    residual = s_V * dcdy * (y_ - yn) * v_c / dt * ufl.dx
-    residual += s_V * ufl.dot(M(c_) * ufl.grad(mu_), ufl.grad(v_c)) * ufl.dx
-    residual -= s_A * i_k * v_c * ufl.ds
+    residual = s_V * dcdy * (y_ - yn) * v_c * ufl.dx
+    residual += s_V * ufl.dot(M(c_) * ufl.grad(mu_), ufl.grad(v_c)) * dt * ufl.dx
+    residual -= s_A * i_k * v_c * dt * ufl.ds
 
     residual += (mu_ - mu_chem) * v_mu * ufl.dx
 
-    problem = NonlinearProblem(residual, u_)
-
-    mu_bc_form = dfx.fem.form(mu_ * r**2 * ufl.ds)
+    mu_bc_form = dfx.fem.form(mu_ * r2 * ufl.ds)
 
     def callback(solver, uh):
 
@@ -230,16 +238,32 @@ if __name__ == "__main__":
 
             print(msg)
 
-            raise AssertionError(msg)
-
         return cell_voltage
 
-    solver = NewtonSolver(comm_self,
-                          problem,
-                          max_iterations=1000,
-                          callback=callback)
+    problem = NonlinearProblem(residual, u_)
 
-    u_.sub(0).x.array[:] = -6. * comm_world.rank  # <- initial data
+    # problem.form = lambda x: callback(_, _)
+
+    solver = NewtonSolver(comm_world, problem)
+    from petsc4py import PETSc
+    # solver.krylov_solver.setType(PETSc.KSP.Type.PREONLY)
+    # solver.krylov_solver.getPC().setType(PETSc.PC.Type.LU)
+    ksp = solver.krylov_solver
+    opts = PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    opts[f"{option_prefix}ksp_type"] = "gmres"
+    opts[f"{option_prefix}pc_type"] = "lu"
+    opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+    ksp.setFromOptions()
+
+    solver.max_it = 10
+    solver.rtol = 1e-3
+    solver.convergence_criterion = "incremental"
+
+    u_.sub(0).x.array[:] = -6.  # <- initial data
+
+    if comm_world.rank == 0:
+        u_.sub(0).x.array[:] = 0.33
 
     # Output
     # ------
@@ -264,7 +288,7 @@ if __name__ == "__main__":
 
     dt_min = 1e-9
     dt_max = 1e-3
-    tol = 1e-4
+    tol = 1e-7
 
     while t < T_final:
 
@@ -274,13 +298,26 @@ if __name__ == "__main__":
 
         # Explicit implementation of the boundary condition
         cell_voltage = callback(solver, u_)
+        # log("cell_voltage", cell_voltage, i_k.value)
 
-        iterations, success = solver.solve(u_)
+        try:
+            iterations, success = solver.solve(u_)
+        except BaseException as e:
+            log(e)
+
+            iterations = 9e99
+            success = False
+
+        # log("before successes " + f"{success}")
+        successes = comm_world.allgather(success)
+        success = np.all(successes)
 
         if not success:
             u_.x.array[:] = un.x.array
 
             dt.value *= 0.5
+
+            log(f"reduce stepsize to {dt.value:1.3e}")
 
             assert dt.value >= dt_min
 
@@ -288,14 +325,16 @@ if __name__ == "__main__":
 
         # Diagnostic output
         # -----------------
-        iterations_global = comm_world.allreduce(iterations, op=MPI.MAX)
+        iterations_global = iterations
 
         if comm_world.rank == 0:
 
-            print(f"t = {t:2.4} : " +
-                  f"dt = {dt.value:1.3e} ; " +
-                  f"iterations: {iterations_global} ; ",
-                  f"cell_voltage: {cell_voltage}", flush=True)
+            print(
+                f"[{t/T_final * 100:>3.0f}%] " +
+                f"t[{it:06}] = {t:2.4e} : " +
+                f"dt = {dt.value:1.3e} ; " +
+                f"iterations: {iterations_global} ; ",
+                f"cell_voltage: {cell_voltage}", flush=True)
 
         # Output
         # ------
@@ -320,7 +359,7 @@ if __name__ == "__main__":
 
         dt.value = min(max(tol / u_err_max, dt_min),
                        dt_max,
-                       1.1 * dt.value)
+                       1.001 * dt.value)
 
         t += dt.value
         it += 1
