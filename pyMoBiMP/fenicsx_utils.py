@@ -238,8 +238,8 @@ class NewtonSolver():
         self.L = create_vector(problem.residual)
 
         self.ksp = PETSc.KSP()
-        self.linear_solver = self.ksp.create(comm)
-        self.linear_solver.setOperators(self.A)
+        self.krylov_solver = self.ksp.create(comm)
+        self.krylov_solver.setOperators(self.A)
 
     def solve(self, ch):
 
@@ -277,7 +277,7 @@ class NewtonSolver():
                 mode=PETSc.ScatterMode.FORWARD)
 
             # Solve linear problem
-            self.linear_solver.solve(L, dc.vector)
+            self.krylov_solver.solve(L, dc.vector)
 
             # Compute norm of update
             correction_norm = dc.vector.norm(0)
