@@ -75,7 +75,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         return super().setup(u, *args, **kwargs)
 
-    def analyze(self, u_state, t):
+    def analyze(self, t):
 
         state_k = dfx.fem.assemble_scalar(self.state_form)
 
@@ -103,7 +103,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         # if self.comm.rank == 0:
             self.data.append([total_state, cell_voltage])
 
-            return super().analyze(u_state, t)
+            return super().analyze(t)
 
 
 def log(*msg):
@@ -349,7 +349,7 @@ if __name__ == "__main__":
 
             ax.plot(c.x.array[:], color=color)
 
-        # rt_analysis.analyze(u_, t)
+        rt_analysis.analyze(t)
 
         # Adaptive timestepping a la Yibao Li et al. (2017)
         u_max_loc = np.abs(u_.x.array - un.x.array).max()
