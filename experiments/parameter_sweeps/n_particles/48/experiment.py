@@ -1,0 +1,26 @@
+from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx.nls.petsc import NewtonSolver
+
+import os
+import sys
+
+
+exp_path = os.path.dirname(__file__)
+parent_path = os.path.abspath(
+    exp_path + "/../..")
+
+sys.path.append(parent_path)
+
+from default.experiment import Simulation, mesh  # noqa: 402
+
+Simulation.NonlinearProblem = NonlinearProblem
+Simulation.NewtonSolver = NewtonSolver
+
+if __name__ == "__main__":
+
+    simulation = Simulation(
+        mesh,
+        output_destination=exp_path + "/simulation_output/output",
+        num_particles=48)
+
+    simulation.run(tol=1e-5)
