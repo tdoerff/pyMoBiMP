@@ -23,6 +23,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
     def setup(
         self,
         comm,
+        u,
         L,
         A,
         I_charge,
@@ -34,10 +35,15 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
     ):
         self.comm = comm
 
+        # TODO: Make sure this is true for more complex processor geometry.
+        self.num_particles = comm.size
+
         self.free_energy = free_energy
         self.c_of_y = c_of_y
 
         self.filename = filename
+
+        self.u_k = u
 
         self.L_k = L
         self.A_k = A
@@ -50,35 +56,51 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         self.L = comm.allreduce(self.L_k * self.a_k, op=MPI.SUM)
 
-        return super().setup(*args, **kwargs)
-
-    def analyze(self, u_state, t):
-
-        V = u_state.function_space
+        V = self.u_k.function_space
         mesh = V.mesh
 
-        y, mu = u_state.split()
+        # Pre-assemble compiled forms.
+        coords = ufl.SpatialCoordinate(mesh)
+        r2 = ufl.inner(coords, coords)
+
+        y, mu = self.u_k.split()
 
         c = self.c_of_y(y)
 
-        # TODO: this can be done at initialization.
-        coords = ufl.SpatialCoordinate(mesh)
-        r = ufl.sqrt(sum([co**2 for co in coords]))
+        self.state_form = dfx.fem.form(3 * c * r2 * ufl.dx)
+        self.mu_bc_form = dfx.fem.form(mu * r2 * ufl.ds)
 
-        charge_k = dfx.fem.assemble_scalar(dfx.fem.form(3 * c * r**2 * ufl.dx))
+        return super().setup(u, *args, **kwargs)
 
-        charge = self.comm.allreduce(charge_k, op=MPI.SUM)
+    def analyze(self, u_state, t):
 
-        mu_bc = dfx.fem.assemble_scalar(dfx.fem.form(mu * r**2 * ufl.ds))
+        state_k = dfx.fem.assemble_scalar(self.state_form)
+
+        # Altough reduce might be the right choice, there seems to
+        # be a bug in the mpi4py implementation, hence we choose a
+        # workaround via gather.
+        states = self.comm.gather(state_k, root=0)  # all particle states
+
+        if self.comm.rank == 0:
+
+            # The total state of charge.
+            total_state = sum(states) / self.num_particles
+
+        # Boundary value of chemical potential
+        mu_bc = dfx.fem.assemble_scalar(self.mu_bc_form)
 
         particle_voltage = self.L_k / self.L * self.a_k * mu_bc
 
-        cell_voltage = self.comm.allreduce(particle_voltage, op=MPI.SUM)
-        cell_voltage += self.I_charge.value / self.L
+        particle_voltages = self.comm.gather(particle_voltage, root=0)
 
-        self.data.append([charge, cell_voltage])
+        if self.comm.rank == 0:
+            cell_voltage = sum(particle_voltages)
+            cell_voltage += self.I_charge.value / self.L
 
-        return super().analyze(u_state, t)
+        # if self.comm.rank == 0:
+            self.data.append([total_state, cell_voltage])
+
+            return super().analyze(u_state, t)
 
 
 if __name__ == "__main__":
@@ -88,6 +110,10 @@ if __name__ == "__main__":
     # comm_self is just the current processor.
     comm_world = MPI.COMM_WORLD
     comm_self = MPI.COMM_SELF
+
+    # Initialize random number generator
+    # ----------------------------------
+    random.seed(comm_world.rank)
 
     # Diagnostic output
     # -----------------
@@ -116,7 +142,7 @@ if __name__ == "__main__":
     def free_energy(c):
         return _free_energy(c, a=0., b=0., c=0.)
 
-    I_total = dfx.fem.Constant(mesh, 0.1)
+    I_total = dfx.fem.Constant(mesh, 0.)
 
     T_final = 1.0
 
@@ -144,9 +170,7 @@ if __name__ == "__main__":
     x = ufl.SpatialCoordinate(mesh)
 
     # Initialize constants for particle current computation during time stepping.
-    mu_bc = dfx.fem.Constant(mesh, 0.)
-    cell_voltage = dfx.fem.Constant(mesh, 0.)
-    i_k = - L_k * (mu_bc + cell_voltage)
+    i_k = dfx.fem.Constant(mesh, 0.)
 
     y_, mu_ = ufl.split(u_)
     yn, mun = ufl.split(un)
@@ -173,23 +197,42 @@ if __name__ == "__main__":
     # An implicit Euler time step.
     residual = s_V * dcdy * (y_ - yn) * v_c / dt * ufl.dx
     residual += s_V * ufl.dot(M(c_) * ufl.grad(mu_), ufl.grad(v_c)) * ufl.dx
-    residual -= s_A * I_total * v_c * ufl.ds
+    residual -= s_A * i_k * v_c * ufl.ds
 
     residual += (mu_ - mu_chem) * v_mu * ufl.dx
 
     problem = NonlinearProblem(residual, u_)
 
+    mu_bc_form = dfx.fem.form(mu_ * r**2 * ufl.ds)
+
     def callback(solver, uh):
 
-        _, muh = uh.split()
+        mu_bc = dfx.fem.assemble_scalar(mu_bc_form)
 
-        mu_bc.value = dfx.fem.assemble_scalar(
-            dfx.fem.form(muh * r**2 * ufl.ds))
+        weighted_particle_potential = L_k / L * a_k * mu_bc
 
-        term = L_k * a_k * mu_bc.value
-        term_sum = comm_world.allreduce(term, op=MPI.SUM)
+        active_phase_potential = comm_world.allreduce(
+            weighted_particle_potential, op=MPI.SUM)
 
-        cell_voltage.value = - (I_total.value + term_sum) / L
+        cell_voltage = -(I_total.value / L + active_phase_potential)
+
+        i_k.value = - L_k * (mu_bc + cell_voltage)
+
+        i_ks = comm_world.allgather(i_k.value * a_k)
+
+        total_current = sum(i_ks)
+
+        if not np.isclose(total_current, I_total.value):
+
+            msg = "Partial currents do not add up to total current!\n"
+            msg += f"sum(i_k a_k) = {total_current} != "
+            msg += f"I_total = {I_total.value}"
+
+            print(msg)
+
+            raise AssertionError(msg)
+
+        return cell_voltage
 
     solver = NewtonSolver(comm_self,
                           problem,
@@ -201,7 +244,7 @@ if __name__ == "__main__":
     # Output
     # ------
     rt_analysis = AnalyzeCellPotential(
-        comm_world, L_k, A_k, I_total, c_of_y, free_energy,
+        comm_world, u_, L_k, A_k, I_total, c_of_y, free_energy,
         filename="simulation_output/Diffusion_parallel_rt.txt")
 
     fig, ax = plt.subplots()
@@ -229,11 +272,19 @@ if __name__ == "__main__":
         # ------------
         un.interpolate(u_)
 
-        callback(solver, u_)  # <- this means the boundary conditions is explicit
+        # Explicit implementation of the boundary condition
+        cell_voltage = callback(solver, u_)
 
         iterations, success = solver.solve(u_)
 
-        assert success
+        if not success:
+            u_.x.array[:] = un.x.array
+
+            dt.value *= 0.5
+
+            assert dt.value >= dt_min
+
+            continue
 
         # Diagnostic output
         # -----------------
@@ -243,7 +294,8 @@ if __name__ == "__main__":
 
             print(f"t = {t:2.4} : " +
                   f"dt = {dt.value:1.3e} ; " +
-                  f"iterations: {iterations_global}", flush=True)
+                  f"iterations: {iterations_global} ; ",
+                  f"cell_voltage: {cell_voltage}", flush=True)
 
         # Output
         # ------
@@ -258,7 +310,7 @@ if __name__ == "__main__":
 
             ax.plot(c.x.array[:], color=color)
 
-        rt_analysis.analyze(u_, t)
+        # rt_analysis.analyze(u_, t)
 
         # Adaptive timestepping a la Yibao Li et al. (2017)
         u_max_loc = np.abs(u_.x.array - un.x.array).max()
