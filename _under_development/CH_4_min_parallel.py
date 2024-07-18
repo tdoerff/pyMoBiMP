@@ -254,6 +254,10 @@ if __name__ == "__main__":
 
     problem = NonlinearProblem(residual, u_)
 
+    # NOTE: This is the way to make sure the boundary condition is updated
+    # before each Newton iteration. However, this makes the simulation
+    # crash. Only the explicit boundary conditions works.
+
     # problem.form = lambda x: callback(_, _)
 
     solver = NewtonSolver(comm_world, problem)
