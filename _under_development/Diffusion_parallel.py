@@ -159,7 +159,7 @@ if __name__ == "__main__":
     def M(c): return c * (1 + c)
 
     def free_energy(c):
-        return _free_energy(c, a=0., b=0., c=0.)
+        return _free_energy(c)
 
     I_total = dfx.fem.Constant(mesh, 0.1)
 
