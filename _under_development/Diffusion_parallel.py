@@ -3,7 +3,7 @@
 
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver
+from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
 from mpi4py import MPI
 
@@ -13,12 +13,33 @@ import numpy as np
 
 import os
 
+from petsc4py import PETSc
+
 import random
 
 import ufl
 
-from pyMoBiMP.cahn_hilliard_utils import c_of_y, _free_energy
+from pyMoBiMP.cahn_hilliard_utils import c_of_y, _free_energy, cahn_hilliard_form
 from pyMoBiMP.fenicsx_utils import RuntimeAnalysisBase
+
+
+class NewtonSolver(NewtonSolverBase):
+    def __init__(self, comm: MPI.Intracomm, problem: NonlinearProblem):
+        super().__init__(comm, problem)
+
+        # solver.krylov_solver.setType(PETSc.KSP.Type.PREONLY)
+        # solver.krylov_solver.getPC().setType(PETSc.PC.Type.LU)
+        ksp = self.krylov_solver
+        opts = PETSc.Options()
+        option_prefix = ksp.getOptionsPrefix()
+        opts[f"{option_prefix}ksp_type"] = "gmres"
+        opts[f"{option_prefix}pc_type"] = "lu"
+        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+        ksp.setFromOptions()
+
+        self.max_it = 10
+        self.rtol = 1e-3
+        self.convergence_criterion = "incremental"
 
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
@@ -188,40 +209,19 @@ if __name__ == "__main__":
 
     dt = dfx.fem.Constant(mesh, 1e-8)
 
-    x = ufl.SpatialCoordinate(mesh)
-
     # Initialize constants for particle current computation during time stepping.
     i_k = dfx.fem.Constant(mesh, 0.0)
 
     y_, mu_ = ufl.split(u_)
-    yn, mun = ufl.split(un)
-    v_c, v_mu = ufl.split(v)
 
-    y_ = ufl.variable(y_)
-    c_ = c_of_y(y_)
+    residual = cahn_hilliard_form(
+        u_, un, dt,
+        M=M, c_of_y=c_of_y, free_energy=free_energy,
+        lam=gamma, I_charge=i_k, theta=1.
+    )
 
-    dcdy = ufl.diff(c_, y_)
-
-    # Differentiate the free energy function to
-    # obtain the chemical potential
-    c_ = ufl.variable(c_)
-    dfdc = ufl.diff(free_energy(c_), c_)
-    mu_chem = dfdc
-
-    # TODO: add geometric weights to form
     coords = ufl.SpatialCoordinate(mesh)
     r2 = ufl.dot(coords, coords)
-
-    s_V = 4 * np.pi * r2
-    s_A = 2 * np.pi * r2
-
-    # An implicit Euler time step.
-    residual = s_V * dcdy * (y_ - yn) * v_c * ufl.dx
-    residual += s_V * ufl.dot(M(c_) * ufl.grad(mu_), ufl.grad(v_c)) * dt * ufl.dx
-    residual -= s_A * i_k * v_c * dt * ufl.ds
-
-    residual += (mu_ - mu_chem) * v_mu * ufl.dx
-    residual -= gamma * ufl.dot(ufl.grad(c_), ufl.grad(v_mu)) * ufl.dx
 
     mu_bc_form = dfx.fem.form(mu_ * r2 * ufl.ds)
 
@@ -257,20 +257,6 @@ if __name__ == "__main__":
     # problem.form = lambda x: callback(_, _)
 
     solver = NewtonSolver(comm_world, problem)
-    from petsc4py import PETSc
-    # solver.krylov_solver.setType(PETSc.KSP.Type.PREONLY)
-    # solver.krylov_solver.getPC().setType(PETSc.PC.Type.LU)
-    ksp = solver.krylov_solver
-    opts = PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-    opts[f"{option_prefix}ksp_type"] = "gmres"
-    opts[f"{option_prefix}pc_type"] = "lu"
-    opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-    ksp.setFromOptions()
-
-    solver.max_it = 10
-    solver.rtol = 1e-3
-    solver.convergence_criterion = "incremental"
 
     u_.sub(0).x.array[:] = 2 * random.random() - 1  # <- initial data
 
