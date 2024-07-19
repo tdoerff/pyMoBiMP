@@ -27,4 +27,6 @@ if __name__ == "__main__":
         mesh,
         output_destination=exp_path + "/simulation_output/output")
 
+    simulation.T_final = 100.
+
     simulation.run(tol=1e-5)
