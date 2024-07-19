@@ -908,10 +908,6 @@ class MultiParticleSimulation():
         self._T = 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
         return self._T
 
-    @T_final.setter
-    def T_final(self, value):
-        self._T = value
-
     @staticmethod
     def free_energy(u, log, sin):
         a = 6.0 / 4
