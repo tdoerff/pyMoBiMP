@@ -23,10 +23,10 @@ exp_path = os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == "__main__":
 
+    Simulation.T_final = 100.
+
     simulation = Simulation(
         mesh,
         output_destination=exp_path + "/simulation_output/output")
-
-    simulation.T_final = 100.
 
     simulation.run(tol=1e-5)
