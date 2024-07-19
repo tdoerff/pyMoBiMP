@@ -649,6 +649,7 @@ class MultiParticleSimulation():
                  num_particles=12,
                  n_out=501,
                  C_rate=0.01,
+                 M=lambda c: c * (1 - c),
                  gamma=0.1,
                  c_of_y=c_of_y,
                  comm=MPI.COMM_WORLD):
@@ -683,9 +684,6 @@ class MultiParticleSimulation():
         # %%
         # The variational form
         # --------------------
-
-        def M(c):
-            return c * (1 - c)
 
         theta = 1.0
 
