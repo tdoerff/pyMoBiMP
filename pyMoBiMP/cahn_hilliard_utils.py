@@ -179,7 +179,7 @@ def cahn_hilliard_form(
 
     flux = M(c) * ufl.grad(mu_theta)
 
-    F1 = s_V * dcdy * (y - y0) * v_c * dx
+    F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_c * dx
     F1 += s_V * ufl.dot(flux, ufl.grad(v_c)) * dt * dx
     F1 -= I_charge * s_A * v_c * dt * ds
 
