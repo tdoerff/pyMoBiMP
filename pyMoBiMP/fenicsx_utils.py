@@ -204,13 +204,37 @@ class NonlinearProblem():
 
     def __init__(self, F, c):
 
-        self.F = F
-        self.c = c
+        super().__init__()
 
-        self.residual = dfx.fem.form(F)
+        # UFL (uncompiled) forms of residual and jacobian
+        self._ufl_F = F
+        self._ufl_J = ufl.derivative(F, c)
 
-        self.J = J = ufl.derivative(F, c)
-        self.jacobian = dfx.fem.form(J)
+        # Linear and bi-linear form
+        self.L = dfx.fem.form(self._ufl_F)  # residual
+        self.a = dfx.fem.form(self._ufl_J)  # jacobian
+
+        # Allocations for residual and matrix.
+        self._F = dfx.fem.petsc.create_vector(self.L)
+        self._J = dfx.fem.petsc.create_matrix(self.a)
+
+    def form(self, x):
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+    def F(self, *_):
+        with self._F.localForm() as f_local:
+            f_local.set(0.0)
+        dfx.fem.petsc.assemble_vector(self._F, self.L)
+        self._F.ghostUpdate(addv=PETSc.InsertMode.ADD,
+                            mode=PETSc.ScatterMode.REVERSE)
+
+        return self._F
+
+    def J(self, *_):
+        self._J.zeroEntries()
+        dfx.fem.petsc.assemble_matrix(self._J, self.a)
+        self._J.assemble()
+        return self._J
 
 
 class NewtonSolver():
@@ -231,15 +255,9 @@ class NewtonSolver():
 
         self.callback = callback
 
-        from dolfinx.fem.petsc import create_matrix
-        from dolfinx.fem.petsc import create_vector
-
-        self.A = create_matrix(problem.jacobian)
-        self.L = create_vector(problem.residual)
-
         self.ksp = PETSc.KSP()
         self.krylov_solver = self.ksp.create(comm)
-        self.krylov_solver.setOperators(self.A)
+        self.krylov_solver.setOperators(problem.a)
 
     def solve(self, ch):
 
@@ -247,28 +265,14 @@ class NewtonSolver():
 
         dc = dfx.fem.Function(V)
 
-        residual = self.problem.residual
-        jacobian = self.problem.jacobian
-
-        A = self.A
-        L = self.L
-
         success = False
 
         for it in range(self.max_iterations):
 
             self.callback(self, ch)
 
-            # Assemble Jacobian and residual
-            with L.localForm() as loc_L:
-                loc_L.set(0)
-            A.zeroEntries()
-            dfx.fem.petsc.assemble_matrix(A, jacobian)
-            A.assemble()
-            dfx.fem.petsc.assemble_vector(L, residual)
-            L.ghostUpdate(
-                addv=PETSc.InsertMode.ADD_VALUES,
-                mode=PETSc.ScatterMode.REVERSE)
+            self.problem.J()
+            L = self.problem.F()
 
             # Scale residual by -1
             L.scale(-1)
