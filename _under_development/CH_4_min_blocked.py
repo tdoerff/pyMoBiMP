@@ -24,12 +24,14 @@ from mpi4py import MPI
 
 import numpy as np
 
+import os
+
 import petsc4py
 
 import petsc4py.PETSc
 import ufl
 
-from pyMoBiMP.fenicsx_utils import get_mesh_spacing
+from pyMoBiMP.fenicsx_utils import get_mesh_spacing, RuntimeAnalysisBase
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     c_of_y,
@@ -56,88 +58,30 @@ class NewtonSolver(NewtonSolverBase):
         self.convergence_criterion = "incremental"
 
 
-class SingleParticleProblem:
+class AnalyzeCellPotential(RuntimeAnalysisBase):
 
-    def __init__(self, F, u, bcs=None, J=None, P=None):
+    def setup(self, u_states, filename):
 
-        if J is None:
-            V = u.function_space
-            du = ufl.TrialFunction(V)
-            J = ufl.derivative(F, u, du)
+        self.u_states = u_states
+        self.filename = filename
 
-        self._F = dolfinx.fem.form(F)
-        self._J = dolfinx.fem.form(J)
-        self._obj_vec = dolfinx.fem.petsc.create_vector(self._F)
-        self._solution = u
-        self._bcs = bcs
-        self._P = P
+        self.mu_bc_forms = [dfx.fem.form(u.sub(1) * r2 * ufl.ds) for u in u_states]
+        self.q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx)
+                        for u in u_states]
 
-        self.F_vec = dolfinx.fem.petsc.create_vector(self._F)
-        self.J_mat = dolfinx.fem.petsc.create_matrix(self._J)
+    def analyze(self, t):
 
-    def create_snes_solution(self) -> petsc4py.PETSc.Vec:
-        """
-        Create a petsc4py.PETSc.Vec to be passed to petsc4py.PETSc.SNES.solve.
+        mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form)
+                  for mu_bc_form in self.mu_bc_forms]
+        qs = [dfx.fem.assemble_scalar(q_form) for q_form in self.q_forms]
 
-        The returned vector will be initialized with the initial guess
-        provided in `self._solution`.
-        """
-        x = petsc4py.PETSc.Vec(self._solution.x.array.copy())
-        with x.localForm() as _x, \
-                petsc4py.PETSc.Vec(self._solution.x).localForm() as _solution:
-            _x[:] = _solution
-        return x
+        soc = sum(qs) / num_particles
 
-    def update_solution(self, x: petsc4py.PETSc.Vec) -> None:
-        """Update `self._solution` with data in `x`."""
-        x.ghostUpdate(
-            addv=petsc4py.PETSc.InsertMode.INSERT,
-            mode=petsc4py.PETSc.ScatterMode.FORWARD,
-        )
-        with x.localForm() as _x, self._solution.x.petsc_vec.localForm() as _solution:
-            _solution[:] = _x
+        cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
 
-    def obj(self, snes: petsc4py.PETSc.SNES, x: petsc4py.PETSc.Vec) -> np.float64:
-        """Compute the norm of the residual."""
-        self.F(snes, x, self._obj_vec)
-        return self._obj_vec.norm()
+        self.data.append([soc, cell_voltage])
 
-    def F(
-        self,
-        snes: petsc4py.PETSc.SNES,
-        x: petsc4py.PETSc.Vec,
-        F_vec: petsc4py.PETSc.Vec,
-    ) -> None:
-        """Assemble the residual."""
-        self.update_solution(x)
-        with F_vec.localForm() as F_vec_local:
-            F_vec_local.set(0.0)
-        dolfinx.fem.petsc.assemble_vector(F_vec, self._F)
-        dolfinx.fem.petsc.apply_lifting(
-            F_vec, [self._J], [self._bcs], x0=[x], scale=-1.0
-        )
-        F_vec.ghostUpdate(
-            addv=petsc4py.PETSc.InsertMode.ADD, mode=petsc4py.PETSc.ScatterMode.REVERSE
-        )
-        dolfinx.fem.petsc.set_bc(F_vec, self._bcs, x, -1.0)
-
-    def J(
-        self,
-        snes: petsc4py.PETSc.SNES,
-        x: petsc4py.PETSc.Vec,
-        J_mat: petsc4py.PETSc.Mat,
-        P_mat: petsc4py.PETSc.Mat,
-    ) -> None:
-        """Assemble the jacobian."""
-        J_mat.zeroEntries()
-        dolfinx.fem.petsc.assemble_matrix(J_mat, self._J, self._bcs, diagonal=1.0)
-        J_mat.assemble()
-        if self._P is not None:
-            P_mat.zeroEntries()
-            dolfinx.fem.petsc.assemble_matrix(
-                P_mat, self._P, self._bcs, diagonal=1.0
-            )
-            P_mat.assemble()
+        super().analyze(t)
 
 
 def compute_cell_voltage(
@@ -256,6 +200,9 @@ if __name__ == "__main__":
 
     q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx) for u in us]
 
+    filename = os.path.dirname(os.path.abspath(__file__)) + "/rt.txt"
+    rt_analysis = AnalyzeCellPotential(us, filename=filename)
+
     figs_axs = [plt.subplots() for _ in range(num_particles)]
 
     t = 0.
@@ -312,6 +259,8 @@ if __name__ == "__main__":
             warn(">>> Reduce timestep size to dt={dt.value:1.3e}")
 
             continue
+
+        rt_analysis.analyze(t)
 
         # increase only after timestep was successfull.
         t += dt.value
