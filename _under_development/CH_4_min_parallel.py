@@ -262,7 +262,7 @@ if __name__ == "__main__":
 
     solver = NewtonSolver(comm_world, problem)
 
-    u_.sub(0).x.array[:] = 2 * random.random() - 1  # <- initial data
+    u_.sub(0).x.array[:] = -6.  # <- initial data
 
     if comm_world.rank == 0:
         u_.sub(0).x.array[:] = 0.33
@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
         dt.value = min(max(tol / u_err_max, dt_min),
                        dt_max,
-                       1.001 * dt.value)
+                       1.01 * dt.value)
 
         t += dt.value
         it += 1

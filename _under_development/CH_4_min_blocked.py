@@ -231,7 +231,7 @@ if __name__ == "__main__":
     # Set up initial data (crudely simplified)
     # ----------------------------------------
     for u in u0s:
-        u.sub(0).x.array[:] = 2 * random.random() - 1
+        u.sub(0).x.array[:] = -6.
 
     # Problem and solver setup
     # ------------------------
@@ -310,7 +310,7 @@ if __name__ == "__main__":
 
                 fig, ax = figs_axs[i_particle]
 
-                color = (t / T_final, 0, 0)
+                color = (min(t, T_final) / T_final, 0, 0)
 
                 c_expr = dfx.fem.Expression(
                     c_of_y(u.sub(0).collapse()),
