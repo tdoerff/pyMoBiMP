@@ -4,24 +4,16 @@ import dolfinx
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
-from dolfinx.fem.petsc import create_vector_block, create_matrix_block
 
 from matplotlib import pyplot as plt
 
 from mpi4py import MPI
 
-import multiphenicsx.fem
-import multiphenicsx.fem.petsc
-
 import numpy as np
-
-import os
 
 import petsc4py
 
 import random
-
-import typing
 
 import petsc4py.PETSc
 import ufl
