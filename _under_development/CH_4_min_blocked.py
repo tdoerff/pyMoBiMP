@@ -26,8 +26,6 @@ import numpy as np
 
 import petsc4py
 
-import random
-
 import petsc4py.PETSc
 import ufl
 
@@ -48,7 +46,7 @@ class NewtonSolver(NewtonSolverBase):
         ksp = self.krylov_solver
         opts = petsc4py.PETSc.Options()
         option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "gmres"  # TODO: direct solver! UMFPACK
+        opts[f"{option_prefix}ksp_type"] = "preonly"  # TODO: direct solver! UMFPACK
         opts[f"{option_prefix}pc_type"] = "lu"
         opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
         ksp.setFromOptions()
@@ -157,14 +155,25 @@ def compute_cell_voltage(
     return cell_voltage
 
 
+def log(*msg, cond=True):
+
+    if cond:
+        print("LOG: ", *msg, flush=True)
+
+
+def warn(*msg):
+
+    print("WARNING: ", *msg, flush=True)
+
+
 if __name__ == "__main__":
 
     # Simulation setup
     # ----------------
 
-    num_particles = 6
+    num_particles = 2
     T_final = 1.0
-    I_total = 0.
+    I_total = 0.1
 
     Ls = 1.e1 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
     a_ratios = np.ones(num_particles) / num_particles
@@ -200,7 +209,6 @@ if __name__ == "__main__":
     i_ks = [dfx.fem.Constant(mesh, 0.0) for _ in range(num_particles)]
 
     Fs = []
-    Js = [[None for _ in range(num_particles)] for _ in range(num_particles)]
     us = []
     u0s = []
 
@@ -226,7 +234,6 @@ if __name__ == "__main__":
         us.append(u)
         u0s.append(u0)
         Fs.append(F)
-        Js[i_particle][i_particle] = J
 
     # Set up initial data (crudely simplified)
     # ----------------------------------------
@@ -235,7 +242,7 @@ if __name__ == "__main__":
 
     # Problem and solver setup
     # ------------------------
-    problems = [NonlinearProblem(F, u) for F, u, J in zip(Fs, us, Js)]
+    problems = [NonlinearProblem(F, u) for F, u in zip(Fs, us)]
 
     solvers = [NewtonSolver(comm, problem) for problem in problems]
 
@@ -247,6 +254,8 @@ if __name__ == "__main__":
 
     mu_bc_forms = [dfx.fem.form(u.sub(1) * r2 * ufl.ds) for u in us]
 
+    q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx) for u in us]
+
     figs_axs = [plt.subplots() for _ in range(num_particles)]
 
     t = 0.
@@ -254,49 +263,70 @@ if __name__ == "__main__":
 
     dt_min = 1e-9
     dt_max = 1e-3
-    tol = 1e-7
+    tol = 1e-5
 
     while t < T_final:
 
-        it += 1
+        if dt.value < dt_min:
+            raise RuntimeError(f"Timestep too small! (dt={dt.value:1.3e})")
 
         mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form) for mu_bc_form in mu_bc_forms]
+        qs = [dfx.fem.assemble_scalar(q_form) for q_form in q_forms]
+
+        soc = sum(qs) / num_particles
 
         cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
 
         u_err_max = 0.
         iterations = 0
 
-        for i_particle in range(num_particles):
+        try:
+            for i_particle in range(num_particles):
 
-            solver = solvers[i_particle]
-            u = us[i_particle]
-            u0 = u0s[i_particle]
+                solver = solvers[i_particle]
+                u = us[i_particle]
+                u0 = u0s[i_particle]
 
-            i_ks[i_particle].value = \
-                - Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
+                i_ks[i_particle].value = \
+                    - Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
 
-            u0.interpolate(u)
+                u0.interpolate(u)
 
-            it_part, _ = solver.solve(u)
+                it_part, _ = solver.solve(u)
 
-            iterations = max(it_part, iterations)
+                iterations = max(it_part, iterations)
 
-            # Adaptive timestepping a la Yibao Li et al. (2017)
-            u_max_loc = np.abs(u.x.array - u0.x.array).max()
+                # Adaptive timestepping a la Yibao Li et al. (2017)
+                u_max_loc = np.abs(u.x.array - u0.x.array).max()
 
-            u_err_max += u_max_loc
+                u_err_max = max(u_max_loc, u_err_max)
 
+        except Exception as e:
+
+            warn(e)
+
+            # Reset and continue with a smaller time step
+            [u.interpolate(u0) for u, u0 in zip(us, u0s)]
+            dt.value *= 0.5
+
+            warn(">>> Reduce timestep size to dt={dt.value:1.3e}")
+
+            continue
+
+        # increase only after timestep was successfull.
+        t += dt.value
+        it += 1
+
+        # The new timestep size for the next timestep.
         dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
 
-        t += dt.value
-
-        print(
+        log(
             f"[{t/T_final * 100:>3.0f}%] " +
             f"t[{it:06}] = {t:2.4e} : " +
             f"dt = {dt.value:1.3e} ; " +
-            f"iterations: {iterations} ; ",
-            f"cell_voltage: {cell_voltage}", flush=True)
+            f"iterations: {iterations} ; " +
+            f"soc = {soc:1.3e}",
+            f"cell_voltage: {cell_voltage}")
 
         # Output
         # ------
