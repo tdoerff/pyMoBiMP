@@ -1,3 +1,16 @@
+"""
+CH_4_min_blocked.py
+
+Playground to develop a multi-particle integrator suitable for integrating
+up to thousands of particles. The essential idea is that each particle problem
+decouples from the other ones except for the boundary condition.
+
+Open issues:
+[ ] parallelization
+[ ] runtime analysis
+[ ] file output
+"""
+
 import basix
 
 import dolfinx
