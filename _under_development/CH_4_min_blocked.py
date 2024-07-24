@@ -278,8 +278,8 @@ if __name__ == "__main__":
             f"t[{it:06}] = {t:2.4e} : " +
             f"dt = {dt.value:1.3e} ; " +
             f"iterations: {iterations} ; " +
-            f"soc = {soc:1.3e}",
-            f"cell_voltage: {cell_voltage}")
+            f"soc = {rt_analysis.soc:1.3e}",
+            f"cell_voltage: {rt_analysis.cell_voltage}")
 
         # Output
         # ------
