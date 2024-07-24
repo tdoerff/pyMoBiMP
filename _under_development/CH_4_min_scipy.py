@@ -1,3 +1,5 @@
+import basix
+
 import dolfinx as dfx
 
 from mpi4py.MPI import COMM_SELF as comm
@@ -13,8 +15,93 @@ from scipy.integrate._ivp.base import OdeSolver  # this is the class we will mon
 from tqdm import tqdm
 
 from pyMoBiMP.cahn_hilliard_utils import (
+    c_of_y,
+    _free_energy as free_energy,
     get_mesh_spacing,
+    SingleParticleODEProblem,
     SingleParticleODEProblem as ODEProblem)
+
+
+class MultiParticleODE(SingleParticleODEProblem):
+    def __init__(self, mesh, num_particles, c_of_y, free_energy, gamma=0.1):
+
+        # Simulation setup
+        # ----------------
+        self.num_particles = num_particles
+
+        self.Ls = 1.e1 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
+        self.a_ratios = np.ones(num_particles) / num_particles
+
+        self.L = sum(_a * _L for _a, _L in zip(self.a_ratios, self.Ls))
+
+        self.mesh = mesh
+
+        # Set up function space
+        # ---------------------
+        element = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
+
+        # Set up individual particle forms
+        # --------------------------------
+
+        self.i_ks = [dfx.fem.Constant(mesh, 0.0) for _ in range(num_particles)]
+
+        particle_odes = []
+
+        for i_particle in range(num_particles):
+
+            particle_odes.append(
+                SingleParticleODEProblem(
+                    mesh,
+                    element=element,
+                    c_of_y=c_of_y,
+                    free_energy=free_energy,
+                    gamma=gamma,
+                    I_charge=self.i_ks[i_particle]
+                )
+            )
+
+        self.particle_odes = particle_odes
+
+    @property
+    def initial_data(self):
+        y_0 = np.array(
+            [ode.y.x.array[:] for ode in self.particle_odes]
+        ).flatten()
+
+        return y_0
+
+    def experiment(self, t):
+
+        for i_k in self.i_ks:
+            i_k.value = 0.1
+
+    def rhs(self, t, y_vec):
+
+        dydt = np.zeros_like(y_vec)
+
+        stop = 0
+        for i_particle in range(self.num_particles):
+
+            # distribute the input data across the particle FEM functions
+            # -----------------------------------------------------------
+
+            # length of the current particle' function storage
+            length = len(self.particle_odes[i_particle].y.x.array)
+
+            # Start at the last stop index.
+            start = stop
+            # Increase the stop counter
+            stop += length
+
+            # Compute the rhs of the current particle and store it into the
+            # return vector.
+            # TODO: incorporate the method `experiment`.
+            particle_ode = self.particle_odes[i_particle]
+            dydt[start:stop] = particle_ode(t, y_vec[start:stop])
+
+            self.experiment(t)
+
+        return dydt
 
 
 # From: https://towardsdatascience.com/do-stuff-at-each-ode-integration-step-monkey-patching-solve-ivp-359b39d5f2  # noqa: 501
@@ -66,7 +153,7 @@ def plot_solution(solution):
 
     for it, t in enumerate(solution.t):
 
-        y = solution.y[:, it]
+        y = solution.y[:len(x), it]
         c = c_of_y(y)
 
         chart.line(x[:, 0], c, color=(t / solution.t[-1], 0, 0))
@@ -78,6 +165,10 @@ def plot_solution(solution):
 
 
 if __name__ == "__main__":
+
+    # General simulation setup
+    # ------------------------
+    num_of_particles = 2
 
     # Discretization
     # --------------
@@ -91,12 +182,17 @@ if __name__ == "__main__":
 
     print(f"Cell spacing: h = {dx_cell}")
 
-    particle_ode = ODEProblem(mesh)
+    I_charge = dfx.fem.Constant(mesh, 1.0)
+    particle_ode = ODEProblem(mesh, I_charge=I_charge)
+
+    multi_particle_ode = MultiParticleODE(
+        mesh, num_of_particles, c_of_y, free_energy
+    )
 
     T_final = 1.
 
     solution = sp.integrate.solve_ivp(
-        particle_ode, [0, T_final], particle_ode.y.x.array[:],
+        multi_particle_ode, [0, T_final], multi_particle_ode.initial_data[:],
         first_step=1e-9,
         max_step=1e-3,
         min_step=1e-12,
