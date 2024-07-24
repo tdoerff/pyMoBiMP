@@ -1066,12 +1066,14 @@ class MultiParticleSimulation():
                 return False
 
         return False
+
+
 def do_nothing(t, y, I_charge):
     """Placeholder for experiment."""
     pass
 
 
-class ODEProblem():
+class SingleParticleODEProblem():
 
     def __init__(
             self,

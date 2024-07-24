@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from pyMoBiMP.cahn_hilliard_utils import (
     get_mesh_spacing,
-    ODEProblem)
+    SingleParticleODEProblem as ODEProblem)
 
 
 # From: https://towardsdatascience.com/do-stuff-at-each-ode-integration-step-monkey-patching-solve-ivp-359b39d5f2  # noqa: 501
