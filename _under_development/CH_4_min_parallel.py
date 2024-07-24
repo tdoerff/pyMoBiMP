@@ -32,7 +32,7 @@ class NewtonSolver(NewtonSolverBase):
         ksp = self.krylov_solver
         opts = PETSc.Options()
         option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "gmres"
+        opts[f"{option_prefix}ksp_type"] = "gmres"  # TODO: direct solver! UMFPACK
         opts[f"{option_prefix}pc_type"] = "lu"
         opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
         ksp.setFromOptions()
@@ -303,6 +303,7 @@ if __name__ == "__main__":
         # log("cell_voltage", cell_voltage, i_k.value)
 
         try:
+            # TODO: try not to throw an exception, error_on_convergence
             iterations, success = solver.solve(u_)
         except BaseException as e:
             log(e)
