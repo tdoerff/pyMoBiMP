@@ -79,11 +79,11 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
                   for mu_bc_form in self.mu_bc_forms]
         qs = [dfx.fem.assemble_scalar(q_form) for q_form in self.q_forms]
 
-        soc = sum(qs) / num_particles
+        self.soc = sum(qs) / num_particles
 
-        cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
+        self.cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
 
-        self.data.append([soc, cell_voltage])
+        self.data.append([self.soc, self.cell_voltage])
 
         super().analyze(t)
 
