@@ -260,7 +260,7 @@ if __name__ == "__main__":
             [u.interpolate(u0) for u, u0 in zip(us, u0s)]
             dt.value *= 0.5
 
-            warn(">>> Reduce timestep size to dt={dt.value:1.3e}")
+            warn(f">>> Reduce timestep size to dt={dt.value:1.3e}")
 
             continue
 
