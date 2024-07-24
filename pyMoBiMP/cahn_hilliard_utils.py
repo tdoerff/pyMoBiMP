@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 import dolfinx as dfx
+from dolfinx.fem.petsc import LinearProblem
 
 from mpi4py import MPI
 
@@ -1106,7 +1107,7 @@ class ODEProblem():
             gamma=gamma)
 
         # mu == f_A - gamma * Delta c
-        self.problem_mu = dfx.fem.petsc.LinearProblem(
+        self.problem_mu = LinearProblem(
             ufl.lhs(residual_mu), ufl.rhs(residual_mu))
 
         residual_dydt = cahn_hilliard_dydt_form(
