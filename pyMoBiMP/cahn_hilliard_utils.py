@@ -1084,6 +1084,7 @@ class SingleParticleODEProblem():
             experiment: Callable[
                 [float, dfx.fem.Function], dfx.fem.Expression
             ] = do_nothing,
+            I_charge: dfx.fem.Constant = dfx.fem.Constant(_mesh, 1.0),
             gamma: float = 0.1,
             M: Callable[
                 [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
@@ -1100,7 +1101,7 @@ class SingleParticleODEProblem():
         self.y = dfx.fem.Function(V)
         self.mu = dfx.fem.Function(V)
 
-        self.I_charge = dfx.fem.Constant(mesh, 1.0)
+        self.I_charge = I_charge
 
         residual_mu = cahn_hilliard_mu_form(
             self.y,
@@ -1139,15 +1140,23 @@ class SingleParticleODEProblem():
 
         self.mu.interpolate(mu_ini)
 
-    def rhs(self, t, y_vec):
+    def solve_dydt(self, mu_):
+        self.mu.x.array[:] = mu_.x.array[:]
+        dydt_ = self.problem_dydt.solve()
+        return dydt_
 
+    def solve_mu(self, y_vec):
         self.y.x.array[:] = y_vec
         mu_ = self.problem_mu.solve()
+        return mu_
+
+    def rhs(self, t, y_vec):
+
+        mu_ = self.solve_mu(y_vec)
 
         self.experiment(t, self.y, self.I_charge)
 
-        self.mu.x.array[:] = mu_.x.array[:]
-        dydt_ = self.problem_dydt.solve()
+        dydt_ = self.solve_dydt(mu_)
 
         # Fix to stabilize r=0 behavior. By copying the inner-next value
         # we enforce first-order Neuman conditions to the time derivative
