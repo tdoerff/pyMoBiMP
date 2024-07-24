@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # Set up individual particle forms
     # --------------------------------
 
-    dt = dfx.fem.Constant(mesh, 1e-4)
+    dt = dfx.fem.Constant(mesh, 1e-9)
 
     i_ks = [dfx.fem.Constant(mesh, 0.0) for _ in range(num_particles)]
 
