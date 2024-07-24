@@ -65,6 +65,10 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         self.u_states = u_states
         self.filename = filename
 
+        mesh = u_states[0].function_space.mesh
+        coords = ufl.SpatialCoordinate(mesh)
+        r2 = ufl.dot(coords, coords)
+
         self.mu_bc_forms = [dfx.fem.form(u.sub(1) * r2 * ufl.ds) for u in u_states]
         self.q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx)
                         for u in u_states]
