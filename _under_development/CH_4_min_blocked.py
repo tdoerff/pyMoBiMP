@@ -9,6 +9,7 @@ Open issues:
 [ ] parallelization
 [ ] runtime analysis
 [ ] file output
+[ ] implicit boundary condition?
 """
 
 import basix
