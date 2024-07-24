@@ -14,6 +14,8 @@ from scipy.integrate._ivp.base import OdeSolver  # this is the class we will mon
 
 from tqdm import tqdm
 
+import ufl
+
 from pyMoBiMP.cahn_hilliard_utils import (
     c_of_y,
     _free_energy as free_energy,
@@ -42,7 +44,7 @@ class MultiParticleODE(SingleParticleODEProblem):
 
         # Set up individual particle forms
         # --------------------------------
-
+        self.I_total = 0.1
         self.i_ks = [dfx.fem.Constant(mesh, 0.0) for _ in range(num_particles)]
 
         particle_odes = []
@@ -62,6 +64,12 @@ class MultiParticleODE(SingleParticleODEProblem):
 
         self.particle_odes = particle_odes
 
+        coords = ufl.SpatialCoordinate(mesh)
+        r2 = ufl.dot(coords, coords)
+
+        self.mu_bc_forms = [dfx.fem.form(particle_ode.y * r2 * ufl.ds)
+                            for particle_ode in self.particle_odes]
+
     @property
     def initial_data(self):
         y_0 = np.array(
@@ -70,10 +78,28 @@ class MultiParticleODE(SingleParticleODEProblem):
 
         return y_0
 
+    def compute_cell_voltage(self, mu_bcs):
+
+        weighted_particle_potentials = [
+            L_k / self.L * a_k * mu_bc
+            for L_k, a_k, mu_bc in zip(self.Ls, self.a_ratios, mu_bcs)
+        ]
+
+        active_phase_potential = sum(weighted_particle_potentials)
+
+        cell_voltage = -(self.I_total / self.L + active_phase_potential)
+
+        return cell_voltage
+
     def experiment(self, t):
 
-        for i_k in self.i_ks:
-            i_k.value = 0.1
+        mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form)
+                  for mu_bc_form in self.mu_bc_forms]
+        cell_voltage = self.compute_cell_voltage(mu_bcs)
+
+        for i_particle, i_k in enumerate(self.i_ks):
+
+            i_k.value = - self.Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
 
     def rhs(self, t, y_vec):
 
@@ -95,10 +121,11 @@ class MultiParticleODE(SingleParticleODEProblem):
 
             # Compute the rhs of the current particle and store it into the
             # return vector.
-            # TODO: incorporate the method `experiment`.
             particle_ode = self.particle_odes[i_particle]
             dydt[start:stop] = particle_ode(t, y_vec[start:stop])
 
+            # TODO: make sure the boudary term i_k is computed constently at
+            # t \in [t^n, t^n+1].
             self.experiment(t)
 
         return dydt
