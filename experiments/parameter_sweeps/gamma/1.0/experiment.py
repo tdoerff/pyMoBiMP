@@ -16,6 +16,6 @@ if __name__ == "__main__":
     simulation = Simulation(
         mesh,
         output_destination=exp_path + "/simulation_output/output",
-        lam=1.)
+        gamma=1.)
 
     simulation.run(tol=1e-5)
