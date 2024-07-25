@@ -105,7 +105,7 @@ def time_stepping(
             else:
                 voltage = 0.
 
-            stop = event_handler(t, u, cell_voltage=voltage, **event_pars)
+            stop = event_handler(t, cell_voltage=voltage, **event_pars)
 
             if stop:
                 break

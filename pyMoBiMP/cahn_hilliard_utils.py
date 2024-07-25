@@ -428,7 +428,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         return super().analyze(t)
 
 
-
 class ParticleCurrentDensity(dfx.fem.Constant):
     def __init__(self, comm, mesh, A_k, L_k, I_charge):
 
@@ -726,10 +725,93 @@ def compute_particle_current_densities(mus, As, Ls, I_charge):
     return I_charges
 
 
+class ChargeDischargeExperiment():
+
+    # Global parameters
+    c_bounds = [-3.7, 3.7]
+    cell_voltage = None
+    stop_at_empty = True
+    stop_on_full = True
+    cycling = True
+    logging = False
+
+    def __init__(self, u, I_charge, c_of_y=c_of_y):
+
+        self.u = u
+        self.I_charge = I_charge
+        self.c_of_y = c_of_y
+
+        coords = ufl.SpatialCoordinate(u.function_space.mesh)
+        r_square = ufl.inner(coords, coords)
+
+        y, _ = u.split()
+
+        self.num_particles = len(y)
+
+        cs = [self.c_of_y(y_) for y_ in y]
+
+        # This is a bit hackish, since we just need to multiply by a function that
+        # is zero at r=0 and 1 at r=1.
+        self.cs_bc_forms = [dfx.fem.form(r_square * c_ * ufl.ds) for c_ in cs]
+
+    def __call__(self, t, cell_voltage):
+        return self.experiment(t, cell_voltage)
+
+    def experiment(self, t, cell_voltage):
+
+        cs_bc = [dfx.fem.assemble_scalar(self.cs_bc_forms[i])
+                 for i in range(self.num_particles)]
+
+        if self.logging:
+            print(
+                f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]")
+
+        # Whenever you may ask yourself whether this works, mind the sign!
+        # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
+        # it increases with chemical potential at the surface of the particles.
+        # The actual cell voltage as measured is the negative of it.
+        if cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
+            print(
+                ">>> Cell voltage exceeds maximum " +
+                f"(V_cell = {cell_voltage:1.3f} > {self.c_bounds[1]:1.3f})."
+            )
+
+            if self.stop_on_full:
+                print(">>> Particle is filled.")
+
+                return True
+
+            self.I_charge.value *= -1.0
+
+            return False
+
+        if cell_voltage < self.c_bounds[0] and self.I_charge.value < 0.0:
+
+            if self.stop_at_empty:
+                print(">>> Cell voltage exceeds minimum." +
+                      f"(V_cell = {cell_voltage:1.3f} > {self.c_bounds[0]:1.3f}).")
+
+                return True
+
+            else:
+                if self.cycling:
+                    print(">>> Start charging.")
+                    self.I_charge.value *= -1.0
+
+                else:
+                    print(">>> Stop charging.")
+                    self.I_charge.value = 0.0
+
+                return False
+
+        return False
+
+
 class MultiParticleSimulation():
 
     NewtonSolver = NewtonSolver
     NonlinearProblem = NonlinearProblem
+    Experiment = ChargeDischargeExperiment
 
     def __init__(self,
                  mesh,
@@ -740,6 +822,7 @@ class MultiParticleSimulation():
                  M=lambda c: c * (1 - c),
                  gamma=0.1,
                  c_of_y=c_of_y,
+                 t_pause=0.,
                  comm=MPI.COMM_WORLD):
 
         self.mesh = mesh
@@ -835,8 +918,8 @@ class MultiParticleSimulation():
 
         self.solver.tol = 1e-3
         # %%
-        # Set up experiment
-        # -----------------
+        # Set up output
+        # -------------
 
         u.interpolate(u_ini)
 
@@ -860,31 +943,13 @@ class MultiParticleSimulation():
             num_particles=num_particles,
         )
 
+        # Set up the experiment
+        self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
+
         # Finalize with some variables that need to be attached to the class instance.
         self.u = u
         self.u0 = u0
         self.dt = dt
-
-        coords = ufl.SpatialCoordinate(u.function_space.mesh)
-        r_square = ufl.inner(coords, coords)
-
-        y, _ = u.split()
-
-        cs = [self.c_of_y(y_) for y_ in y]
-
-        # This is a bit hackish, since we just need to multiply by a function that
-        # is zero at r=0 and 1 at r=1.
-        cs_bc_form = [dfx.fem.form(r_square * c_ * ufl.ds) for c_ in cs]
-
-        self.event_params = dict(
-            I_charge=I_charge,
-            stop_on_full=False,
-            stop_at_empty=False,
-            cycling=False,
-            logging=True,
-            num_particles=num_particles,
-            cs_bc_form=cs_bc_form
-        )
 
     def run(self,
             dt_max=1e-1,
@@ -905,8 +970,7 @@ class MultiParticleSimulation():
             tol=tol,
             event_handler=self.experiment,
             output=self.output_xdmf,
-            runtime_analysis=self.rt_analysis,
-            **self.event_params,
+            runtime_analysis=self.rt_analysis
         )
 
     def create_function_space(self, mesh, num_particles):
@@ -1006,68 +1070,6 @@ class MultiParticleSimulation():
             + a * u * (1 - u)
             + b * sin(cc * np.pi * u)
         )
-
-    @staticmethod
-    def experiment(
-        t,
-        u,
-        I_charge,
-        c_bounds=[-3.7, 3.7],
-        cell_voltage=None,
-        stop_at_empty=True,
-        stop_on_full=True,
-        cycling=True,
-        logging=False,
-        num_particles=None,
-        cs_bc_form=None
-    ):
-
-        cs_bc = [dfx.fem.assemble_scalar(cs_bc_form[i]) for i in range(num_particles)]
-
-        if logging:
-            print(f"t={t:1.5f} ; c_bc = [{min(cs_bc):1.3e}, {max(cs_bc):1.3e}]", c_bounds)
-
-        # Whenever you may ask yourself whether this works, mind the sign!
-        # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
-        # it increases with chemical potential at the surface of the particles.
-        # The actual cell voltage as measured is the negative of it.
-        if cell_voltage > c_bounds[1] and I_charge.value > 0.0:
-            print(
-                ">>> Cell voltage exceeds maximum " +
-                f"(V_cell = {cell_voltage:1.3f} > {c_bounds[1]:1.3f})."
-            )
-
-            if stop_on_full:
-                print(">>> Particle is filled.")
-
-                return True
-
-            print(">>> Start discharging.")
-            I_charge.value *= -1.0
-
-            return False
-
-        if cell_voltage < c_bounds[0] and I_charge.value < 0.0:
-
-            if stop_at_empty:
-                print(">>> Cell voltage exceeds minimum." +
-                      f"(V_cell = {cell_voltage:1.3f} > {c_bounds[0]:1.3f}).")
-
-                return True
-
-            else:
-                if cycling:
-                    print(">>> Start charging.")
-                    I_charge.value *= -1.0
-
-                else:
-                    print(">>> Stop charging.")
-                    I_charge.value = 0.0
-
-                return False
-
-        return False
-
 
 def do_nothing(t, y, I_charge):
     """Placeholder for experiment."""
