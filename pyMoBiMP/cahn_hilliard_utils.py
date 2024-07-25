@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 import dolfinx as dfx
+from dolfinx.fem.petsc import LinearProblem
 
 from mpi4py import MPI
 
@@ -27,6 +28,24 @@ from .fenicsx_utils import (
     FileOutput,
     strip_off_xdmf_file_ending
 )
+
+
+# Defaults for the Simulation class
+_mesh = dfx.mesh.create_unit_interval(MPI.COMM_WORLD, 128)
+
+
+def _free_energy(
+    u: dfx.fem.Function, a: float = 6.0 / 4.0, b: float = 0.2, c: float = 5.0
+):
+
+    fe = (
+        u * ufl.ln(u)
+        + (1 - u) * ufl.ln(1 - u)
+        + a * u * (1 - u)
+        + b * ufl.sin(c * np.pi * u)
+    )
+
+    return fe
 
 
 # Forward and backward variable transformation.
@@ -151,16 +170,10 @@ def cahn_hilliard_form(
             "cahn_hilliard_form takes either 3 or 5 positional arguments."
         )
 
-    y = ufl.variable(y)
-    c = c_of_y(y)
-
-    dcdy = ufl.diff(c, y)
-
     # Differentiate the free energy function to
     # obtain the chemical potential
-    c = ufl.variable(c)
-    dfdc = ufl.diff(free_energy(c), c)
-    mu_chem = dfdc
+    c = c_of_y(y)
+    mu_chem = compute_chemical_potential(free_energy, c)
 
     mu_theta = theta * mu + (theta - 1.0) * mu0
 
@@ -179,18 +192,110 @@ def cahn_hilliard_form(
 
     flux = M(c) * ufl.grad(mu_theta)
 
-    F1 = s_V * dcdy * (y - y0) * v_c * dx
-    F1 += s_V * ufl.dot(flux, ufl.grad(v_c)) * dt * dx
-    F1 -= I_charge * s_A * v_c * dt * ds
+    F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_mu * dx
+    F1 += s_V * ufl.dot(flux, ufl.grad(v_mu)) * dt * dx
+    F1 -= I_charge * s_A * v_mu * dt * ds
 
-    F2 = s_V * mu * v_mu * dx
-    F2 -= s_V * mu_chem * v_mu * dx
-    F2 -= lam * (s_V * ufl.inner(ufl.grad(c), ufl.grad(v_mu)) * dx)
-    F2 += grad_c_bc(c) * (s_A * v_mu * ds)
+    F2 = s_V * mu * v_c * dx
+    F2 -= s_V * mu_chem * v_c * dx
+    F2 -= lam * (s_V * ufl.inner(ufl.grad(c), ufl.grad(v_c)) * dx)
+    F2 += grad_c_bc(c) * (s_A * v_c * ds)
 
     F = F1 + F2
 
     return F
+
+
+def compute_chemical_potential(free_energy, c):
+
+    # Differentiate the free energy function to
+    # obtain the chemical potential
+    c = ufl.variable(c)
+    dfdc = ufl.diff(free_energy(c), c)
+    mu_chem = dfdc
+    return mu_chem
+
+
+def compute_dcdy(y, c_of_y):
+
+    y = ufl.variable(y)
+    c = c_of_y(y)
+
+    dcdy = ufl.diff(c, y)
+
+    return c, dcdy
+
+
+def cahn_hilliard_mu_form(
+        y,
+        c_of_y=c_of_y,
+        free_energy=_free_energy,
+        gamma=0.1,
+        form_weights=None):
+
+    V = y.function_space
+    mesh = V.mesh
+
+    r = ufl.SpatialCoordinate(mesh)
+
+    # adaptation of the volume element due to geometry
+    if form_weights is not None:
+        s_V = form_weights["volume"]
+    else:
+        s_V = 4 * np.pi * r**2
+
+    c = c_of_y(y)
+    mu_chem = compute_chemical_potential(free_energy, c)
+
+    # adaptation of the volume element due to geometry
+    if form_weights is not None:
+        s_V = form_weights["volume"]
+    else:
+        s_V = 4 * np.pi * r**2
+
+    mu_ = ufl.TrialFunction(V)
+    v = ufl.TestFunction(V)
+
+    residual_mu = s_V * ufl.inner(mu_, v) * ufl.dx
+    residual_mu -= s_V * ufl.inner(v, mu_chem) * ufl.dx + \
+        gamma * s_V * ufl.inner(ufl.grad(c), ufl.grad(v)) * ufl.dx
+
+    return residual_mu
+
+
+def cahn_hilliard_dydt_form(
+        y,
+        mu,
+        I_charge,
+        M=lambda c: c * (1 - c),
+        c_of_y=c_of_y,
+        form_weights=None):
+
+    V = mu.function_space
+    mesh = V.mesh
+
+    r = ufl.SpatialCoordinate(mesh)
+
+    # adaptation of the volume element due to geometry
+    if form_weights is not None:
+        s_V = form_weights["volume"]
+        s_A = form_weights["surface"]
+    else:
+        s_V = 4 * np.pi * r**2
+        s_A = 2 * np.pi * r**2
+
+    c, dcdy = compute_dcdy(y, c_of_y)
+
+    flux = M(c) * ufl.grad(mu)
+
+    dydt = ufl.TrialFunction(V)
+    v = ufl.TestFunction(V)
+
+    residual_dydt = s_V * dcdy * dydt * v * ufl.dx
+    residual_dydt -= s_A * I_charge * v * ufl.ds
+    residual_dydt -= -s_V * ufl.dot(ufl.grad(v), flux) * ufl.dx
+
+    return residual_dydt
 
 
 def populate_initial_data(u_ini, c_ini_fun, free_energy, y_of_c=y_of_c):
@@ -322,23 +427,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         return super().analyze(t)
 
-
-# Defaults for the Simulation class
-_mesh = dfx.mesh.create_unit_interval(MPI.COMM_WORLD, 128)
-
-
-def _free_energy(
-    u: dfx.fem.Function, a: float = 6.0 / 4.0, b: float = 0.2, c: float = 5.0
-):
-
-    fe = (
-        u * ufl.ln(u)
-        + (1 - u) * ufl.ln(1 - u)
-        + a * u * (1 - u)
-        + b * ufl.sin(c * np.pi * u)
-    )
-
-    return fe
 
 
 class ParticleCurrentDensity(dfx.fem.Constant):
@@ -978,3 +1066,103 @@ class MultiParticleSimulation():
                 return False
 
         return False
+
+
+def do_nothing(t, y, I_charge):
+    """Placeholder for experiment."""
+    pass
+
+
+class SingleParticleODEProblem():
+
+    def __init__(
+            self,
+            mesh: dfx.mesh.Mesh = _mesh,
+            element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
+            c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
+            free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
+            experiment: Callable[
+                [float, dfx.fem.Function], dfx.fem.Expression
+            ] = do_nothing,
+            I_charge: dfx.fem.Constant = dfx.fem.Constant(_mesh, 1.0),
+            gamma: float = 0.1,
+            M: Callable[
+                [dfx.fem.Function | dfx.fem.Expression], dfx.fem.Expression
+            ] = lambda c: 1.0 * c * (1 - c),
+            c_ini=lambda x: 1e-3 * np.ones_like(x[0])):
+
+        if element is None:
+            element = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
+        self.V = V = dfx.fem.FunctionSpace(mesh, element)
+
+        self.c_of_y = c_of_y
+
+        self.y = dfx.fem.Function(V)
+        self.mu = dfx.fem.Function(V)
+
+        self.I_charge = I_charge
+
+        residual_mu = cahn_hilliard_mu_form(
+            self.y,
+            c_of_y=c_of_y,
+            free_energy=free_energy,
+            gamma=gamma)
+
+        # mu == f_A - gamma * Delta c
+        self.problem_mu = LinearProblem(
+            ufl.lhs(residual_mu), ufl.rhs(residual_mu))
+
+        residual_dydt = cahn_hilliard_dydt_form(
+            self.y, self.mu, self.I_charge, c_of_y=c_of_y, M=M)
+
+        # dcdt = dcdy * dydt == div (M grad mu)
+        self.problem_dydt = dfx.fem.petsc.LinearProblem(
+            ufl.lhs(residual_dydt),
+            ufl.rhs(residual_dydt))
+
+        self.experiment = experiment
+
+        self.initial_data(c_ini)
+
+    def initial_data(self, c_ini_fun):
+
+        y_ini = dfx.fem.Function(self.V)
+
+        c_ini = dfx.fem.Function(self.V)
+        c_ini.interpolate(lambda x: c_ini_fun(x))
+
+        y_ini.interpolate(dfx.fem.Expression(
+            y_of_c(c_ini), self.V.element.interpolation_points()))
+
+        self.y.interpolate(y_ini)
+        mu_ini = self.problem_mu.solve()
+
+        self.mu.interpolate(mu_ini)
+
+    def solve_dydt(self, mu_):
+        self.mu.x.array[:] = mu_.x.array[:]
+        dydt_ = self.problem_dydt.solve()
+        return dydt_
+
+    def solve_mu(self, y_vec):
+        self.y.x.array[:] = y_vec
+        mu_ = self.problem_mu.solve()
+        return mu_
+
+    def rhs(self, t, y_vec):
+
+        mu_ = self.solve_mu(y_vec)
+
+        self.experiment(t, self.y, self.I_charge)
+
+        dydt_ = self.solve_dydt(mu_)
+
+        # Fix to stabilize r=0 behavior. By copying the inner-next value
+        # we enforce first-order Neuman conditions to the time derivative
+        dydt_.x.array[0] = dydt_.x.array[1]
+
+        return dydt_.x.array[:]
+
+    def __call__(self, t, y_vec):
+        return self.rhs(t, y_vec)
