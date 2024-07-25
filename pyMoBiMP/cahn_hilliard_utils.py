@@ -1033,8 +1033,8 @@ class MultiParticleSimulation():
         # The actual cell voltage as measured is the negative of it.
         if cell_voltage > c_bounds[1] and I_charge.value > 0.0:
             print(
-                ">>> charge at boundary exceeds maximum " +
-                f"(max(c) = {max(cs_bc):1.3f} > {c_bounds[1]:1.3f})."
+                ">>> Cell voltage exceeds maximum " +
+                f"(V_cell = {cell_voltage:1.3f} > {c_bounds[1]:1.3f})."
             )
 
             if stop_on_full:
@@ -1050,7 +1050,8 @@ class MultiParticleSimulation():
         if cell_voltage < c_bounds[0] and I_charge.value < 0.0:
 
             if stop_at_empty:
-                print(">>> Particle is emptied!")
+                print(">>> Cell voltage exceeds minimum." +
+                      f"(V_cell = {cell_voltage:1.3f} > {c_bounds[0]:1.3f}).")
 
                 return True
 
