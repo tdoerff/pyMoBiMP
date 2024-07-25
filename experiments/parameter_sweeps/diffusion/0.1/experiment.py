@@ -1,25 +1,24 @@
 # %%
-import dolfinx as dfx
-
-from mpi4py import MPI
-
 import os
 
-from pyMoBiMP.cahn_hilliard_utils import (
-    MultiParticleSimulation as Simulation,
-)
+import sys
+
+exp_path = os.path.dirname(__file__)
+parent_path = os.path.abspath(
+    exp_path + "/../..")
+
+sys.path.append(parent_path)
+
+from default.experiment import Simulation as SimulationBase, mesh  # noqa: 402
 
 
-comm_world = MPI.COMM_WORLD
+class Simulation(SimulationBase):
 
+    @classmethod
+    def experiment(cls, *args, c_bounds=[-5., 5], **kwargs):
 
-# %%
-# Discretization
-# --------------
+        super().experiment(*args, c_bounds=c_bounds, **kwargs)
 
-n_elem = 16
-mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
-exp_path = os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == "__main__":
 
