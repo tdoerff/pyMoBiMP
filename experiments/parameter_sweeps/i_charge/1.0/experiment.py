@@ -8,7 +8,15 @@ parent_path = os.path.abspath(
 
 sys.path.append(parent_path)
 
-from default.experiment import Simulation, mesh  # noqa: 402
+from default.experiment import Simulation as SimulationBase, mesh  # noqa: 402
+
+
+class Simulation(SimulationBase):
+
+    @classmethod
+    def experiment(cls, *args, c_bounds=[-5., 5], **kwargs):
+
+        super().experiment(*args, c_bounds=c_bounds, **kwargs)
 
 
 if __name__ == "__main__":
