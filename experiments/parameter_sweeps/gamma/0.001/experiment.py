@@ -1,3 +1,5 @@
+import dolfinx as dfx
+from mpi4py.MPI import COMM_WORLD as comm_world
 import os
 import sys
 
@@ -8,10 +10,17 @@ parent_path = os.path.abspath(
 
 sys.path.append(parent_path)
 
-from default.experiment import Simulation, mesh  # noqa: 402
+from default.experiment import Simulation  # noqa: 402
 
 
 if __name__ == "__main__":
+
+    # %%
+    # Discretization
+    # --------------
+
+    n_elem = 128
+    mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
     simulation = Simulation(
         mesh,

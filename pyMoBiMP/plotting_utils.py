@@ -224,6 +224,7 @@ class PyvistaAnimation:
         # make sure even for a single particle we can use the upcoming code
         shape = len(t_out), -1, 2, len(self.r)
         self.data_out = np.array(data_out).reshape(shape)
+        self.rt_data = rt_data
 
         # Convert y to c.
         self.data_out[..., 0, :] = c_of_y(self.data_out[..., 0, :])
@@ -510,12 +511,12 @@ class PyvistaAnimation:
         q = np.array([sp.integrate.trapezoid(
             3 * self.r**2 * c, self.r, axis=-1) for c in cs]).sum(axis=0) / num_particles
 
-        # chemical potential time series at the outer edge for each particle.
-        mu = self.data_out[it, ..., 1, -1]
+        t = self.t_out[it]
+        V = np.interp(t, self.rt_data[:, 0], self.rt_data[:, -1])
 
         self.q_mu_chart.remove_plot(self.q_mu_scatter)
 
-        self.q_mu_scatter = self.q_mu_chart.scatter([q], [-mu], color='r')
+        self.q_mu_scatter = self.q_mu_chart.scatter([q], [-V], color='r')
 
 
 def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
