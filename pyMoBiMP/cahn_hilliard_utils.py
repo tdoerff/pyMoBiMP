@@ -729,10 +729,9 @@ class ChargeDischargeExperiment():
 
     # Global parameters
     c_bounds = [-3.7, 3.7]
-    cell_voltage = None
-    stop_at_empty = True
-    stop_on_full = True
-    cycling = True
+    stop_at_empty = False
+    stop_on_full = False
+    cycling = False
     logging = False
 
     def __init__(self, u, I_charge, c_of_y=c_of_y):
