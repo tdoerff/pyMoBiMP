@@ -21,9 +21,14 @@ class Simulation(SimulationBase):
 
 if __name__ == "__main__":
 
+    C_rate = 0.1
+    T_final = 12.0 / C_rate
+
+    Simulation.T_final = T_final
+
     simulation = Simulation(
         mesh,
         output_destination=exp_path + "/simulation_output/output",
-        C_rate=0.1)
+        C_rate=C_rate)
 
     simulation.run(tol=1e-5)

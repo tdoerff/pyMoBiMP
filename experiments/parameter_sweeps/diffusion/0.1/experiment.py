@@ -22,6 +22,11 @@ class Simulation(SimulationBase):
 
 if __name__ == "__main__":
 
+    C_rate = 0.01
+    T_final = 12.0 / C_rate
+
+    Simulation.T_final = T_final
+
     simulation = Simulation(
         mesh,
         M=lambda c: 0.1 * c * (1. - c),
