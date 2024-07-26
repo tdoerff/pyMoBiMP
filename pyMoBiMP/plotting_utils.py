@@ -472,6 +472,9 @@ class PyvistaAnimation:
 
         x = pv_grid.cast_to_pointset().points
 
+        x0 = x.mean(axis=0)
+        x -= x0
+
         r_grid = np.sqrt((x**2).sum(axis=-1))
 
         c = self.data_out[i_t, i_particle, 0, :]
