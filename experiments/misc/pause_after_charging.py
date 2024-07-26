@@ -74,7 +74,7 @@ if __name__ == "__main__":
     Simulation.Experiment = Experiment
 
     c_rate = 3 * Experiment.charge_amplitude
-    T_final = 6 / c_rate + 20
+    T_final = 10 / c_rate + Experiment.pause
 
     Simulation.T_final = T_final
 
