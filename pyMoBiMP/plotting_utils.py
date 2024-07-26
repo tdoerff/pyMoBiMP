@@ -300,7 +300,7 @@ class PyvistaAnimation:
         if self.plot_cell_voltage:
             self.plotter.subplot(int(plot_c_of_r))
 
-            chart = pyvista.Chart2D(x_label=r"$q$", y_label=r"$V$")
+            chart = pyvista.Chart2D(x_label=r"$SoC$", y_label=r"$V$")
 
             # Retrieve the charge.
             q = rt_data[:, 1]
