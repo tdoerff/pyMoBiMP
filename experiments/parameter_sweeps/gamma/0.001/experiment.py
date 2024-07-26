@@ -19,12 +19,17 @@ if __name__ == "__main__":
     # Discretization
     # --------------
 
-    n_elem = 128
-    mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
+    # Set up the mesh
+    mesh_filename = parent_path + "/../../" + "Meshes/line_mesh.xdmf"
+
+    if os.path.isfile(mesh_filename):
+        # Load mesh from file
+        with dfx.io.XDMFFile(comm_world, mesh_filename, 'r') as file:
+            mesh = file.read_mesh(name="Grid")
 
     simulation = Simulation(
         mesh,
         output_destination=exp_path + "/simulation_output/output",
         gamma=1e-3)
 
-    simulation.run(tol=1e-5)
+    simulation.run(tol=1e-6, dt_max=1e-3)
