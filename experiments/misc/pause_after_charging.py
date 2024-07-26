@@ -16,7 +16,7 @@ comm_world = MPI.COMM_WORLD
 
 class Experiment(ExperimentBase):
 
-    pause = 20.0
+    pause = 150.0
     charge_amplitude = 0.1
 
     def __init__(self, *args, **kwargs):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     Simulation.Experiment = Experiment
 
     c_rate = 3 * Experiment.charge_amplitude
-    T_final = 10 / c_rate + Experiment.pause
+    T_final = 6 / c_rate + 2 * Experiment.pause
 
     Simulation.T_final = T_final
 
@@ -82,4 +82,4 @@ if __name__ == "__main__":
         mesh,
         output_destination=exp_path + "/simulation_output/pause_after_charging")
 
-    simulation.run(tol=1e-5)
+    simulation.run(tol=1e-5, dt_max=1e-3)
