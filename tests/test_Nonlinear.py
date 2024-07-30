@@ -15,6 +15,10 @@ from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
 
 
 def test_NonlinearProblem():
+    """
+    Test constom problem class against build-in solver
+    to make sure we do not break the interface with the custom problem.
+    """
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
