@@ -1,4 +1,5 @@
 import dolfinx as dfx
+from dolfinx.nls.petsc import NewtonSolver as NewtonOEM
 
 from mpi4py.MPI import COMM_WORLD as comm, MIN, SUM
 
@@ -11,6 +12,52 @@ import pytest
 import ufl
 
 from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
+
+
+def test_NonlinearProblem():
+    """
+    Test constom problem class against build-in solver
+    to make sure we do not break the interface with the custom problem.
+    """
+
+    mesh = dfx.mesh.create_unit_interval(comm, 128)
+
+    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+
+    uh = dfx.fem.Function(V)
+
+    v = ufl.TestFunction(V)
+    x = ufl.SpatialCoordinate(mesh)
+    F = uh**2 * v * ufl.dx - 2 * uh * v * ufl.dx - \
+        (x[0]**2 + 4 * x[0] + 3) * v * ufl.dx
+
+    problem = NonlinearProblem(F, uh)
+
+    solver = NewtonOEM(comm, problem)
+
+    solver.solve(uh)
+
+    def root_0(x):
+        return 3 + x[0]
+
+    def root_1(x):
+        return -1 - x[0]
+
+    u_ex0 = dfx.fem.Function(V)
+    u_ex0.interpolate(lambda x: root_0(x))
+
+    u_ex1 = dfx.fem.Function(V)
+    u_ex1.interpolate(lambda x: root_1(x))
+
+    L2_err0_loc = dfx.fem.assemble_scalar(
+        dfx.fem.form(ufl.inner(u_ex0 - uh, u_ex0 - uh) * ufl.dx))
+    L2_err1_loc = dfx.fem.assemble_scalar(
+        dfx.fem.form(ufl.inner(u_ex1 - uh, u_ex1 - uh) * ufl.dx))
+
+    L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
+    L2_err1 = mesh.comm.allreduce(L2_err1_loc, op=SUM)
+
+    assert np.isclose(L2_err0, 0.) or np.isclose(L2_err1, 0.)
 
 
 @pytest.mark.parametrize("order", [1, 2, 5, 9])

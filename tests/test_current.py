@@ -2,7 +2,7 @@ import numpy as np
 
 import pytest
 
-from CH_4_min_n_particles import compute_particle_current_densities
+from pyMoBiMP.cahn_hilliard_utils import compute_particle_current_densities
 
 
 @pytest.mark.parametrize("num_particles", [1, 2, 5])

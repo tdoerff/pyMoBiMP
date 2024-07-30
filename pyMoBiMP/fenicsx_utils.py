@@ -201,17 +201,20 @@ def time_stepping(
     return
 
 
-class NonlinearProblem():
+class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
+    """
+    Custom implementation of NonlinearProblem to make sure we have a Jacobian.
+    """
 
-    def __init__(self, F, c):
+    def __init__(self, F, c, bcs=[]):
 
-        self.F = F
-        self.c = c
+        V = c.function_space
 
-        self.residual = dfx.fem.form(F)
+        dc = ufl.TrialFunction(V)
 
-        self.J = J = ufl.derivative(F, c)
-        self.jacobian = dfx.fem.form(J)
+        J = ufl.derivative(F, c, dc)
+
+        super().__init__(F, c, J=J, bcs=bcs)
 
 
 class NewtonSolver():
@@ -227,16 +230,13 @@ class NewtonSolver():
 
         self.problem = problem
 
+        self.A = dfx.fem.petsc.create_matrix(problem.a)
+        self.L = dfx.fem.petsc.create_vector(problem.L)
+
         self.max_iterations = max_iterations
         self.tol = tol
 
         self.callback = callback
-
-        from dolfinx.fem.petsc import create_matrix
-        from dolfinx.fem.petsc import create_vector
-
-        self.A = create_matrix(problem.jacobian)
-        self.L = create_vector(problem.residual)
 
         self.ksp = PETSc.KSP()
         self.krylov_solver = self.ksp.create(comm)
@@ -248,37 +248,31 @@ class NewtonSolver():
 
         dc = dfx.fem.Function(V)
 
-        residual = self.problem.residual
-        jacobian = self.problem.jacobian
-
-        A = self.A
-        L = self.L
-
         success = False
 
         for it in range(self.max_iterations):
 
             self.callback(self, ch)
 
-            # Assemble Jacobian and residual
-            with L.localForm() as loc_L:
-                loc_L.set(0)
-            A.zeroEntries()
-            dfx.fem.petsc.assemble_matrix(A, jacobian)
-            A.assemble()
-            dfx.fem.petsc.assemble_vector(L, residual)
-            L.ghostUpdate(
-                addv=PETSc.InsertMode.ADD_VALUES,
-                mode=PETSc.ScatterMode.REVERSE)
+            with self.L.localForm() as loc_L:
+                loc_L.set(0.)
+
+            dfx.fem.petsc.assemble_vector(self.L, self.problem.L)
+            self.L.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES,
+                               mode=PETSc.ScatterMode.REVERSE)
+
+            self.A.zeroEntries()
+            dfx.fem.petsc.assemble_matrix(self.A, self.problem.a)
+            self.A.assemble()
 
             # Scale residual by -1
-            L.scale(-1)
-            L.ghostUpdate(
+            self.L.scale(-1)
+            self.L.ghostUpdate(
                 addv=PETSc.InsertMode.INSERT_VALUES,
                 mode=PETSc.ScatterMode.FORWARD)
 
             # Solve linear problem
-            self.krylov_solver.solve(L, dc.vector)
+            self.krylov_solver.solve(self.L, dc.vector)
 
             # Compute norm of update
             correction_norm = dc.vector.norm(0)
