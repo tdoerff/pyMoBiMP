@@ -201,6 +201,9 @@ def time_stepping(
 
 
 class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
+    """
+    Custom implementation of NonlinearProblem to make sure we have a Jacobian.
+    """
 
     def __init__(self, F, c, bcs=[]):
 
@@ -211,24 +214,6 @@ class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
         J = ufl.derivative(F, c, dc)
 
         super().__init__(F, c, J=J, bcs=bcs)
-
-    # def form(self, x):
-    #     x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-
-    # def F(self, *_):
-    #     with self._F.localForm() as f_local:
-    #         f_local.set(0.0)
-    #     dfx.fem.petsc.assemble_vector(self._F, self.L)
-    #     self._F.ghostUpdate(addv=PETSc.InsertMode.ADD,
-    #                         mode=PETSc.ScatterMode.REVERSE)
-
-    #     return self._F
-
-    # def J(self, *_):
-    #     self._J.zeroEntries()
-    #     dfx.fem.petsc.assemble_matrix(self._J, self.a)
-    #     self._J.assemble()
-    #     return self._J
 
 
 class NewtonSolver():
@@ -244,6 +229,9 @@ class NewtonSolver():
 
         self.problem = problem
 
+        self.A = dfx.fem.petsc.create_matrix(problem.a)
+        self.L = dfx.fem.petsc.create_vector(problem.L)
+
         self.max_iterations = max_iterations
         self.tol = tol
 
@@ -251,7 +239,7 @@ class NewtonSolver():
 
         self.ksp = PETSc.KSP()
         self.krylov_solver = self.ksp.create(comm)
-        self.krylov_solver.setOperators(problem.a)
+        self.krylov_solver.setOperators(self.A)
 
     def solve(self, ch):
 
@@ -265,17 +253,25 @@ class NewtonSolver():
 
             self.callback(self, ch)
 
-            self.problem.J()
-            L = self.problem.F()
+            with self.L.localForm() as loc_L:
+                loc_L.set(0.)
+
+            dfx.fem.petsc.assemble_vector(self.L, self.problem.L)
+            self.L.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES,
+                               mode=PETSc.ScatterMode.REVERSE)
+
+            self.A.zeroEntries()
+            dfx.fem.petsc.assemble_matrix(self.A, self.problem.a)
+            self.A.assemble()
 
             # Scale residual by -1
-            L.scale(-1)
-            L.ghostUpdate(
+            self.L.scale(-1)
+            self.L.ghostUpdate(
                 addv=PETSc.InsertMode.INSERT_VALUES,
                 mode=PETSc.ScatterMode.FORWARD)
 
             # Solve linear problem
-            self.krylov_solver.solve(L, dc.vector)
+            self.krylov_solver.solve(self.L, dc.vector)
 
             # Compute norm of update
             correction_norm = dc.vector.norm(0)
