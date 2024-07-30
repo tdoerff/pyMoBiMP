@@ -200,41 +200,35 @@ def time_stepping(
     return
 
 
-class NonlinearProblem():
+class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
 
-    def __init__(self, F, c):
+    def __init__(self, F, c, bcs=[]):
 
-        super().__init__()
+        V = c.function_space
 
-        # UFL (uncompiled) forms of residual and jacobian
-        self._ufl_F = F
-        self._ufl_J = ufl.derivative(F, c)
+        dc = ufl.TrialFunction(V)
 
-        # Linear and bi-linear form
-        self.L = dfx.fem.form(self._ufl_F)  # residual
-        self.a = dfx.fem.form(self._ufl_J)  # jacobian
+        J = ufl.derivative(F, c, dc)
 
-        # Allocations for residual and matrix.
-        self._F = dfx.fem.petsc.create_vector(self.L)
-        self._J = dfx.fem.petsc.create_matrix(self.a)
+        super().__init__(F, c, J=J, bcs=bcs)
 
-    def form(self, x):
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    # def form(self, x):
+    #     x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-    def F(self, *_):
-        with self._F.localForm() as f_local:
-            f_local.set(0.0)
-        dfx.fem.petsc.assemble_vector(self._F, self.L)
-        self._F.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                            mode=PETSc.ScatterMode.REVERSE)
+    # def F(self, *_):
+    #     with self._F.localForm() as f_local:
+    #         f_local.set(0.0)
+    #     dfx.fem.petsc.assemble_vector(self._F, self.L)
+    #     self._F.ghostUpdate(addv=PETSc.InsertMode.ADD,
+    #                         mode=PETSc.ScatterMode.REVERSE)
 
-        return self._F
+    #     return self._F
 
-    def J(self, *_):
-        self._J.zeroEntries()
-        dfx.fem.petsc.assemble_matrix(self._J, self.a)
-        self._J.assemble()
-        return self._J
+    # def J(self, *_):
+    #     self._J.zeroEntries()
+    #     dfx.fem.petsc.assemble_matrix(self._J, self.a)
+    #     self._J.assemble()
+    #     return self._J
 
 
 class NewtonSolver():
