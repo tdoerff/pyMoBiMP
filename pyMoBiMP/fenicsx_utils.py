@@ -201,7 +201,7 @@ def time_stepping(
     return
 
 
-class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
+class NonlinearProblem:
     """
     Custom implementation of NonlinearProblem to make sure we have a Jacobian.
     """
@@ -214,7 +214,40 @@ class NonlinearProblem(dfx.fem.petsc.NonlinearProblem):
 
         J = ufl.derivative(F, c, dc)
 
-        super().__init__(F, c, J=J, bcs=bcs)
+        self.L = dfx.fem.form(F)
+        self.a = dfx.fem.form(J)
+
+        self.bcs = bcs
+
+    def form(self, x):
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+    def F(self, x, b):
+        """Assemble residual vector."""
+
+        with b.localForm() as b_local:
+            b_local.set(0.0)
+
+        dfx.fem.petsc.assemble_vector(b, self.L)
+
+        dfx.fem.petsc.apply_lifting(b, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+
+        dfx.fem.petsc.set_bc(b, self.bcs, x, -1.0)
+
+    def J(self, x, A):
+        """Assemble Jacobian matrix."""
+
+        A.zeroEntries()
+        dfx.fem.petsc.assemble_matrix(A, self.a, bcs=self.bcs)
+        A.assemble()
+
+    def matrix(self):
+        return dfx.fem.petsc.create_matrix(self.a)
+
+    def vector(self):
+        return dfx.fem.petsc.create_vector(self.L)
 
 
 class NewtonSolver():
@@ -230,12 +263,12 @@ class NewtonSolver():
 
         self.problem = problem
 
-        self.A = dfx.fem.petsc.create_matrix(problem.a)
-        self.L = dfx.fem.petsc.create_vector(problem.L)
+        self.A = problem.matrix()
+        self.L = problem.vector()
 
         self.max_it = max_iterations
         self.rtol = rtol
-self.convergence_criterion = "incremental"
+        self.convergence_criterion = "incremental"
 
         self.callback = callback
 
@@ -299,8 +332,8 @@ self.convergence_criterion = "incremental"
 
             elif self.convergence_criterion == "none":
                 if it == self.max_it:
-                success = True
-                break
+                    success = True
+                    break
 
             else:
                 raise ValueError(
