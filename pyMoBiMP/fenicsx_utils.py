@@ -443,7 +443,6 @@ class BlockNewtonSolver:
                 dc.x.scatter_forward()
                 # Update u_{i+1} = u_i + delta u_i
                 ch.x.array[:] += dc.x.array
-                it += 1
 
                 # Compute norm of update
                 correction_norm += dc.vector.norm(0)
