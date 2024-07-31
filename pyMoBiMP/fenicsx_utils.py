@@ -289,6 +289,9 @@ class NewtonSolver():
     def setJ(self, x):
         self.problem.J(x, self.A)
 
+    def set_form(self, x):
+        self.problem.form(x)
+
     def solve(self, ch):
 
         V = ch.function_space
@@ -306,6 +309,9 @@ class NewtonSolver():
 
             # Assemble the Jacobian
             self.setJ(dc.vector)
+
+            # Finally update ghost values
+            self.set_form(dc.vector)
 
             # Solve linear problem
             self.krylov_solver.solve(self.L, dc.vector)
