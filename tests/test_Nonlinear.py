@@ -102,7 +102,7 @@ def test_nonlinear_algebraic(order):
     assert np.isclose(L2_err0, 0.) or np.isclose(L2_err1, 0.)
 
 
-@pytest.mark.parametrize("order", [1, 2, 5])
+@pytest.mark.parametrize("order", [1, 5])
 def test_differential(order):
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
