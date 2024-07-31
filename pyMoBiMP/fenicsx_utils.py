@@ -209,6 +209,7 @@ class NonlinearProblem:
     def __init__(self, F, c, bcs=[]):
 
         V = c.function_space
+        self.mesh_comm = V.mesh.comm
 
         dc = ufl.TrialFunction(V)
 
