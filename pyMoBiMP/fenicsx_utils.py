@@ -223,7 +223,7 @@ class NewtonSolver():
                  comm,
                  problem,
                  max_iterations=10,
-                 tol=1e-10,
+                 rtol=1e-10,
                  callback=lambda solver, uh: None):
 
         self.comm = comm
@@ -233,8 +233,9 @@ class NewtonSolver():
         self.A = dfx.fem.petsc.create_matrix(problem.a)
         self.L = dfx.fem.petsc.create_vector(problem.L)
 
-        self.max_iterations = max_iterations
-        self.tol = tol
+        self.max_it = max_iterations
+        self.rtol = rtol
+self.convergence_criterion = "incremental"
 
         self.callback = callback
 
@@ -250,7 +251,7 @@ class NewtonSolver():
 
         success = False
 
-        for it in range(self.max_iterations):
+        for it in range(self.max_it):
 
             self.callback(self, ch)
 
@@ -261,15 +262,15 @@ class NewtonSolver():
             self.L.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES,
                                mode=PETSc.ScatterMode.REVERSE)
 
-            self.A.zeroEntries()
-            dfx.fem.petsc.assemble_matrix(self.A, self.problem.a)
-            self.A.assemble()
-
             # Scale residual by -1
             self.L.scale(-1)
             self.L.ghostUpdate(
                 addv=PETSc.InsertMode.INSERT_VALUES,
                 mode=PETSc.ScatterMode.FORWARD)
+
+            self.A.zeroEntries()
+            dfx.fem.petsc.assemble_matrix(self.A, self.problem.a)
+            self.A.assemble()
 
             # Solve linear problem
             self.krylov_solver.solve(self.L, dc.vector)
@@ -286,9 +287,24 @@ class NewtonSolver():
             it += 1
 
             # print(f"Iteration {it}: Correction norm {correction_norm}")
-            if correction_norm < self.tol:
+            if self.convergence_criterion == 'incremental':
+                if correction_norm < self.rtol * ch.vector.norm(0):
+                    success = True
+                    break
+
+            elif self.convergence_criterion == "residual":
+                if self.L.norm(0) < self.rtol:
+                    success = True
+                    break
+
+            elif self.convergence_criterion == "none":
+                if it == self.max_it:
                 success = True
                 break
+
+            else:
+                raise ValueError(
+                    f"Convergence criterion `{self.convergence_criterion}` not suported")
 
         return it, success
 
