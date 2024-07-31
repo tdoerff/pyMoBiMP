@@ -167,8 +167,8 @@ def NonlinearBlockProblemCreation():
     to make sure we do not break the interface with the custom problem.
     """
 
-    meshes = [dfx.mesh.create_unit_interval(comm, 128),
-              dfx.mesh.create_unit_interval(comm, 32)]
+    meshes = [dfx.mesh.create_interval(comm, 128, [-1, 0.]),
+              dfx.mesh.create_unit_interval(comm, 128)]
 
     def set_up_u(mesh):
         V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
