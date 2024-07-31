@@ -276,6 +276,19 @@ class NewtonSolver():
         self.krylov_solver = self.ksp.create(comm)
         self.krylov_solver.setOperators(self.A)
 
+    def setF(self, x):
+        # Assemble the residual vector
+        self.problem.F(x, self.L)
+
+        # Scale residual by -1
+        self.L.scale(-1)
+        self.L.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT_VALUES,
+            mode=PETSc.ScatterMode.FORWARD)
+
+    def setJ(self, x):
+        self.problem.J(x, self.A)
+
     def solve(self, ch):
 
         V = ch.function_space
@@ -288,22 +301,11 @@ class NewtonSolver():
 
             self.callback(self, ch)
 
-            with self.L.localForm() as loc_L:
-                loc_L.set(0.)
+            # Assemble RHS
+            self.setF(dc.vector)
 
-            dfx.fem.petsc.assemble_vector(self.L, self.problem.L)
-            self.L.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES,
-                               mode=PETSc.ScatterMode.REVERSE)
-
-            # Scale residual by -1
-            self.L.scale(-1)
-            self.L.ghostUpdate(
-                addv=PETSc.InsertMode.INSERT_VALUES,
-                mode=PETSc.ScatterMode.FORWARD)
-
-            self.A.zeroEntries()
-            dfx.fem.petsc.assemble_matrix(self.A, self.problem.a)
-            self.A.assemble()
+            # Assemble the Jacobian
+            self.setJ(dc.vector)
 
             # Solve linear problem
             self.krylov_solver.solve(self.L, dc.vector)
