@@ -14,6 +14,8 @@ from petsc4py import PETSc
 
 import shutil
 
+from typing import List
+
 import ufl
 
 
@@ -249,6 +251,37 @@ class NonlinearProblem:
 
     def vector(self):
         return dfx.fem.petsc.create_vector(self.L)
+
+
+class BlockNonlinearProblem:
+    """
+    Wrapper class to collect independent block problems to be solved simultaneously.
+    """
+    def __init__(self,
+                 Fs: List[ufl.Form],
+                 cs: List[dfx.fem.Function],
+                 bcss: List[List[dfx.fem.DirichletBC | None]] = []):
+
+        assert len(Fs) == len(cs)
+
+        self.num_of_blocks = len(Fs)
+
+        if len(bcss) == 0:
+            bcss = [[], ] * self.num_of_blocks
+
+        assert len(bcss) == self.num_of_blocks
+
+        self.block_problems = [
+            NonlinearProblem(F, c, bcs) for F, c, bcs in zip(Fs, cs, bcss)]
+
+    def form(self, xs):
+        [self.block_problems.form(x) for x in zip(xs)]
+
+    def F(self, xs, Ls):
+        [self.block_problems.F(x, L) for x, L in zip(xs, Ls)]
+
+    def J(self, xs, Js):
+        [self.block_problems.J(x, J) for x, J in zip(xs, Js)]
 
 
 class NewtonSolver():

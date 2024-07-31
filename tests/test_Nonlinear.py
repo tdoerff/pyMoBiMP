@@ -11,7 +11,11 @@ import pytest
 
 import ufl
 
-from pyMoBiMP.fenicsx_utils import NewtonSolver, NonlinearProblem
+from pyMoBiMP.fenicsx_utils import (
+    NewtonSolver,
+    NonlinearProblem,
+    BlockNonlinearProblem,
+)
 
 
 def test_NonlinearProblem():
@@ -166,3 +170,37 @@ def test_differential(order):
     L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
 
     assert np.isclose(L2_err0, 0.)
+
+
+def test_NonlinearBlockProblemCreation():
+    """
+    Test constom problem class against build-in solver
+    to make sure we do not break the interface with the custom problem.
+    """
+
+    meshes = [dfx.mesh.create_unit_interval(comm, 128),
+              dfx.mesh.create_unit_interval(comm, 32)]
+
+    def set_up_u(mesh):
+        V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+
+        u = dfx.fem.Function(V)
+
+        return u
+
+    us = [set_up_u(mesh) for mesh in meshes]
+
+    def set_up_form(u):
+
+        V = u.function_space
+
+        v = ufl.TestFunction(V)
+        F = (u**3 - u**2) * v * ufl.dx
+
+        return F
+
+    Fs = [set_up_form(u) for u in us]
+
+    problem = BlockNonlinearProblem(Fs, us)
+
+    return problem
