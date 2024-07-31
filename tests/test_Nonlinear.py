@@ -14,6 +14,7 @@ import ufl
 from pyMoBiMP.fenicsx_utils import (
     NewtonSolver,
     NonlinearProblem,
+    BlockNewtonSolver,
     BlockNonlinearProblem,
 )
 
@@ -75,35 +76,23 @@ def test_nonlinear_algebraic(order):
 
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(mesh)
-    F = uh**2 * v * ufl.dx - 2 * uh * v * ufl.dx - (x[0]**2 + 4 * x[0] + 3) * v * ufl.dx
+    F = (x[0] - uh)**2 * v * ufl.dx
 
-    def root_0(x):
-        return 3 + x[0]
-
-    def root_1(x):
-        return -1 - x[0]
-
-    u_ex0 = dfx.fem.Function(V)
-    u_ex0.interpolate(lambda x: root_0(x))
-
-    u_ex1 = dfx.fem.Function(V)
-    u_ex1.interpolate(lambda x: root_1(x))
+    u_ex = dfx.fem.Function(V)
+    u_ex.interpolate(lambda x: x[0])
 
     problem = NonlinearProblem(F, uh)
 
-    solver = NewtonSolver(comm, problem)
+    solver = NewtonSolver(comm, problem, max_iterations=50)
 
     solver.solve(uh)
 
-    L2_err0_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex0 - uh, u_ex0 - uh) * ufl.dx))
-    L2_err1_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex1 - uh, u_ex1 - uh) * ufl.dx))
+    L2_err_loc = dfx.fem.assemble_scalar(
+        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx))
 
-    L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
-    L2_err1 = mesh.comm.allreduce(L2_err1_loc, op=SUM)
+    L2_err0 = mesh.comm.allreduce(L2_err_loc, op=SUM)
 
-    assert np.isclose(L2_err0, 0.) or np.isclose(L2_err1, 0.)
+    assert np.isclose(L2_err0, 0.)
 
 
 @pytest.mark.parametrize("order", [1, 5])
@@ -151,7 +140,7 @@ def test_differential(order):
     ksp.getPC().setFactorSetUpSolverType()
     ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=24, ival=1)  # detect null pivots
     ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)  # do not compute null space again
-    ksp.setFromOptions()
+    ksp.getPC().setFactorSetUpSolverType()
 
     # solver.A.setOption(PETSc.Mat.Option.SYMMETRIC, True)
     # solver.A.setOption(PETSc.Mat.Option.SYMMETRY_ETERNAL, True)
@@ -193,14 +182,43 @@ def test_NonlinearBlockProblemCreation():
     def set_up_form(u):
 
         V = u.function_space
+        mesh = V.mesh
+
+        x = ufl.SpatialCoordinate(mesh)
 
         v = ufl.TestFunction(V)
-        F = (u**3 - u**2) * v * ufl.dx
+        F = (u - x[0])**2 * v * ufl.dx
 
         return F
+
+    def u_exact(x):
+        return x
 
     Fs = [set_up_form(u) for u in us]
 
     problem = BlockNonlinearProblem(Fs, us)
 
-    return problem
+    return us, problem, u_exact
+
+
+def test_NonLinearProblem():
+
+    us, block_problem, u_exact = test_NonlinearBlockProblemCreation()
+
+    solver = BlockNewtonSolver(comm, block_problem, convergence_criterion="residual")
+
+    solver.solve(us)
+
+    for u in us:
+
+        V = u.function_space
+        mesh = V.mesh
+
+        u_ex = dfx.fem.Function(V)
+        u_ex.interpolate(lambda x: u_exact(x[0]))
+
+        L2_err0_loc = dfx.fem.assemble_scalar(
+            dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
+        L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
+
+        assert np.isclose(L2_err0, 0.)

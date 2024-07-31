@@ -271,17 +271,8 @@ class BlockNonlinearProblem:
 
         assert len(bcss) == self.num_of_blocks
 
-        self.block_problems = [
+        self.problems = [
             NonlinearProblem(F, c, bcs) for F, c, bcs in zip(Fs, cs, bcss)]
-
-    def form(self, xs):
-        [self.block_problems.form(x) for x in zip(xs)]
-
-    def F(self, xs, Ls):
-        [self.block_problems.F(x, L) for x, L in zip(xs, Ls)]
-
-    def J(self, xs, Js):
-        [self.block_problems.J(x, J) for x, J in zip(xs, Js)]
 
 
 class NewtonSolver():
@@ -309,6 +300,17 @@ class NewtonSolver():
         self.ksp = PETSc.KSP()
         self.krylov_solver = self.ksp.create(comm)
         self.krylov_solver.setOperators(self.A)
+
+        self.krylov_solver_setup()
+
+    def krylov_solver_setup(self):
+        # Set default options for the linear solver
+        ksp = self.ksp
+        ksp.setType("preonly")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("mumps")
+        ksp.getPC().setFactorSetUpSolverType()
+        ksp.getPC().setFactorSetUpSolverType()
 
     def setF(self, x):
         # Assemble the residual vector
@@ -369,6 +371,95 @@ class NewtonSolver():
 
             elif self.convergence_criterion == "residual":
                 if self.L.norm(0) < self.rtol:
+                    success = True
+                    break
+
+            elif self.convergence_criterion == "none":
+                if it == self.max_it:
+                    success = True
+                    break
+
+            else:
+                raise ValueError(
+                    f"Convergence criterion `{self.convergence_criterion}` not suported")
+
+        return it, success
+
+
+class BlockNewtonSolver:
+    def __init__(self,
+                 comm,
+                 block_problem,
+                 max_iterations=50,
+                 rtol=1e-10,
+                 convergence_criterion="incremental",
+                 callback=lambda solver, uh: None):
+
+        self.comm = comm
+
+        self.problem = block_problem
+
+        self.max_it = max_iterations
+        self.rtol = rtol
+        self.convergence_criterion = convergence_criterion
+        self.callback = callback
+
+        self.block_solvers = [
+            NewtonSolver(comm, problem) for problem in self.problem.problems]
+
+    def solve(self, chs):
+
+        Vs = [ch.function_space for ch in chs]
+
+        dcs = [dfx.fem.Function(V) for V in Vs]
+
+        success = False
+
+        for it in range(self.max_it):
+
+            correction_norm = 0.
+            solution_norm = 0.
+            residual_norm = 0.
+
+            self.callback(self, chs)
+
+            for ch, dc, solver in zip(chs, dcs, self.block_solvers):
+
+                # Assemble RHS
+                solver.setF(dc.vector)
+
+                # Assemble the Jacobian
+                solver.setJ(dc.vector)
+
+                # Finally update ghost values
+                solver.set_form(dc.vector)
+
+                # Solve linear problem
+                solver.krylov_solver.solve(solver.L, dc.vector)
+
+                if np.isnan(correction_norm) or np.isinf(correction_norm):
+                    raise RuntimeError("NaNs in NewtonSolver!")
+
+                dc.x.scatter_forward()
+                # Update u_{i+1} = u_i + delta u_i
+                ch.x.array[:] += dc.x.array
+                it += 1
+
+                # Compute norm of update
+                correction_norm += dc.vector.norm(0)
+                solution_norm += ch.vector.norm(0)
+                residual_norm += solver.L.norm(0)
+
+                print(it, correction_norm, residual_norm)
+
+            # print(f"Iteration {it}: Correction norm {correction_norm}")
+            if self.convergence_criterion == 'incremental':
+                if correction_norm < self.rtol * solution_norm:
+                    success = True
+                    break
+
+            elif self.convergence_criterion == "residual":
+                if residual_norm < self.rtol:
                     success = True
                     break
 
