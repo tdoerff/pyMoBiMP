@@ -161,7 +161,7 @@ def test_differential(order):
     assert np.isclose(L2_err0, 0.)
 
 
-def NonlinearBlockProblemCreation():
+def NonlinearBlockProblemCreation_algebraic():
     """
     Test constom problem class against build-in solver
     to make sure we do not break the interface with the custom problem.
@@ -202,12 +202,12 @@ def NonlinearBlockProblemCreation():
 
 
 def test_nonlinear_problem_creation():
-    _ = NonlinearBlockProblemCreation()
+    _ = NonlinearBlockProblemCreation_algebraic()
 
 
 def test_nonlinear_block_algebraic():
 
-    us, block_problem, u_exact = NonlinearBlockProblemCreation()
+    us, block_problem, u_exact = NonlinearBlockProblemCreation_algebraic()
 
     solver = BlockNewtonSolver(comm, block_problem, convergence_criterion="residual")
 
