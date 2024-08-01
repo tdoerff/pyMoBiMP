@@ -249,20 +249,23 @@ def test_nonlinear_block_differential():
         V = u.function_space
         mesh = V.mesh
 
+        # Constants to access the boundary conditions at runtime.
         u_inner = dfx.fem.Constant(mesh, 0.,)
         u_outer = dfx.fem.Constant(mesh, 0.,)
 
-        dofs_inner = dfx.fem.locate_dofs_geometrical(
-            V, lambda x: np.isclose(x[0]**2, 0.))
-
+        # Set out Dirichlet BC.
         dofs_outer = dfx.fem.locate_dofs_geometrical(
             V, lambda x: np.isclose(x[0]**2, 1.))
 
-        bcs = [dfx.fem.dirichletbc(u_inner, dofs_inner, V),
-               dfx.fem.dirichletbc(u_outer, dofs_outer, V)]
+        bcs = [dfx.fem.dirichletbc(u_outer, dofs_outer, V)]
 
+        coords = ufl.SpatialCoordinate(mesh)
+        r2 = ufl.dot(coords, coords)
+
+        # The form including inner Neumann BCs.
         v = ufl.TestFunction(V)
         F = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx + 2 * v * ufl.dx
+        F -= u_inner * v * (1. - r2) * ufl.ds
 
         return F, u, bcs, u_inner, u_outer
 
@@ -276,21 +279,26 @@ def test_nonlinear_block_differential():
 
     # Manually set the boundary conditions for both grids.
     u_outers[0].value = 2.
+    u_outers[1].value = 2.
+
+    # Manually perturb the inner Neumann BC.
     u_inners[0].value = 1.
     u_inners[1].value = 1.
-    u_outers[1].value = 2.
 
     problem = BlockNonlinearProblem(Fs, us, bcs)
 
     coords = ufl.SpatialCoordinate(meshes[1])
     r2 = ufl.dot(coords, coords)
+    n = ufl.FacetNormal(meshes[1])
 
     # The term (1 - r2) selects the inner interface.
-    u_1_l_form = dfx.fem.form(us[1] * (1 - r2) * ufl.ds)
+    du_1_l_form = dfx.fem.form(ufl.dot(ufl.grad(us[1]), n) * (1 - r2) * ufl.ds)
 
     coords = ufl.SpatialCoordinate(meshes[0])
     r2 = ufl.dot(coords, coords)
-    u_0_r_form = dfx.fem.form(us[0] * (1 - r2) * ufl.ds)
+    n = ufl.FacetNormal(meshes[0])
+
+    du_0_r_form = dfx.fem.form(ufl.dot(ufl.grad(us[0]), n) * (1 - r2) * ufl.ds)
 
     def callback(solver, uhs):
         """
@@ -300,15 +308,15 @@ def test_nonlinear_block_differential():
 
         # First function
         # ---------------
-        u_1_l = dfx.fem.assemble_scalar(u_1_l_form)
+        du_1_l = dfx.fem.assemble_scalar(du_1_l_form)
 
-        u_inners[0].value = u_1_l
+        u_inners[0].value = du_1_l
 
         # # Second function
         # # ---------------
-        u_0_r = dfx.fem.assemble_scalar(u_0_r_form)
+        du_0_r = dfx.fem.assemble_scalar(du_0_r_form)
 
-        u_inners[1].value = u_0_r
+        u_inners[1].value = du_0_r
 
     solver = BlockNewtonSolver(comm, problem, callback=callback)
 
