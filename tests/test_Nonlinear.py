@@ -290,6 +290,9 @@ def test_nonlinear_block_differential():
 
     # The term (1 - r2) selects the inner interface.
     u_1_l_form = dfx.fem.form(us[1] * (1 - r2) * ufl.ds)
+
+    coords = ufl.SpatialCoordinate(meshes[0])
+    r2 = ufl.dot(coords, coords)
     u_0_r_form = dfx.fem.form(us[0] * (1 - r2) * ufl.ds)
 
     def callback(solver, uhs):
