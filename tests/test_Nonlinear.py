@@ -249,39 +249,36 @@ def test_nonlinear_block_differential():
         V = u.function_space
         mesh = V.mesh
 
-        x_min = mesh.geometry.x[:, 0].min()
-        x_max = mesh.geometry.x[:, 0].max()
+        u_inner = dfx.fem.Constant(mesh, 0.,)
+        u_outer = dfx.fem.Constant(mesh, 0.,)
 
-        u_left = dfx.fem.Constant(mesh, 0.,)
-        u_right = dfx.fem.Constant(mesh, 0.,)
+        dofs_inner = dfx.fem.locate_dofs_geometrical(
+            V, lambda x: np.isclose(x[0]**2, 0.))
 
-        dofs_left = dfx.fem.locate_dofs_geometrical(
-            V, lambda x: np.isclose(x[0], x_min))
+        dofs_outer = dfx.fem.locate_dofs_geometrical(
+            V, lambda x: np.isclose(x[0]**2, 1.))
 
-        dofs_right = dfx.fem.locate_dofs_geometrical(
-            V, lambda x: np.isclose(x[0], x_max))
-
-        bcs = [dfx.fem.dirichletbc(u_left, dofs_left, V),
-               dfx.fem.dirichletbc(u_right, dofs_right, V)]
+        bcs = [dfx.fem.dirichletbc(u_inner, dofs_inner, V),
+               dfx.fem.dirichletbc(u_outer, dofs_outer, V)]
 
         v = ufl.TestFunction(V)
         F = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx - 2 * v * ufl.dx
 
-        return F, u, bcs, u_left, u_right
+        return F, u, bcs, u_inner, u_outer
 
     problem_defs = [set_up_form(u) for u in us]
 
     Fs = [F for F, *_ in problem_defs]
     us = [u for _, u, *_ in problem_defs]
     bcs = [bc for _, _, bc, *_ in problem_defs]
-    u_lefts = [u_left for _, _, _, u_left, _ in problem_defs]
-    u_rights = [u_right for _, _, _, _, u_right in problem_defs]
+    u_inners = [u_inner for _, _, _, u_inner, _ in problem_defs]
+    u_outers = [u_outer for _, _, _, _, u_outer in problem_defs]
 
     # Manually set the boundary conditions for both grids.
-    u_lefts[0].value = 2.
-    u_rights[0].value = 1.
-    u_lefts[1].value = 1.
-    u_rights[1].value = 2.
+    u_outers[0].value = 2.
+    u_inners[0].value = 1.
+    u_inners[1].value = 1.
+    u_outers[1].value = 2.
 
     problem = BlockNonlinearProblem(Fs, us, bcs)
 
@@ -305,13 +302,13 @@ def test_nonlinear_block_differential():
         # ---------------
         u_1_l = dfx.fem.assemble_scalar(u_1_l_form)
 
-        u_rights[0].value = u_1_l
+        u_inners[0].value = u_1_l
 
         # # Second function
         # # ---------------
         u_0_r = dfx.fem.assemble_scalar(u_0_r_form)
 
-        u_lefts[1].value = u_0_r
+        u_inners[1].value = u_0_r
 
     solver = BlockNewtonSolver(comm, problem, callback=callback)
 
@@ -330,7 +327,7 @@ def test_nonlinear_block_differential():
             dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
         for u, u_ex in zip(us, u_exs)]
 
-    L2_err = [mesh.comm.allreduce(
-        L2_err_loc, op=SUM) for mesh, L2_err_loc in zip(meshes, L2_err_locs)]
+    L2_err = sum([mesh.comm.allreduce(
+        L2_err_loc, op=SUM) for mesh, L2_err_loc in zip(meshes, L2_err_locs)])
 
     assert np.isclose(L2_err, 0.)
