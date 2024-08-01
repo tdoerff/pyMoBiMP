@@ -262,7 +262,7 @@ def test_nonlinear_block_differential():
                dfx.fem.dirichletbc(u_outer, dofs_outer, V)]
 
         v = ufl.TestFunction(V)
-        F = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx - 2 * v * ufl.dx
+        F = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx + 2 * v * ufl.dx
 
         return F, u, bcs, u_inner, u_outer
 
