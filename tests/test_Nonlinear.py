@@ -242,6 +242,16 @@ def test_nonlinear_block_algebraic():
 
 
 def test_nonlinear_block_differential():
+    r"""
+    The purpose of this test is to reproduce a solution of the elliptic problem
+    $$
+        u'' = 2
+    $$
+
+    on $\Omega = [-1, 1]$ with $u(-1) = u(1) = 2$. The solution domain is split into
+    $\Omega_L = [-1, 0]$ and $\Omega_R = [0, 1]$ and the matching conditions is
+    $\lim_{\Omega_L \ni x\nearrow 0} u'(x) = lim_{\Omega_R \ni x\searrow 0} u'(x)$
+    """
 
     # Adjacent meshes
     meshes = [
