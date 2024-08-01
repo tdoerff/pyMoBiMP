@@ -12,7 +12,6 @@ import pytest
 import ufl
 
 from pyMoBiMP.fenicsx_utils import (
-    evaluation_points_and_cells,
     NewtonSolver,
     NonlinearProblem,
     BlockNewtonSolver,
@@ -34,8 +33,11 @@ def test_NonlinearProblem():
 
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(mesh)
-    F = uh**2 * v * ufl.dx - 2 * uh * v * ufl.dx - \
-        (x[0]**2 + 4 * x[0] + 3) * v * ufl.dx
+    F = (
+        uh**2 * v * ufl.dx
+        - 2 * uh * v * ufl.dx
+        - (x[0] ** 2 + 4 * x[0] + 3) * v * ufl.dx
+    )
 
     problem = NonlinearProblem(F, uh)
 
@@ -56,14 +58,16 @@ def test_NonlinearProblem():
     u_ex1.interpolate(lambda x: root_1(x))
 
     L2_err0_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex0 - uh, u_ex0 - uh) * ufl.dx))
+        dfx.fem.form(ufl.inner(u_ex0 - uh, u_ex0 - uh) * ufl.dx)
+    )
     L2_err1_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex1 - uh, u_ex1 - uh) * ufl.dx))
+        dfx.fem.form(ufl.inner(u_ex1 - uh, u_ex1 - uh) * ufl.dx)
+    )
 
     L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
     L2_err1 = mesh.comm.allreduce(L2_err1_loc, op=SUM)
 
-    assert np.isclose(L2_err0, 0.) or np.isclose(L2_err1, 0.)
+    assert np.isclose(L2_err0, 0.0) or np.isclose(L2_err1, 0.0)
 
 
 @pytest.mark.parametrize("order", [1, 2, 5, 9])
@@ -77,7 +81,7 @@ def test_nonlinear_algebraic(order):
 
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(mesh)
-    F = (x[0] - uh)**2 * v * ufl.dx
+    F = (x[0] - uh) ** 2 * v * ufl.dx
 
     u_ex = dfx.fem.Function(V)
     u_ex.interpolate(lambda x: x[0])
@@ -89,11 +93,12 @@ def test_nonlinear_algebraic(order):
     solver.solve(uh)
 
     L2_err_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx))
+        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx)
+    )
 
     L2_err0 = mesh.comm.allreduce(L2_err_loc, op=SUM)
 
-    assert np.isclose(L2_err0, 0.)
+    assert np.isclose(L2_err0, 0.0)
 
 
 @pytest.mark.parametrize("order", [1, 5])
@@ -107,12 +112,14 @@ def test_differential(order):
 
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(mesh)
-    F = ufl.inner(ufl.grad(uh), ufl.grad(v)) * ufl.dx - \
-        2 * x[0] * v * ufl.ds + \
-        2 * v * ufl.dx
+    F = (
+        ufl.inner(ufl.grad(uh), ufl.grad(v)) * ufl.dx
+        - 2 * x[0] * v * ufl.ds
+        + 2 * v * ufl.dx
+    )
 
     u_ex = dfx.fem.Function(V)
-    u_ex.interpolate(lambda x: x[0]**2)
+    u_ex.interpolate(lambda x: x[0] ** 2)
 
     problem = NonlinearProblem(F, uh)
 
@@ -122,7 +129,7 @@ def test_differential(order):
     const.interpolate(lambda x: np.ones_like(x[0]))
 
     C = dfx.fem.petsc.assemble_vector(dfx.fem.form(const * v * ufl.dx))
-    C.scale(1. / C.norm())
+    C.scale(1.0 / C.norm())
 
     assert np.isclose(C.norm(), 1.0)
 
@@ -140,7 +147,8 @@ def test_differential(order):
     ksp.getPC().setFactorSolverType("mumps")
     ksp.getPC().setFactorSetUpSolverType()
     ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=24, ival=1)  # detect null pivots
-    ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)  # do not compute null space again
+    # do not compute null space again
+    ksp.getPC().getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)
     ksp.getPC().setFactorSetUpSolverType()
 
     # solver.A.setOption(PETSc.Mat.Option.SYMMETRIC, True)
@@ -156,10 +164,11 @@ def test_differential(order):
     uh.x.array[:] -= min_uh
 
     L2_err0_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx))
+        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx)
+    )
     L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
 
-    assert np.isclose(L2_err0, 0.)
+    assert np.isclose(L2_err0, 0.0)
 
 
 def NonlinearBlockProblemCreation_algebraic():
@@ -168,8 +177,10 @@ def NonlinearBlockProblemCreation_algebraic():
     to make sure we do not break the interface with the custom problem.
     """
 
-    meshes = [dfx.mesh.create_interval(comm, 128, [-1, 0.]),
-              dfx.mesh.create_unit_interval(comm, 128)]
+    meshes = [
+        dfx.mesh.create_interval(comm, 128, [-1, 0.0]),
+        dfx.mesh.create_unit_interval(comm, 128),
+    ]
 
     def set_up_u(mesh):
         V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
@@ -188,7 +199,7 @@ def NonlinearBlockProblemCreation_algebraic():
         x = ufl.SpatialCoordinate(mesh)
 
         v = ufl.TestFunction(V)
-        F = (u - x[0])**2 * v * ufl.dx
+        F = (u - x[0]) ** 2 * v * ufl.dx
 
         return F
 
@@ -223,17 +234,20 @@ def test_nonlinear_block_algebraic():
         u_ex.interpolate(lambda x: u_exact(x[0]))
 
         L2_err0_loc = dfx.fem.assemble_scalar(
-            dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
+            dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx)
+        )
         L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
 
-        assert np.isclose(L2_err0, 0.)
+        assert np.isclose(L2_err0, 0.0)
 
 
 def test_nonlinear_block_differential():
 
     # Adjacent meshes
-    meshes = [dfx.mesh.create_interval(comm, 128, [-1, 0.]),
-              dfx.mesh.create_unit_interval(comm, 128)]
+    meshes = [
+        dfx.mesh.create_interval(comm, 128, [-1, 0.0]),
+        dfx.mesh.create_unit_interval(comm, 128),
+    ]
 
     def set_up_u(mesh):
         V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 4))
@@ -250,12 +264,19 @@ def test_nonlinear_block_differential():
         mesh = V.mesh
 
         # Constants to access the boundary conditions at runtime.
-        u_inner = dfx.fem.Constant(mesh, 0.,)
-        u_outer = dfx.fem.Constant(mesh, 0.,)
+        u_inner = dfx.fem.Constant(
+            mesh,
+            0.0,
+        )
+        u_outer = dfx.fem.Constant(
+            mesh,
+            0.0,
+        )
 
         # Set out Dirichlet BC.
         dofs_outer = dfx.fem.locate_dofs_geometrical(
-            V, lambda x: np.isclose(x[0]**2, 1.))
+            V, lambda x: np.isclose(x[0] ** 2, 1.0)
+        )
 
         bcs = [dfx.fem.dirichletbc(u_outer, dofs_outer, V)]
 
@@ -265,7 +286,7 @@ def test_nonlinear_block_differential():
         # The form including inner Neumann BCs.
         v = ufl.TestFunction(V)
         F = ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx + 2 * v * ufl.dx
-        F -= u_inner * v * (1. - r2) * ufl.ds
+        F -= u_inner * v * (1.0 - r2) * ufl.ds
 
         return F, u, bcs, u_inner, u_outer
 
@@ -278,12 +299,12 @@ def test_nonlinear_block_differential():
     u_outers = [u_outer for _, _, _, _, u_outer in problem_defs]
 
     # Manually set the boundary conditions for both grids.
-    u_outers[0].value = 2.
-    u_outers[1].value = 2.
+    u_outers[0].value = 2.0
+    u_outers[1].value = 2.0
 
     # Manually perturb the inner Neumann BC.
-    u_inners[0].value = 1.
-    u_inners[1].value = 1.
+    u_inners[0].value = 1.0
+    u_inners[1].value = 1.0
 
     problem = BlockNonlinearProblem(Fs, us, bcs)
 
@@ -323,7 +344,7 @@ def test_nonlinear_block_differential():
     solver.solve(us)
 
     def u_ex_fun(x):
-        return x[0]**2 + 1.
+        return x[0] ** 2 + 1.0
 
     u_exs = [set_up_u(mesh) for mesh in meshes]
 
@@ -331,11 +352,15 @@ def test_nonlinear_block_differential():
     u_exs[1].interpolate(u_ex_fun)
 
     L2_err_locs = [
-        dfx.fem.assemble_scalar(
-            dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
-        for u, u_ex in zip(us, u_exs)]
+        dfx.fem.assemble_scalar(dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
+        for u, u_ex in zip(us, u_exs)
+    ]
 
-    L2_err = sum([mesh.comm.allreduce(
-        L2_err_loc, op=SUM) for mesh, L2_err_loc in zip(meshes, L2_err_locs)])
+    L2_err = sum(
+        [
+            mesh.comm.allreduce(L2_err_loc, op=SUM)
+            for mesh, L2_err_loc in zip(meshes, L2_err_locs)
+        ]
+    )
 
-    assert np.isclose(L2_err, 0.)
+    assert np.isclose(L2_err, 0.0)
