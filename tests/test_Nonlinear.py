@@ -317,4 +317,20 @@ def test_nonlinear_block_differential():
 
     solver.solve(us)
 
-    assert True
+    def u_ex_fun(x):
+        return x[0]**2 + 1.
+
+    u_exs = [set_up_u(mesh) for mesh in meshes]
+
+    u_exs[0].interpolate(u_ex_fun)
+    u_exs[1].interpolate(u_ex_fun)
+
+    L2_err_locs = [
+        dfx.fem.assemble_scalar(
+            dfx.fem.form(ufl.inner(u_ex - u, u_ex - u) * ufl.dx))
+        for u, u_ex in zip(us, u_exs)]
+
+    L2_err = [mesh.comm.allreduce(
+        L2_err_loc, op=SUM) for mesh, L2_err_loc in zip(meshes, L2_err_locs)]
+
+    assert np.isclose(L2_err, 0.)
