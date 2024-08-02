@@ -25,7 +25,7 @@ import os
 import ufl
 
 from pyMoBiMP.fenicsx_utils import (
-    BlockNewtonSolver as BlockNewtonSolverBase,
+    BlockNewtonSolver as BlockNewtonSolver,
     BlockNonlinearProblem,
     get_mesh_spacing,
     RuntimeAnalysisBase)
@@ -34,16 +34,6 @@ from pyMoBiMP.cahn_hilliard_utils import (
     c_of_y,
     _free_energy as free_energy,
 )
-
-
-class BlockNewtonSolver(BlockNewtonSolverBase):
-    def __init__(self, comm: MPI.Intracomm, problem: BlockNonlinearProblem):
-
-        super().__init__(comm, problem)
-
-        self.max_it = 10
-        self.rtol = 1e-3
-        self.convergence_criterion = "incremental"
 
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
