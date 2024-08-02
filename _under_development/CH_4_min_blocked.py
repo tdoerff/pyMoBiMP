@@ -176,7 +176,7 @@ if __name__ == "__main__":
     # ------------------------
     problem = BlockNonlinearProblem(Fs, us)
 
-    solver = BlockNewtonSolver(comm, problem)
+    solver = BlockNewtonSolver(comm, problem, max_iterations=25, atol=1e-9)
 
     # # Do a single step to solve for mu
     its, success = solver.solve(us)
