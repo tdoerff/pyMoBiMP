@@ -12,9 +12,6 @@ Open issues:
 [ ] implicit boundary condition?
 """
 
-import basix
-
-import dolfinx
 import dolfinx as dfx
 
 from matplotlib import pyplot as plt
@@ -25,9 +22,6 @@ import numpy as np
 
 import os
 
-import petsc4py
-
-import petsc4py.PETSc
 import ufl
 
 from pyMoBiMP.fenicsx_utils import (
