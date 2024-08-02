@@ -16,8 +16,6 @@ import basix
 
 import dolfinx
 import dolfinx as dfx
-from dolfinx.fem.petsc import NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
 from matplotlib import pyplot as plt
 
@@ -32,7 +30,11 @@ import petsc4py
 import petsc4py.PETSc
 import ufl
 
-from pyMoBiMP.fenicsx_utils import get_mesh_spacing, RuntimeAnalysisBase
+from pyMoBiMP.fenicsx_utils import (
+    BlockNewtonSolver as BlockNewtonSolverBase,
+    BlockNonlinearProblem,
+    get_mesh_spacing,
+    RuntimeAnalysisBase)
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     c_of_y,
@@ -40,19 +42,10 @@ from pyMoBiMP.cahn_hilliard_utils import (
 )
 
 
-class NewtonSolver(NewtonSolverBase):
-    def __init__(self, comm: MPI.Intracomm, problem: NonlinearProblem):
-        super().__init__(comm, problem)
+class BlockNewtonSolver(BlockNewtonSolverBase):
+    def __init__(self, comm: MPI.Intracomm, problem: BlockNonlinearProblem):
 
-        # solver.krylov_solver.setType(PETSc.KSP.Type.PREONLY)
-        # solver.krylov_solver.getPC().setType(PETSc.PC.Type.LU)
-        ksp = self.krylov_solver
-        opts = petsc4py.PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"  # TODO: direct solver! UMFPACK
-        opts[f"{option_prefix}pc_type"] = "lu"
-        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-        ksp.setFromOptions()
+        super().__init__(comm, problem)
 
         self.max_it = 10
         self.rtol = 1e-3
@@ -122,7 +115,7 @@ if __name__ == "__main__":
 
     num_particles = 2
     T_final = 1.0
-    I_total = 0.1
+    I_total = 0.
 
     Ls = 1.e1 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
     a_ratios = np.ones(num_particles) / num_particles
@@ -133,9 +126,9 @@ if __name__ == "__main__":
     # ---------------
     comm = MPI.COMM_SELF
 
-    n_elem = 32
-    mesh = dfx.mesh.create_unit_interval(comm, n_elem)
-    print("create mesh.")
+    mesh_filename = "Meshes/line_mesh.xdmf"
+    with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
+        mesh = file.read_mesh(name="Grid")
 
     dx_cell = get_mesh_spacing(mesh)
 
@@ -144,7 +137,7 @@ if __name__ == "__main__":
     # Set up function space
     # ---------------------
 
-    elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
+    elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
     elem_c, elem_mu = elem1, elem1
 
     # TODO: Is just one space enough?
@@ -189,14 +182,18 @@ if __name__ == "__main__":
     for u in u0s:
         u.sub(0).x.array[:] = -6.
 
+    us[0].sub(0).x.array[:] = -5.5
+
     # Problem and solver setup
     # ------------------------
-    problems = [NonlinearProblem(F, u) for F, u in zip(Fs, us)]
+    problem = BlockNonlinearProblem(Fs, us)
 
-    solvers = [NewtonSolver(comm, problem) for problem in problems]
+    solver = BlockNewtonSolver(comm, problem)
 
-    # Do a single step to solve for mu
-    [solver.solve(u) for solver, u in zip(solvers, us)]
+    # # Do a single step to solve for mu
+    its, success = solver.solve(us)
+
+    assert success
 
     coords = ufl.SpatialCoordinate(mesh)
     r2 = ufl.dot(coords, coords)
@@ -204,6 +201,23 @@ if __name__ == "__main__":
     mu_bc_forms = [dfx.fem.form(u.sub(1) * r2 * ufl.ds) for u in us]
 
     q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx) for u in us]
+
+    def callback(solver, us):
+
+        mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form)
+                  for mu_bc_form in mu_bc_forms]
+
+        cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
+
+        # update particle currents
+        for i_particle, _ in enumerate(us):
+            i_ks[i_particle].value = \
+                -Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
+
+        assert np.isclose(sum([i.value for i in i_ks]),  I_total)
+
+    # attach to solver
+    solver.callback = callback
 
     filename = os.path.dirname(os.path.abspath(__file__)) + "/rt.txt"
     rt_analysis = AnalyzeCellPotential(us, filename=filename)
@@ -220,7 +234,11 @@ if __name__ == "__main__":
     while t < T_final:
 
         if dt.value < dt_min:
-            raise RuntimeError(f"Timestep too small! (dt={dt.value:1.3e})")
+            warn(f"Timestep too small! (dt={dt.value:1.3e})")
+
+            break
+
+        [u0.interpolate(u) for u0, u in zip(u0s, us)]
 
         mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form) for mu_bc_form in mu_bc_forms]
         qs = [dfx.fem.assemble_scalar(q_form) for q_form in q_forms]
@@ -229,47 +247,37 @@ if __name__ == "__main__":
 
         cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
 
-        u_err_max = 0.
-        iterations = 0
-
         try:
-            for i_particle in range(num_particles):
+            iterations, success = solver.solve(us)
+            assert success
 
-                solver = solvers[i_particle]
-                u = us[i_particle]
-                u0 = u0s[i_particle]
-
-                i_ks[i_particle].value = \
-                    - Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
-
-                u0.interpolate(u)
-
-                it_part, _ = solver.solve(u)
-
-                iterations = max(it_part, iterations)
-
-                # Adaptive timestepping a la Yibao Li et al. (2017)
-                u_max_loc = np.abs(u.x.array - u0.x.array).max()
-
-                u_err_max = max(u_max_loc, u_err_max)
-
-        except Exception as e:
-
+        except (AssertionError, RuntimeError) as e:
             warn(e)
 
             # Reset and continue with a smaller time step
             [u.interpolate(u0) for u, u0 in zip(us, u0s)]
             dt.value *= 0.5
 
-            warn(f">>> Reduce timestep size to dt={dt.value:1.3e}")
+            warn(f"Reduce timestep size to dt={dt.value:1.3e}")
 
             continue
+
+        except Exception as e:
+            warn("!!! Uncought exception!")
+            warn(e)
+
+            break
 
         rt_analysis.analyze(t)
 
         # increase only after timestep was successfull.
         t += dt.value
         it += 1
+
+        u_err_maxs = [np.abs(u.x.array - u0.x.array).max()
+                      for u, u0 in zip(us, u0s)]
+
+        u_err_max = max(u_err_maxs)
 
         # The new timestep size for the next timestep.
         dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
