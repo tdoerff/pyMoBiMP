@@ -67,7 +67,11 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
 
 def compute_cell_voltage(
-    I_total: float, L: float, mu_bcs: float, Ls: list[float], a_ratios: list[float]
+    I_total: float,
+    L: float,
+    mu_bcs: list[float],
+    Ls: list[float],
+    a_ratios: list[float],
 ):
 
     weighted_particle_potentials = [
