@@ -449,8 +449,6 @@ class BlockNewtonSolver:
                 solution_norm += ch.vector.norm(0)
                 residual_norm += solver.L.norm(0)
 
-                print(it, correction_norm, residual_norm)
-
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
                 if correction_norm < self.rtol * solution_norm:
