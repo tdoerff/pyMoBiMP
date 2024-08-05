@@ -341,7 +341,7 @@ if __name__ == "__main__":
 
         # Output
         # ------
-        if it % 100 == 0:
+        if it % 500 == 0:
 
             plot_solution(num_particles, T_final, us, figs_axs, t)
 
