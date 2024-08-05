@@ -26,14 +26,33 @@ import ufl
 
 from pyMoBiMP.fenicsx_utils import (
     BlockNewtonSolver as BlockNewtonSolver,
+    NewtonSolver as SingleBlockNewtonSolverBase,
     BlockNonlinearProblem,
     get_mesh_spacing,
     RuntimeAnalysisBase)
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     c_of_y,
-    _free_energy as free_energy,
+    _free_energy,
 )
+
+
+class SingleBlockNewtonSolver(SingleBlockNewtonSolverBase):
+
+    def krylov_solver_setup(self):
+        ksp = self.ksp
+        ksp.setType("gmres")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("mumps")
+        ksp.getPC().setFactorSetUpSolverType()
+        ksp.getPC().setFactorSetUpSolverType()
+
+
+BlockNewtonSolver.SingleBlockNewtonSolver = SingleBlockNewtonSolver
+
+
+def free_energy(c):
+    return _free_energy(c, a=0., b=0., c=0)
 
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):

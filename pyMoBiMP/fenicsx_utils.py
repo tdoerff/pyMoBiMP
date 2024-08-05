@@ -387,6 +387,9 @@ class NewtonSolver():
 
 
 class BlockNewtonSolver:
+
+    SingleBlockNewtonSolver = NewtonSolver
+
     def __init__(self,
                  comm,
                  block_problem,
