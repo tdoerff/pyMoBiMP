@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # Simulation setup
     # ----------------
 
-    num_particles = 2
+    num_particles = 48
     T_final = 1.0
     I_total = 0.1
 
