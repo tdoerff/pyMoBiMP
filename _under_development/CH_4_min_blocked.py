@@ -185,9 +185,10 @@ if __name__ == "__main__":
 
     # Set up initial data (crudely simplified)
     # ----------------------------------------
-    for u in u0s:
+    for u in us:
         u.sub(0).x.array[:] = -6.
 
+    # Set first particle.
     us[0].sub(0).x.array[:] = -5.5
 
     # Problem and solver setup
