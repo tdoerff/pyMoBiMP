@@ -96,6 +96,24 @@ def warn(*msg):
     print("WARNING: ", *msg, flush=True)
 
 
+def plot_solution(num_particles, T_final, us, figs_axs, t):
+    for i_particle in range(num_particles):
+        u = us[i_particle]
+        V0, _ = u.function_space.sub(0).collapse()
+        c = dfx.fem.Function(V0)
+
+        fig, ax = figs_axs[i_particle]
+
+        color = (min(t, T_final) / T_final, 0, 0)
+
+        c_expr = dfx.fem.Expression(
+                    c_of_y(u.sub(0).collapse()),
+                    V0.element.interpolation_points())
+        c.interpolate(c_expr)
+
+        ax.plot(c.x.array[:], color=color)
+
+
 if __name__ == "__main__":
 
     # Simulation setup
@@ -212,6 +230,8 @@ if __name__ == "__main__":
 
     figs_axs = [plt.subplots() for _ in range(num_particles)]
 
+    plot_solution(num_particles, T_final, us, figs_axs, 0.)
+
     t = 0.
     it = 0
 
@@ -282,21 +302,6 @@ if __name__ == "__main__":
         # ------
         if it % 100 == 0:
 
-            for i_particle in range(num_particles):
-
-                u = us[i_particle]
-                V0, _ = u.function_space.sub(0).collapse()
-                c = dfx.fem.Function(V0)
-
-                fig, ax = figs_axs[i_particle]
-
-                color = (min(t, T_final) / T_final, 0, 0)
-
-                c_expr = dfx.fem.Expression(
-                    c_of_y(u.sub(0).collapse()),
-                    V0.element.interpolation_points())
-                c.interpolate(c_expr)
-
-                ax.plot(c.x.array[:], color=color)
+            plot_solution(num_particles, T_final, us, figs_axs, t)
 
     plt.show()
