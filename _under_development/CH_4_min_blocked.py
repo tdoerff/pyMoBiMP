@@ -142,7 +142,7 @@ if __name__ == "__main__":
 
     num_particles = 2
     T_final = 1.0
-    I_total = 0.
+    I_total = 0.1
 
     Ls = 1.e0 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
 
