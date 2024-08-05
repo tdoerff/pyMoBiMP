@@ -288,7 +288,10 @@ if __name__ == "__main__":
         u_err_max = max(u_err_maxs)
 
         # The new timestep size for the next timestep.
-        dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
+
+        increase = 1.001 if iterations < 50 else 1.0
+
+        dt.value = min(max(tol / u_err_max, dt_min), dt_max, increase * dt.value)
 
         log(
             f"[{t/T_final * 100:>3.0f}%] " +
