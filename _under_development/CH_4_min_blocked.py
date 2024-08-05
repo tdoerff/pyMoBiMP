@@ -256,6 +256,7 @@ if __name__ == "__main__":
     t = 0.
     it = 0
 
+    dt.value = 5e-9
     dt_min = 1e-9
     dt_max = 1e-3
     tol = 1e-5
