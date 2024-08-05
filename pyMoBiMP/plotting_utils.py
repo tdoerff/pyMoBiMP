@@ -1,5 +1,7 @@
 # file plotting_utils.py
 
+import colorcet as cc
+
 from collections.abc import Callable
 
 import dolfinx
@@ -8,6 +10,7 @@ import ipywidgets
 
 import math
 
+from matplotlib import colors as clrs
 from matplotlib import pyplot as plt
 
 import numpy as np
@@ -23,6 +26,11 @@ import scipy as sp
 from typing import List, Optional, Tuple
 
 from .fenicsx_utils import Fenicx1DOutput
+
+
+_fire = cc.cm.CET_L3
+graphite_colormap = clrs.ListedColormap(
+    _fire(np.linspace(0.15, 0.95, 101)), name='graphite')
 
 
 def add_arrow(line, position=None, direction="right", size=15, color=None):
@@ -148,6 +156,20 @@ def animate_time_series(output, c_of_y):
     )
 
 
+def prime_factors(n):
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return factors
+
+
 def assemble_plot_grid(num_particles: int):
     """Find an arrangement for closest to a square for a given number of particles.
 
@@ -162,11 +184,21 @@ def assemble_plot_grid(num_particles: int):
         Index mapping returning the plot coordinates for a given particle index.
     """
 
-    N = num_particles**0.5
+    primes = prime_factors(num_particles)
 
-    # Note that this construction ensures that Nx * Ny > num_particles.
-    Nx = math.floor(N)
-    Ny = math.ceil(N)
+    primes_0 = primes[::2]
+    primes_1 = primes[1::2]
+
+    Nx = np.prod(primes_0)
+    Ny = np.prod(primes_1)
+
+    if Ny > 2 * Nx:
+        Ny //= primes[0]
+        Nx *= primes[0]
+
+    elif Nx > 2 * Ny:
+        Nx //= primes[0]
+        Ny *= primes[0]
 
     # Anyhow, make sure that we have enough grid positions for all particles.
     # Round-off errors might cause situations where N**2 = num_particles - eps
@@ -204,6 +236,12 @@ class PyvistaAnimation:
         # --------------
         plotter_kwargs.update(specular=specular)
         self.plotter_kwargs = plotter_kwargs
+
+        if "cmap" not in self.plotter_kwargs.keys():
+            self.plotter_kwargs.update(cmap=graphite_colormap)
+
+        elif self.plotter_kwargs["cmap"] == "graphite":
+            self.plotter_kwargs.update(cmap=graphite_colormap)
 
         # get the data
         # ------------
@@ -366,7 +404,10 @@ class PyvistaAnimation:
 
             grids.append(grid)
 
-            self.plotter.add_mesh(grid, **self.plotter_kwargs)
+            actor = self.plotter.add_mesh(grid, **self.plotter_kwargs)
+
+            # actor.prop.interpolation = "pbr"
+            # actor.prop.metallic = .25
 
         return grids
 
