@@ -310,7 +310,8 @@ if __name__ == "__main__":
 
         # The new timestep size for the next timestep.
 
-        increase = 1.001 if iterations < 50 else 1.0
+        increase = 1.01 if iterations < 3 else \
+            1.001 if iterations < solver.max_it / 2 else 1.0
 
         dt.value = min(max(tol / u_err_max, dt_min), dt_max, increase * dt.value)
 
