@@ -33,6 +33,8 @@ from pyMoBiMP.fenicsx_utils import (
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     c_of_y,
+    populate_initial_data,
+    y_of_c,
     _free_energy,
 )
 
@@ -52,7 +54,7 @@ BlockNewtonSolver.SingleBlockNewtonSolver = SingleBlockNewtonSolver
 
 
 def free_energy(c):
-    return _free_energy(c, a=0., b=0., c=0)
+    return _free_energy(c)
 
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
@@ -142,8 +144,14 @@ if __name__ == "__main__":
     T_final = 1.0
     I_total = 0.
 
-    Ls = 1.e1 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
-    a_ratios = np.ones(num_particles) / num_particles
+    Ls = 1.e0 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
+
+    Rs = np.ones(num_particles)
+    As = 4 * np.pi * Rs
+
+    A = np.sum(As)
+
+    a_ratios = As / A
 
     L = sum(_a * _L for _a, _L in zip(a_ratios, Ls))
 
@@ -154,6 +162,8 @@ if __name__ == "__main__":
     mesh_filename = "Meshes/line_mesh.xdmf"
     with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
         mesh = file.read_mesh(name="Grid")
+
+    # mesh = dfx.mesh.create_unit_interval(comm, 16)
 
     dx_cell = get_mesh_spacing(mesh)
 
@@ -204,21 +214,24 @@ if __name__ == "__main__":
 
     # Set up initial data (crudely simplified)
     # ----------------------------------------
-    for u in u0s:
-        u.sub(0).x.array[:] = -6.
+    [populate_initial_data(u0, lambda x: 1e-3 * np.ones_like(x[0]),
+                           free_energy=free_energy, y_of_c=y_of_c) for u0 in u0s]
 
-    # Set first particle.
-    u0s[0].sub(0).x.array[:] = -5.5
+    populate_initial_data(u0, lambda x: 0.5 * np.ones_like(x[0]),
+                          free_energy=free_energy, y_of_c=y_of_c)
 
     # Problem and solver setup
     # ------------------------
     problem = BlockNonlinearProblem(Fs, us)
 
-    solver = BlockNewtonSolver(comm, problem, max_iterations=25, atol=1e-9)
+    # Note: It seems the accuracy of the solver has an impact on the
+    # stability of the solution.
+    # After a long round of debugging, this solved the issue!
+    solver = BlockNewtonSolver(comm, problem,
+                               max_iterations=25, rtol=1e-12, atol=1e-13)
 
     # # Do a single step to solve for mu. Since dt=0, we enforce us = u0s.
     its, success = solver.solve(us)
-
     assert success
 
     coords = ufl.SpatialCoordinate(mesh)
@@ -259,7 +272,7 @@ if __name__ == "__main__":
     dt.value = 5e-9
     dt_min = 1e-9
     dt_max = 1e-3
-    tol = 1e-5
+    tol = 1e-4
 
     while t < T_final:
 
@@ -311,7 +324,7 @@ if __name__ == "__main__":
 
         # The new timestep size for the next timestep.
 
-        increase = 1.01 if iterations < 3 else \
+        increase = 1.01 if iterations < solver.max_it / 3 else \
             1.001 if iterations < solver.max_it / 2 else 1.0
 
         dt.value = min(max(tol / u_err_max, dt_min), dt_max, increase * dt.value)

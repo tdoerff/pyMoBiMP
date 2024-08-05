@@ -336,6 +336,9 @@ class NewtonSolver():
 
         success = False
 
+        # Hold a copy of the incoming data.
+        self.ch_array_ini = ch.x.array.copy()
+
         for it in range(self.max_it):
 
             self.callback(self, ch)
@@ -395,6 +398,7 @@ class BlockNewtonSolver:
                  block_problem,
                  max_iterations=50,
                  rtol=1e-10,
+                 atol=1e-6,
                  convergence_criterion="incremental",
                  callback=lambda solver, uh: None):
 
@@ -404,11 +408,13 @@ class BlockNewtonSolver:
 
         self.max_it = max_iterations
         self.rtol = rtol
+        self.atol = atol
         self.convergence_criterion = convergence_criterion
         self.callback = callback
 
         self.block_solvers = [
-            NewtonSolver(comm, problem) for problem in self.problem.problems]
+            self.SingleBlockNewtonSolver(comm, problem)
+            for problem in self.problem.problems]
 
     def solve(self, chs):
 
@@ -416,9 +422,18 @@ class BlockNewtonSolver:
 
         dcs = [dfx.fem.Function(V) for V in Vs]
 
+        # Hold the initial value for debugging purposes
+        self.chs_ini = [ch.x.array.copy() for ch in chs]
+        self.chs_last = self.chs_ini
+
         success = False
 
-        for it in range(self.max_it):
+        alpha = 1.0
+        it = 0
+
+        while it < self.max_it and alpha > 1e-2:
+
+            it += 1
 
             correction_norm = 0.
             solution_norm = 0.
@@ -445,21 +460,29 @@ class BlockNewtonSolver:
 
                 dc.x.scatter_forward()
                 # Update u_{i+1} = u_i + delta u_i
-                ch.x.array[:] += dc.x.array
+                ch.x.array[:] += alpha * dc.x.array
 
                 # Compute norm of update
                 correction_norm += dc.vector.norm(0)
                 solution_norm += ch.vector.norm(0)
                 residual_norm += solver.L.norm(0)
 
+            tolerance = self.rtol * solution_norm + self.atol
+
+            self.errors = dict(increment_norm=correction_norm,
+                               residual_norm=residual_norm)
+
+            # Hold the result of the last successful iteration to reset.
+            self.chs_last = [ch.x.array.copy() for ch in chs]
+
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
-                if correction_norm < self.rtol * solution_norm:
+                if correction_norm < tolerance:
                     success = True
                     break
 
             elif self.convergence_criterion == "residual":
-                if residual_norm < self.rtol:
+                if residual_norm < tolerance:
                     success = True
                     break
 
