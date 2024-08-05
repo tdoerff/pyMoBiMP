@@ -344,13 +344,13 @@ class NewtonSolver():
             self.callback(self, ch)
 
             # Assemble RHS
-            self.setF(dc.vector)
+            self.setF(ch.vector)
 
             # Assemble the Jacobian
-            self.setJ(dc.vector)
+            self.setJ(ch.vector)
 
             # Finally update ghost values
-            self.set_form(dc.vector)
+            self.set_form(ch.vector)
 
             # Solve linear problem
             self.krylov_solver.solve(self.L, dc.vector)
@@ -444,13 +444,13 @@ class BlockNewtonSolver:
             for ch, dc, solver in zip(chs, dcs, self.block_solvers):
 
                 # Assemble RHS
-                solver.setF(dc.vector)
+                solver.setF(ch.vector)
 
                 # Assemble the Jacobian
-                solver.setJ(dc.vector)
+                solver.setJ(ch.vector)
 
                 # Finally update ghost values
-                solver.set_form(dc.vector)
+                solver.set_form(ch.vector)
 
                 # Solve linear problem
                 solver.krylov_solver.solve(solver.L, dc.vector)
