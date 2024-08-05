@@ -204,11 +204,11 @@ if __name__ == "__main__":
 
     # Set up initial data (crudely simplified)
     # ----------------------------------------
-    for u in us:
+    for u in u0s:
         u.sub(0).x.array[:] = -6.
 
     # Set first particle.
-    us[0].sub(0).x.array[:] = -5.5
+    u0s[0].sub(0).x.array[:] = -5.5
 
     # Problem and solver setup
     # ------------------------
@@ -216,7 +216,7 @@ if __name__ == "__main__":
 
     solver = BlockNewtonSolver(comm, problem, max_iterations=25, atol=1e-9)
 
-    # # Do a single step to solve for mu
+    # # Do a single step to solve for mu. Since dt=0, we enforce us = u0s.
     its, success = solver.solve(us)
 
     assert success
