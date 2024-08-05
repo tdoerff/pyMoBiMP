@@ -221,7 +221,8 @@ if __name__ == "__main__":
             i_ks[i_particle].value = \
                 -Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
 
-        assert np.isclose(sum([i.value for i in i_ks]),  I_total)
+        assert np.isclose(sum([a * i.value for a, i in
+                               zip(a_ratios, i_ks)]),  I_total)
 
     # attach to solver
     solver.callback = callback
