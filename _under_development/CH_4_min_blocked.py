@@ -228,7 +228,7 @@ if __name__ == "__main__":
     # stability of the solution.
     # After a long round of debugging, this solved the issue!
     solver = BlockNewtonSolver(comm, problem,
-                               max_iterations=25, rtol=1e-12, atol=1e-13)
+                               max_iterations=50, rtol=1e-12, atol=1e-13)
 
     # # Do a single step to solve for mu. Since dt=0, we enforce us = u0s.
     its, success = solver.solve(us)
