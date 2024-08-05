@@ -159,11 +159,11 @@ if __name__ == "__main__":
     # ---------------
     comm = MPI.COMM_SELF
 
-    mesh_filename = "Meshes/line_mesh.xdmf"
-    with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
-        mesh = file.read_mesh(name="Grid")
+    # mesh_filename = "Meshes/line_mesh.xdmf"
+    # with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
+    #     mesh = file.read_mesh(name="Grid")
 
-    # mesh = dfx.mesh.create_unit_interval(comm, 16)
+    mesh = dfx.mesh.create_unit_interval(comm, 16)
 
     dx_cell = get_mesh_spacing(mesh)
 
