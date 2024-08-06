@@ -416,6 +416,15 @@ class BlockNewtonSolver:
             self.SingleBlockNewtonSolver(comm, problem)
             for problem in self.problem.problems]
 
+    def line_search(self, L, A, ch, dc):
+        alpha = 1.0
+        c = 1e-4
+
+        # while norm_f_new > norm_f_old + c * norm_Jac_dot_p:
+        #     break
+
+        return alpha
+
     def solve(self, chs):
 
         Vs = [ch.function_space for ch in chs]
