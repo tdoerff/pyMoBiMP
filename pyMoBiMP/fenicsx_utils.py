@@ -433,9 +433,11 @@ class BlockNewtonSolver:
 
         dcs = [dfx.fem.Function(V) for V in Vs]
 
-        # Hold the initial value for debugging purposes
-        self.chs_ini = [ch.x.array.copy() for ch in chs]
-        self.chs_last = self.chs_ini
+        # Hold a copy of the initial values for debugging purposes
+        self.chs_ini = [ch.copy() for ch in chs]
+
+        # Refence to the last solution array.
+        chs_last = self.chs_ini
 
         success = False
 
@@ -457,6 +459,7 @@ class BlockNewtonSolver:
                 # retrieve the structures belonging the the current block
                 solver = self.block_solvers[i_block]
                 ch = chs[i_block]
+                ch_last = chs_last[i_block]
                 dc = dcs[i_block]
 
                 # Assemble RHS
@@ -471,17 +474,25 @@ class BlockNewtonSolver:
                 # Solve linear problem
                 solver.krylov_solver.solve(solver.L, dc.vector)
 
-                if np.isnan(correction_norm) or np.isinf(correction_norm):
-                    raise RuntimeError("NaNs in NewtonSolver!")
-
                 dc.x.scatter_forward()
-                # Update u_{i+1} = u_i + delta u_i
-                ch.x.array[:] += alpha * dc.x.array
 
                 # Compute norm of update
                 correction_norm += dc.vector.norm(0)
                 solution_norm += ch.vector.norm(0)
                 residual_norm += solver.L.norm(0)
+
+                # Check now whether something went wrong and raise error
+                if np.isnan(correction_norm) or np.isinf(correction_norm):
+                    raise RuntimeError("NaNs in NewtonSolver!")
+
+                alpha = self.line_search(solver, ch, ch_last, dc)
+                # Update u_{i+1} = u_i + delta u_i
+                ch.x.array[:] = ch_last.x.array + alpha * dc.x.array
+
+            dfx.log.log(dfx.log.LogLevel.INFO,
+                        f"It = {it:>3}: " +
+                        f"L = {residual_norm:1.3e} ; " +
+                        f"dc = {correction_norm:1.3e}")
 
             tolerance = self.rtol * solution_norm + self.atol
 
@@ -489,7 +500,7 @@ class BlockNewtonSolver:
                                residual_norm=residual_norm)
 
             # Hold the result of the last successful iteration to reset.
-            self.chs_last = [ch.x.array.copy() for ch in chs]
+            chs_last = [ch.copy() for ch in chs]
 
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
