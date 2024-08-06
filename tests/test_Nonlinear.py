@@ -221,7 +221,8 @@ def test_nonlinear_block_algebraic():
 
     us, block_problem, u_exact = NonlinearBlockProblemCreation_algebraic()
 
-    solver = BlockNewtonSolver(comm, block_problem, convergence_criterion="residual")
+    solver = BlockNewtonSolver(comm, block_problem,
+                               convergence_criterion="residual", atol=1e-10, rtol=0)
 
     solver.solve(us)
 
