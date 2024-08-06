@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # Simulation setup
     # ----------------
 
-    num_particles = 48
+    num_particles = 4
     T_final = 1.0
     I_total = 0.1
 
@@ -158,6 +158,8 @@ if __name__ == "__main__":
     # Set up the mesh
     # ---------------
     comm = MPI.COMM_SELF
+
+    dfx.log.set_log_level(dfx.log.LogLevel.INFO)
 
     # mesh_filename = "Meshes/line_mesh.xdmf"
     # with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
@@ -325,7 +327,7 @@ if __name__ == "__main__":
         # The new timestep size for the next timestep.
 
         increase = 1.01 if iterations < solver.max_it / 3 else \
-            1.00 if iterations < solver.max_it / 2 else \
+            1.001 if iterations < solver.max_it / 2 else \
             0.95 if iterations > solver.max_it * 0.8 else \
             1.0
 
