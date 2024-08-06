@@ -416,12 +416,51 @@ class BlockNewtonSolver:
             self.SingleBlockNewtonSolver(comm, problem)
             for problem in self.problem.problems]
 
-    def line_search(self, L, A, ch, dc):
-        alpha = 1.0
+    def line_search(self, solver, ch, ch_last, dc):
+        alpha = 1.
+        beta = 0.5
         c = 1e-4
 
-        # while norm_f_new > norm_f_old + c * norm_Jac_dot_p:
-        #     break
+        return alpha
+
+        # Reference norm for the line search
+        norm_res_old = solver.L.norm()
+
+        solution_norm = ch.vector.norm()
+
+        # Compute composite tolerance
+        tolerance = self.rtol * solution_norm + self.atol
+
+        while alpha > tolerance:
+
+            ch.x.array[:] = ch_last.x.array
+            ch.vector.axpy(alpha, dc.vector)
+
+            solver.setF(ch.vector)
+
+            norm_res_new = solver.L.norm()
+
+            reduction = norm_res_new / norm_res_old
+
+            dfx.log.log(
+                dfx.log.LogLevel.INFO,
+                f"alpha = {alpha:1.3e}, " +
+                f"norm = {norm_res_new:1.3e}, " +
+                f"reduct = {reduction:1.3e}")
+
+            # We need a tolerance here, otherwise a solution close to machine
+            if norm_res_new < norm_res_old + tolerance:
+
+                dfx.log.log(
+                    dfx.log.LogLevel.INFO,
+                    f"Line Search: Accepted step with alpha={alpha}, " +
+                    f"reduction={reduction}")
+                break
+            else:
+                alpha *= beta
+
+        if alpha < tolerance:
+            raise RuntimeError("Line search failed to find a suitable step size.")
 
         return alpha
 
