@@ -427,6 +427,8 @@ class BlockNewtonSolver:
 
     def solve(self, chs):
 
+        num_blocks = len(chs)
+
         Vs = [ch.function_space for ch in chs]
 
         dcs = [dfx.fem.Function(V) for V in Vs]
@@ -450,7 +452,12 @@ class BlockNewtonSolver:
 
             self.callback(self, chs)
 
-            for ch, dc, solver in zip(chs, dcs, self.block_solvers):
+            for i_block in range(num_blocks):
+
+                # retrieve the structures belonging the the current block
+                solver = self.block_solvers[i_block]
+                ch = chs[i_block]
+                dc = dcs[i_block]
 
                 # Assemble RHS
                 solver.setF(ch.vector)
