@@ -819,6 +819,7 @@ class MultiParticleSimulation():
                  n_out=501,
                  C_rate=0.01,
                  M=lambda c: c * (1 - c),
+                 L_mean=1.0e1,
                  gamma=0.1,
                  c_of_y=c_of_y,
                  t_pause=0.,
@@ -879,7 +880,7 @@ class MultiParticleSimulation():
 
         As = 4 * np.pi * Rs
 
-        Ls = 1.e1 * (1 + 0.1 * (2 * np.random.random(num_particles) - 1))
+        Ls = L_mean * (1 + 0.1 * (2 * np.random.random(num_particles) - 1))
 
         I_charges = compute_particle_current_densities(
             mu_theta, As, Ls, I_charge
