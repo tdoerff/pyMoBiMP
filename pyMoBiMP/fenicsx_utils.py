@@ -65,7 +65,7 @@ def time_stepping(
     dt_min=1e-9,
     dt_increase=1.1,
     tol=1e-6,
-    event_handler=lambda t, u, **pars: None,
+    event_handler=lambda t, **pars: None,
     output=None,
     runtime_analysis=None,
     logging=True,
