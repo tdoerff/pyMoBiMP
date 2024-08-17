@@ -826,6 +826,11 @@ class MultiParticleSimulation():
                  t_pause=0.,
                  comm=MPI.COMM_WORLD):
 
+        # Numerical setup
+        # ---------------
+
+        self.comm = comm
+
         self.mesh = mesh
         self.C_rate = C_rate
 
