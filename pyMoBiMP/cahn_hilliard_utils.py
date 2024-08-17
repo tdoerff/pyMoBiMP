@@ -856,6 +856,9 @@ class MultiParticleSimulation():
         # charging current
         I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
 
+        # Invoke the experiment
+        self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
+
         T_final = self.T_final
 
         # %%
@@ -948,9 +951,6 @@ class MultiParticleSimulation():
             filename=rt_filename,
             num_particles=num_particles,
         )
-
-        # Set up the experiment
-        self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
 
         # Finalize with some variables that need to be attached to the class instance.
         self.u = u
