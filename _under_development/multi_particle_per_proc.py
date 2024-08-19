@@ -9,11 +9,19 @@ import numpy as np
 
 import os
 
+import ufl
+
 from pyMoBiMP.cahn_hilliard_utils import (
     MultiParticleSimulation as SimulationBase,
 )
 
 from pyMoBiMP.fenicsx_utils import StopEvent
+
+
+def log(*msg, comm=MPI.COMM_WORLD, cond=True):
+
+    if cond:
+        print(f"LOG [{comm.rank}]: ", *msg, flush=True)
 
 
 class Simulation(SimulationBase):
@@ -23,6 +31,11 @@ class Simulation(SimulationBase):
         self.logging = logging
 
         super().__init__(*args, **kwargs)
+
+        self.I_battery = dfx.fem.Constant(mesh, 0.1)
+
+        # Invoke the experiment
+        self.experiment = self.Experiment(self.u, self.I_battery, c_of_y=self.c_of_y)
 
     def run(self,
             dt_max=1e-1,
@@ -47,86 +60,153 @@ class Simulation(SimulationBase):
 
         it = 0
 
+        ### DIRTY HACK HERE, sort in later!
+        # ---------------------------------
+
+        # Set up face measure at r=1
+        fdim = self.mesh.topology.dim - 1
+        facets = dfx.mesh.locate_entities(
+            self.mesh, fdim, lambda x: np.isclose(x[0], 1.))
+        facet_markers = np.full_like(facets, 1)
+
+        facet_tag = dfx.mesh.meshtags(self.mesh, fdim, facets, facet_markers)
+
+        dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
+
+        A_p = sum(self.As)
+        aas = self.As / A_p
+
+        # The total particle surface across all cells
+        A = self.comm.allreduce(A_p, op=MPI.SUM)
+
+        # Ratio between cell surface and total surface
+        a_p = A_p / A
+
+        L_p = sum(aas * self.Ls)
+
+        L = self.comm.allreduce(L_p * a_p)
+
+        mus = self.u.sub(1).split()
+
+        V_p_OCP_form_ufl = - 1 / L_p * sum(
+            [L_ * a_ * mu_ * dA for L_, a_, mu_ in zip(self.Ls, aas, mus)])
+
+        V_p_OCP_form = dfx.fem.form(V_p_OCP_form_ufl)
+
         while t < self.T_final:
 
             it += 1
 
-            if self.rt_analysis is not None:
-                self.rt_analysis.analyze(t)
+            # if self.rt_analysis is not None:
+            #     self.rt_analysis.analyze(t)
 
-            try:
-                self.u.x.scatter_forward()
-                self.u0.x.array[:] = self.u.x.array[:]
-                self.u0.x.scatter_forward()
+            self.u.x.scatter_forward()
+            self.u0.x.array[:] = self.u.x.array[:]
+            self.u0.x.scatter_forward()
 
-                if self.rt_analysis is not None:
-                    voltage = self.rt_analysis.data[-1][-1]
-                else:
-                    voltage = 0.
+            tol = 1e-6
+            voltage_err = 1e99
+            voltage_old = 0.
+            it_voltage = 0
+            max_it_voltage = 100
+
+            iterations = 0  # counter for the inner iterations
+
+            while (voltage_err > tol) and (it_voltage < max_it_voltage):
+
+                it_voltage += 1
+
+                # Compute cell and battery voltage
+                # --------------------------------
+
+                # cell open circuit voltage
+                V_p_OCP = dfx.fem.assemble_scalar(V_p_OCP_form)
+
+                # Global OCP across all cells
+                V_OCP = self.comm.allreduce(a_p * L_p * V_p_OCP) / L
+
+                # global voltage
+                voltage = V_OCP - self.I_battery.value / L
+
+                voltage_inc = abs(voltage - voltage_old)
+                voltage_old = voltage
+
+                # Update the cell current according to global voltage
+                self.I_charge.value = L_p * (V_p_OCP - voltage)
 
                 stop = self.experiment(t, cell_voltage=voltage)
 
                 if stop:
                     break
 
-                if float(dt) < dt_min:
+                try:
+                    if float(dt) < dt_min:
 
-                    raise ValueError(f"Timestep too small (dt={dt.value})!")
+                        raise ValueError(f"Timestep too small (dt={dt.value})!")
 
-                iterations, success = self.solver.solve(self.u)
+                    try:
+                        it_k, success = self.solver.solve(self.u)
+                    except Exception as e:
+                        log(e)
+                        it_k = 9999
 
-                if not success:
-                    raise RuntimeError("Newton solver did not converge.")
-                else:
-                    iterations = MPI.COMM_WORLD.allreduce(iterations, op=MPI.MAX)
+                    self.comm.barrier()
+                    # log("Hit barrier")
 
-                # Adaptive timestepping a la Yibao Li et al. (2017)
-                # TODO: Timestepping through free energy
-                u_max_loc = np.abs(self.u.sub(0).x.array -
-                                   self.u0.sub(0).x.array).max()
+                    iterations = max(it_k, iterations)
 
-                u_err_max = self.comm.allreduce(u_max_loc, op=MPI.MAX)
+                    if not success:
+                        raise RuntimeError("Newton solver did not converge.")
+                    else:
+                        iterations = MPI.COMM_WORLD.allreduce(
+                            iterations, op=MPI.MAX)
 
-                dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
+                    # Adaptive timestepping a la Yibao Li et al. (2017)
+                    # TODO: Timestepping through free energy
+                    u_max_loc = np.abs(self.u.sub(0).x.array -
+                                       self.u0.sub(0).x.array).max()
 
-                # callback(it, t, self.u)
+                    u_err_max = self.comm.allreduce(u_max_loc, op=MPI.MAX)
 
-            except StopEvent as e:
+                    dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.1 * dt.value)
 
-                print(e)
-                print(">>> Stop integration.")
+                    # callback(it, t, self.u)
 
-                break
+                except StopEvent as e:
 
-            except RuntimeError as e:
+                    print(e)
+                    print(">>> Stop integration.")
 
-                print(e)
+                    break
 
-                # reset and continue with smaller time step.
-                self.u.x.array[:] = self.u0.x.array[:]
+                except RuntimeError as e:
 
-                iterations = self.solver.max_iterations
+                    print(e)
 
-                if dt.value > dt_min:
-                    dt.value *= 0.5
+                    # reset and continue with smaller time step.
+                    self.u.x.array[:] = self.u0.x.array[:]
 
-                    print(f"Decrease timestep to dt={dt.value:1.3e}")
+                    iterations = self.solver.max_iterations
 
-                    continue
+                    if dt.value > dt_min:
+                        dt.value *= 0.5
 
-                else:
+                        print(f"Decrease timestep to dt={dt.value:1.3e}")
+
+                        continue
+                    else:
+                        if self.output is not None:
+                            [o.save_snapshot(self.u, t) for o in self.output]
+
+                except ValueError as e:
+
+                    print(e)
+
                     if self.output is not None:
+                        [o.save_snapshot(self.u, t, force=True)
+                         for o in self.output]
 
-                        [o.save_snapshot(self.u, t) for o in self.output]
-
-            except ValueError as e:
-
-                print(e)
-
-                if self.output is not None:
-                    [o.save_snapshot(self.u, t, force=True) for o in self.output]
-
-                break
+                    break
 
             # Find the minimum timestep among all processes.
             # Note that we explicitly use COMM_WORLD since the mesh communicator
@@ -149,6 +229,8 @@ class Simulation(SimulationBase):
                         f"t[{it:06}] = {t:1.6f}, "
                         f"dt = {dt.value:1.3e}, "
                         f"its = {iterations}",
+                        f"its_voltage = {it_voltage}",
+                        f"voltage_inc = {voltage_inc}",
                         flush=True
                     )
 
