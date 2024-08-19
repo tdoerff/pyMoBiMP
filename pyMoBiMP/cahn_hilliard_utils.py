@@ -854,7 +854,7 @@ class MultiParticleSimulation():
         self.c_of_y = c_of_y
 
         # charging current
-        I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
+        self.I_charge = I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
 
         # Invoke the experiment
         self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
@@ -887,9 +887,10 @@ class MultiParticleSimulation():
         # particle parameters
         Rs = np.ones(num_particles)
 
-        As = 4 * np.pi * Rs
+        As = self.As = 4 * np.pi * Rs
 
-        Ls = L_mean * (1 + L_var_rel * (2 * np.random.random(num_particles) - 1))
+        Ls = self.Ls = L_mean * (
+            1 + L_var_rel * (2 * np.random.random(num_particles) - 1))
 
         I_charges = compute_particle_current_densities(
             mu_theta, As, Ls, I_charge
