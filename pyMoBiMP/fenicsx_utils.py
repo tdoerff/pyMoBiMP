@@ -145,7 +145,7 @@ def time_stepping(
             # reset and continue with smaller time step.
             u.x.array[:] = u0.x.array[:]
 
-            iterations = solver.max_iterations
+            iterations = solver.max_it
 
             if dt.value > dt_min:
                 dt.value *= 0.5
@@ -233,7 +233,7 @@ class NewtonSolver():
         self.A = dfx.fem.petsc.create_matrix(problem.a)
         self.L = dfx.fem.petsc.create_vector(problem.L)
 
-        self.max_iterations = max_iterations
+        self.max_it = max_iterations
         self.tol = tol
 
         self.callback = callback
@@ -250,7 +250,7 @@ class NewtonSolver():
 
         success = False
 
-        for it in range(self.max_iterations):
+        for it in range(self.max_it):
 
             self.callback(self, ch)
 
