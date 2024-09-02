@@ -15,6 +15,28 @@ from pyMoBiMP.fenicsx_utils import NonlinearProblem
 from pyMoBiMP.fenicsx_utils import NewtonSolver
 from pyMoBiMP.fenicsx_utils import time_stepping
 
+# %% Helper functions
+# ===================
+
+
+def plot_solution_on_grid(u):
+
+    V = u.function_space
+
+    topology, cell_types, x = dfx.plot.vtk_mesh(V)
+    grid = pv.UnstructuredGrid(topology, cell_types, x)
+
+    grid['u'] = u.x.array
+
+    plotter = pv.Plotter()
+
+    warped = grid.warp_by_scalar('u')
+
+    plotter.add_mesh(warped, show_edges=True, show_vertices=False, )
+    plotter.add_axes()
+
+    plotter.show()
+
 
 # %% Grid setup
 # =============
@@ -29,7 +51,11 @@ particle_grid = np.linspace(0, 1, n_part)
 rr, pp = np.meshgrid(radial_grid, particle_grid)
 
 coords_grid = np.stack((rr, pp)).transpose((-1, 1, 0)).copy()
-coords_grid_flat = coords_grid.reshape(-1, 2).copy()
+
+if comm.rank == 0:
+    coords_grid_flat = coords_grid.reshape(-1, 2).copy()
+else:
+    coords_grid_flat = np.empty((0, 2), dtype=np.float64)
 
 # Elements
 # --------
@@ -45,7 +71,10 @@ elements_radial = np.array(elements_radial).reshape(-1, 2)
 elements_bc = (n_rad - 1) * n_part + np.array([[k, k + 1] for k in range(n_part - 1)])
 elements_bc = []  # With elements at the outer edge the integration fails.
 
-elements = np.array(list(elements_bc) + list(elements_radial))
+if comm.rank == 0:
+    elements = np.array(list(elements_bc) + list(elements_radial))
+else:
+    elements = np.empty((0, 2), dtype=np.int64)
 
 # %% The DOLFINx grid
 # -------------------
@@ -129,6 +158,7 @@ def callback(solver, u):
     OCP.interpolate(OCP_expr)
 
     V_cell = dfx.fem.assemble_scalar(V_cell_form)
+    V_cell = comm.allreduce(V_cell)  # op=MPI.SUM is default
 
     mu = u.sub(1).collapse()
 
@@ -185,29 +215,6 @@ residual = dfx.fem.form(F)
 
 problem = NonlinearProblem(F, u)
 solver = NewtonSolver(comm, problem, callback=callback)
-
-# %% Helper functions
-# ===================
-
-
-def plot_solution_on_grid(u):
-
-    V = u.function_space
-
-    topology, cell_types, x = dfx.plot.vtk_mesh(V)
-    grid = pv.UnstructuredGrid(topology, cell_types, x)
-
-    grid['u'] = u.x.array
-
-    plotter = pv.Plotter()
-
-    warped = grid.warp_by_scalar('u')
-
-    plotter.add_mesh(warped, show_edges=True, show_vertices=False, )
-    plotter.add_axes()
-
-    plotter.show()
-
 
 # %% Initial data
 # ===============
