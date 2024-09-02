@@ -1,4 +1,6 @@
 import dolfinx as dfx
+from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
+from dolfinx.nls.petsc import NewtonSolver
 
 from mpi4py.MPI import COMM_WORLD as comm
 
@@ -11,8 +13,6 @@ import ufl
 from pyMoBiMP.cahn_hilliard_utils import (
     c_of_y, compute_chemical_potential, _free_energy as free_energy)
 
-from pyMoBiMP.fenicsx_utils import NonlinearProblem
-from pyMoBiMP.fenicsx_utils import NewtonSolver
 from pyMoBiMP.fenicsx_utils import time_stepping
 
 # %% Helper functions
@@ -153,7 +153,7 @@ OCP_expr = dfx.fem.Expression(- Ls / L * a_ratios * mu,
 V_cell_form = dfx.fem.form(- (I_global / L - OCP) * dA_R)
 
 
-def callback(solver, u):
+def callback():
 
     OCP.interpolate(OCP_expr)
 
@@ -163,6 +163,14 @@ def callback(solver, u):
     mu = u.sub(1).collapse()
 
     I_particle.x.array[:] = - Ls.x.array * (mu.x.array + V_cell)
+
+
+# With this dirty hack we make sure the voltage is updated
+# per iteration within the Newton solver
+class NonlinearProblem(NonlinearProblemBase):
+    def form(self, x):
+        callback()
+        super().form(x)
 
 
 theta = 1.0
@@ -214,7 +222,7 @@ residual = dfx.fem.form(F)
 # ===================================
 
 problem = NonlinearProblem(F, u)
-solver = NewtonSolver(comm, problem, callback=callback)
+solver = NewtonSolver(comm, problem)
 
 # %% Initial data
 # ===============
