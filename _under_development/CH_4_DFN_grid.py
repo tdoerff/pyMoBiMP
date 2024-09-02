@@ -11,9 +11,13 @@ import pyvista as pv
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
-    c_of_y, compute_chemical_potential, _free_energy as free_energy)
+    c_of_y,
+    compute_chemical_potential,
+    _free_energy as free_energy)
 
-from pyMoBiMP.fenicsx_utils import time_stepping
+from pyMoBiMP.fenicsx_utils import (
+    RuntimeAnalysisBase,
+    time_stepping)
 
 # %% Helper functions
 # ===================
@@ -36,6 +40,59 @@ def plot_solution_on_grid(u):
     plotter.add_axes()
 
     plotter.show()
+
+
+class AnalyzeOCP(RuntimeAnalysisBase):
+    def setup(self, u_state, c_of_y, I_global, Ls, a_ratios, *args, **kwargs):
+        super().setup(u_state, *args, **kwargs)
+
+        # Function space(s) and mesh information
+        V = self.u_state.function_space
+        mesh = V.mesh
+
+        V0, _ = V.sub(0).collapse()
+
+        coords = ufl.SpatialCoordinate(mesh)
+        r = coords[0]
+
+        # Create integral measure on the particle surface
+        fdim = mesh.topology.dim - 1
+
+        facets = dfx.mesh.locate_entities(mesh, fdim, lambda x: np.isclose(x[0], 1.))
+
+        facet_markers = np.full_like(facets, 1)
+
+        facet_tag = dfx.mesh.meshtags(mesh, fdim, facets, facet_markers)
+
+        dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
+        dA_R = dA(1)
+
+        # particle parameters
+        L_ufl = a_ratios * Ls * dA
+        L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))  # weighted reaction affinity
+
+        y, mu = self.u_state.split()
+
+        # compute state of charge
+        c = c_of_y(y)
+
+        self.soc_form = dfx.fem.form(3 * c * r**2 * ufl.dx)
+
+        # Compute cell potential
+        OCP = dfx.fem.Function(V0)
+
+        OCP = - Ls / L * a_ratios * mu
+
+        self.V_cell_form = dfx.fem.form(- (I_global / L - OCP) * dA_R)
+
+    def analyze(self, t):
+
+        soc = dfx.fem.assemble_scalar(self.soc_form)
+        V_cell = dfx.fem.assemble_scalar(self.V_cell_form)
+
+        self.data.append([soc, V_cell])
+
+        return super().analyze(t)
 
 
 # %% Grid setup
@@ -224,6 +281,11 @@ residual = dfx.fem.form(F)
 problem = NonlinearProblem(F, u)
 solver = NewtonSolver(comm, problem)
 
+# %% Runtime analysis and output
+# ==============================
+
+rt_analysis = AnalyzeOCP(u, c_of_y, I_global, Ls, a_ratios, filename="CH_4_DFN_rt.txt")
+
 # %% Initial data
 # ===============
 u0.sub(0).x.array[:] = -6  # This corresponds to roughly c = 1e-3
@@ -255,6 +317,7 @@ if __name__ == "__main__":
         dt_min=dt_min,
         dt_increase=1.01,
         tol=tol,
+        runtime_analysis=rt_analysis,
     )
 
     y = u.sub(0)
