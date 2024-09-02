@@ -533,7 +533,7 @@ class Fenicx1DOutput(OutputBase):
 
 class RuntimeAnalysisBase(abc.ABC):
 
-    def __init__(self, u_state, *args, **kwargs):
+    def __init__(self, u_state, *args, filename=None, **kwargs):
 
         # Attach the Function object
         self.u_state = u_state
@@ -542,7 +542,7 @@ class RuntimeAnalysisBase(abc.ABC):
         self.t = []
         self.data = []
 
-        self.filename = None
+        self.filename = filename
 
         self.setup(u_state, *args, **kwargs)
 
