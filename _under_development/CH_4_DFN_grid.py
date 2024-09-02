@@ -298,8 +298,10 @@ if __name__ == "__main__":
 
     dt.value = 1e-8
 
-    T_final = 1.0
+    T_final = 25.0
     tol = 1e-4
+
+    I_global.value = 0.01
 
     u.x.scatter_forward()
     u0.x.scatter_forward()
