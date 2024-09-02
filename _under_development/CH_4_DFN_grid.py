@@ -40,8 +40,8 @@ def plot_solution_on_grid(u):
 
 # %% Grid setup
 # =============
-n_rad = 64
-n_part = 12
+n_rad = 16
+n_part = 96
 
 # Nodes
 # -----
