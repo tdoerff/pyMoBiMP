@@ -206,7 +206,7 @@ flux = M(c) * mu_theta.dx(0)
 
 F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_mu * dx
 F1 += s_V * flux * v_mu.dx(0) * dt * dx
-F1 -= I_particle * v_mu * dt * dA_R
+F1 -= I_particle * s_A * v_mu * dt * dA_R
 
 F2 = s_V * mu * v_c * dx
 F2 -= s_V * mu_chem * v_c * dx
