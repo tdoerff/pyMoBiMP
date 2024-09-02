@@ -1,8 +1,4 @@
-import basix
-
 import dolfinx as dfx
-
-import matplotlib.pyplot as plt
 
 from mpi4py.MPI import COMM_WORLD as comm
 
