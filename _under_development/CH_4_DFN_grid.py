@@ -222,6 +222,7 @@ def callback():
     mu = u.sub(1).collapse()
 
     I_particle.x.array[:] = - Ls.x.array * (mu.x.array + V_cell)
+    I_particle.x.scatter_forward()
 
 
 # With this dirty hack we make sure the voltage is updated
