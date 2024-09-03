@@ -171,6 +171,7 @@ dA_R = dA(1)
 # particle parameters
 Rs = dfx.fem.Function(V0)
 Rs.x.array[:] = 1.
+Rs.x.scatter_forward()
 
 As = 4 * np.pi * Rs**2
 
