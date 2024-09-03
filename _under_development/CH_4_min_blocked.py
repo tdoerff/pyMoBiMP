@@ -12,12 +12,7 @@ Open issues:
 [ ] implicit boundary condition?
 """
 
-import basix
-
-import dolfinx
 import dolfinx as dfx
-from dolfinx.fem.petsc import NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver as NewtonSolverBase
 
 from matplotlib import pyplot as plt
 
@@ -27,36 +22,39 @@ import numpy as np
 
 import os
 
-import petsc4py
-
-import petsc4py.PETSc
 import ufl
 
-from pyMoBiMP.fenicsx_utils import get_mesh_spacing, RuntimeAnalysisBase
+from pyMoBiMP.fenicsx_utils import (
+    BlockNewtonSolver as BlockNewtonSolver,
+    NewtonSolver as SingleBlockNewtonSolverBase,
+    BlockNonlinearProblem,
+    get_mesh_spacing,
+    RuntimeAnalysisBase)
 from pyMoBiMP.cahn_hilliard_utils import (
     cahn_hilliard_form,
     c_of_y,
-    _free_energy as free_energy,
+    populate_initial_data,
+    y_of_c,
+    _free_energy,
 )
 
 
-class NewtonSolver(NewtonSolverBase):
-    def __init__(self, comm: MPI.Intracomm, problem: NonlinearProblem):
-        super().__init__(comm, problem)
+class SingleBlockNewtonSolver(SingleBlockNewtonSolverBase):
 
-        # solver.krylov_solver.setType(PETSc.KSP.Type.PREONLY)
-        # solver.krylov_solver.getPC().setType(PETSc.PC.Type.LU)
-        ksp = self.krylov_solver
-        opts = petsc4py.PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"  # TODO: direct solver! UMFPACK
-        opts[f"{option_prefix}pc_type"] = "lu"
-        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-        ksp.setFromOptions()
+    def krylov_solver_setup(self):
+        ksp = self.ksp
+        ksp.setType("gmres")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("mumps")
+        ksp.getPC().setFactorSetUpSolverType()
+        ksp.getPC().setFactorSetUpSolverType()
 
-        self.max_it = 10
-        self.rtol = 1e-3
-        self.convergence_criterion = "incremental"
+
+BlockNewtonSolver.SingleBlockNewtonSolver = SingleBlockNewtonSolver
+
+
+def free_energy(c):
+    return _free_energy(c)
 
 
 class AnalyzeCellPotential(RuntimeAnalysisBase):
@@ -90,7 +88,11 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
 
 def compute_cell_voltage(
-    I_total: float, L: float, mu_bcs: float, Ls: list[float], a_ratios: list[float]
+    I_total: float,
+    L: float,
+    mu_bcs: list[float],
+    Ls: list[float],
+    a_ratios: list[float],
 ):
 
     weighted_particle_potentials = [
@@ -115,17 +117,41 @@ def warn(*msg):
     print("WARNING: ", *msg, flush=True)
 
 
+def plot_solution(num_particles, T_final, us, figs_axs, t):
+    for i_particle in range(num_particles):
+        u = us[i_particle]
+        V0, _ = u.function_space.sub(0).collapse()
+        c = dfx.fem.Function(V0)
+
+        fig, ax = figs_axs[i_particle]
+
+        color = (min(t, T_final) / T_final, 0, 0)
+
+        c_expr = dfx.fem.Expression(
+                    c_of_y(u.sub(0).collapse()),
+                    V0.element.interpolation_points())
+        c.interpolate(c_expr)
+
+        ax.plot(c.x.array[:], color=color)
+
+
 if __name__ == "__main__":
 
     # Simulation setup
     # ----------------
 
-    num_particles = 2
+    num_particles = 4
     T_final = 1.0
     I_total = 0.1
 
-    Ls = 1.e1 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
-    a_ratios = np.ones(num_particles) / num_particles
+    Ls = 1.e0 * (1. + 0.1 * (2. * np.random.random(num_particles) - 1.))
+
+    Rs = np.ones(num_particles)
+    As = 4 * np.pi * Rs
+
+    A = np.sum(As)
+
+    a_ratios = As / A
 
     L = sum(_a * _L for _a, _L in zip(a_ratios, Ls))
 
@@ -133,9 +159,13 @@ if __name__ == "__main__":
     # ---------------
     comm = MPI.COMM_SELF
 
-    n_elem = 32
-    mesh = dfx.mesh.create_unit_interval(comm, n_elem)
-    print("create mesh.")
+    dfx.log.set_log_level(dfx.log.LogLevel.INFO)
+
+    # mesh_filename = "Meshes/line_mesh.xdmf"
+    # with dfx.io.XDMFFile(comm, mesh_filename, 'r') as file:
+    #     mesh = file.read_mesh(name="Grid")
+
+    mesh = dfx.mesh.create_unit_interval(comm, 16)
 
     dx_cell = get_mesh_spacing(mesh)
 
@@ -144,7 +174,7 @@ if __name__ == "__main__":
     # Set up function space
     # ---------------------
 
-    elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
+    elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
     elem_c, elem_mu = elem1, elem1
 
     # TODO: Is just one space enough?
@@ -153,7 +183,7 @@ if __name__ == "__main__":
     # Set up individual particle forms
     # --------------------------------
 
-    dt = dfx.fem.Constant(mesh, 1e-9)
+    dt = dfx.fem.Constant(mesh, 0.)
 
     i_ks = [dfx.fem.Constant(mesh, 0.0) for _ in range(num_particles)]
 
@@ -186,17 +216,25 @@ if __name__ == "__main__":
 
     # Set up initial data (crudely simplified)
     # ----------------------------------------
-    for u in u0s:
-        u.sub(0).x.array[:] = -6.
+    [populate_initial_data(u0, lambda x: 1e-3 * np.ones_like(x[0]),
+                           free_energy=free_energy, y_of_c=y_of_c) for u0 in u0s]
+
+    populate_initial_data(u0, lambda x: 0.5 * np.ones_like(x[0]),
+                          free_energy=free_energy, y_of_c=y_of_c)
 
     # Problem and solver setup
     # ------------------------
-    problems = [NonlinearProblem(F, u) for F, u in zip(Fs, us)]
+    problem = BlockNonlinearProblem(Fs, us)
 
-    solvers = [NewtonSolver(comm, problem) for problem in problems]
+    # Note: It seems the accuracy of the solver has an impact on the
+    # stability of the solution.
+    # After a long round of debugging, this solved the issue!
+    solver = BlockNewtonSolver(comm, problem,
+                               max_iterations=50, rtol=1e-12, atol=1e-13)
 
-    # Do a single step to solve for mu
-    [solver.solve(u) for solver, u in zip(solvers, us)]
+    # # Do a single step to solve for mu. Since dt=0, we enforce us = u0s.
+    its, success = solver.solve(us)
+    assert success
 
     coords = ufl.SpatialCoordinate(mesh)
     r2 = ufl.dot(coords, coords)
@@ -205,22 +243,47 @@ if __name__ == "__main__":
 
     q_forms = [dfx.fem.form(3 * c_of_y(u.sub(0)) * r2 * ufl.dx) for u in us]
 
+    def callback(solver, us):
+
+        mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form)
+                  for mu_bc_form in mu_bc_forms]
+
+        cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
+
+        # update particle currents
+        for i_particle, _ in enumerate(us):
+            i_ks[i_particle].value = \
+                -Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
+
+        assert np.isclose(sum([a * i.value for a, i in
+                               zip(a_ratios, i_ks)]),  I_total)
+
+    # attach to solver
+    solver.callback = callback
+
     filename = os.path.dirname(os.path.abspath(__file__)) + "/rt.txt"
     rt_analysis = AnalyzeCellPotential(us, filename=filename)
 
     figs_axs = [plt.subplots() for _ in range(num_particles)]
 
+    plot_solution(num_particles, T_final, us, figs_axs, 0.)
+
     t = 0.
     it = 0
 
+    dt.value = 5e-9
     dt_min = 1e-9
     dt_max = 1e-3
-    tol = 1e-5
+    tol = 1e-4
 
     while t < T_final:
 
         if dt.value < dt_min:
-            raise RuntimeError(f"Timestep too small! (dt={dt.value:1.3e})")
+            warn(f"Timestep too small! (dt={dt.value:1.3e})")
+
+            break
+
+        [u0.interpolate(u) for u0, u in zip(u0s, us)]
 
         mu_bcs = [dfx.fem.assemble_scalar(mu_bc_form) for mu_bc_form in mu_bc_forms]
         qs = [dfx.fem.assemble_scalar(q_form) for q_form in q_forms]
@@ -229,41 +292,26 @@ if __name__ == "__main__":
 
         cell_voltage = compute_cell_voltage(I_total, L, mu_bcs, Ls, a_ratios)
 
-        u_err_max = 0.
-        iterations = 0
-
         try:
-            for i_particle in range(num_particles):
+            iterations, success = solver.solve(us)
+            assert success
 
-                solver = solvers[i_particle]
-                u = us[i_particle]
-                u0 = u0s[i_particle]
-
-                i_ks[i_particle].value = \
-                    - Ls[i_particle] * (mu_bcs[i_particle] + cell_voltage)
-
-                u0.interpolate(u)
-
-                it_part, _ = solver.solve(u)
-
-                iterations = max(it_part, iterations)
-
-                # Adaptive timestepping a la Yibao Li et al. (2017)
-                u_max_loc = np.abs(u.x.array - u0.x.array).max()
-
-                u_err_max = max(u_max_loc, u_err_max)
-
-        except Exception as e:
-
+        except (AssertionError, RuntimeError) as e:
             warn(e)
 
             # Reset and continue with a smaller time step
             [u.interpolate(u0) for u, u0 in zip(us, u0s)]
             dt.value *= 0.5
 
-            warn(f">>> Reduce timestep size to dt={dt.value:1.3e}")
+            warn(f"Reduce timestep size to dt={dt.value:1.3e}")
 
             continue
+
+        except Exception as e:
+            warn("!!! Uncought exception!")
+            warn(e)
+
+            break
 
         rt_analysis.analyze(t)
 
@@ -271,8 +319,19 @@ if __name__ == "__main__":
         t += dt.value
         it += 1
 
+        u_err_maxs = [np.abs(u.x.array - u0.x.array).max()
+                      for u, u0 in zip(us, u0s)]
+
+        u_err_max = max(u_err_maxs)
+
         # The new timestep size for the next timestep.
-        dt.value = min(max(tol / u_err_max, dt_min), dt_max, 1.01 * dt.value)
+
+        increase = 1.01 if iterations < solver.max_it / 3 else \
+            1.001 if iterations < solver.max_it / 2 else \
+            0.95 if iterations > solver.max_it * 0.8 else \
+            1.0
+
+        dt.value = min(max(tol / u_err_max, dt_min), dt_max, increase * dt.value)
 
         log(
             f"[{t/T_final * 100:>3.0f}%] " +
@@ -284,23 +343,8 @@ if __name__ == "__main__":
 
         # Output
         # ------
-        if it % 100 == 0:
+        if it % 500 == 0:
 
-            for i_particle in range(num_particles):
-
-                u = us[i_particle]
-                V0, _ = u.function_space.sub(0).collapse()
-                c = dfx.fem.Function(V0)
-
-                fig, ax = figs_axs[i_particle]
-
-                color = (min(t, T_final) / T_final, 0, 0)
-
-                c_expr = dfx.fem.Expression(
-                    c_of_y(u.sub(0).collapse()),
-                    V0.element.interpolation_points())
-                c.interpolate(c_expr)
-
-                ax.plot(c.x.array[:], color=color)
+            plot_solution(num_particles, T_final, us, figs_axs, t)
 
     plt.show()
