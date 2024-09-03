@@ -188,12 +188,14 @@ Ls.x.array[:] = 1 + L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
 
 A_ufl = As * dA_R
 A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
+A = mesh.comm.allreduce(A)
 
 a_ratios = As / A
 
 # Weighted mean reaction affinity parameter taken from particle surfaces.
 L_ufl = a_ratios * Ls * dA_R
 L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
+L = mesh.comm.allreduce(L)
 
 # %% The FEM form
 # ===============
