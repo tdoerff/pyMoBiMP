@@ -72,6 +72,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         num_particles = dfx.fem.assemble_scalar(
             dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA_R)
         )
+        num_particles = mesh.comm.allreduce(num_particles)
 
         # Weighted mean affinity parameter taken from particle surfaces.
         L_ufl = a_ratios * Ls * dA_R
