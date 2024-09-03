@@ -76,6 +76,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         # Weighted mean affinity parameter taken from particle surfaces.
         L_ufl = a_ratios * Ls * dA_R
         L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))  # weighted reaction affinity
+        L = mesh.comm.allreduce(L)
 
         y, mu = self.u_state.split()
 
@@ -91,8 +92,13 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
     def analyze(self, t):
 
+        mesh = self.u_state.function_space.mesh
+
         soc = dfx.fem.assemble_scalar(self.soc_form)
+        soc = mesh.comm.allreduce(soc)
+
         V_cell = dfx.fem.assemble_scalar(self.V_cell_form)
+        V_cell = mesh.comm.allreduce(V_cell)
 
         self.data.append([soc, V_cell])
 
