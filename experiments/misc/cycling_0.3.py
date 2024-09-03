@@ -20,7 +20,7 @@ class Experiment(ExperimentBase):
 
     charge_amplitude = 0.01
 
-    c_bounds = [0.025, 0.34]
+    c_bounds = [0.05, 0.4]
 
     def __init__(self, *args, **kwargs):
 
