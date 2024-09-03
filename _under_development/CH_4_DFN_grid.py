@@ -108,7 +108,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 # %% Grid setup
 # =============
 n_rad = 16
-n_part = 96
+n_part = 192
 
 # Nodes
 # -----
