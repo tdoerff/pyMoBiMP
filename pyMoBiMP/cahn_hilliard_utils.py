@@ -394,10 +394,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         self.free_energy = free_energy
         self.c_of_y = c_of_y
 
-        return super().setup(*args, **kwargs)
-
-    def analyze(self, t):
-
         V = self.u_state.function_space
         mesh = V.mesh
 
@@ -411,14 +407,17 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         c = ufl.variable(c)
         dFdc = ufl.diff(self.free_energy(c), c)
 
-        charge = dfx.fem.form(3 * c * r**2 * ufl.dx)
-        charge = dfx.fem.assemble_scalar(charge)
+        self.charge_form = dfx.fem.form(3 * c * r**2 * ufl.dx)
+        self.chem_pot_form = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
+        self.mu_bc_form = dfx.fem.form(mu * r**2 * ufl.ds)
 
-        chem_pot = dfx.fem.form(3 * dFdc * r**2 * ufl.dx)
-        chem_pot = dfx.fem.assemble_scalar(chem_pot)
+        return super().setup(*args, **kwargs)
 
-        mu_bc = dfx.fem.form(mu * r**2 * ufl.ds)
-        mu_bc = dfx.fem.assemble_scalar(mu_bc)
+    def analyze(self, t):
+
+        charge = dfx.fem.assemble_scalar(self.charge_form)
+        chem_pot = dfx.fem.assemble_scalar(self.chem_pot_form)
+        mu_bc = dfx.fem.assemble_scalar(self.mu_bc_form)
 
         self.data.append([charge, chem_pot, mu_bc])
 
