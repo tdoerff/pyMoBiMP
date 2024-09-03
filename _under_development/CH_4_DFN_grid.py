@@ -205,17 +205,12 @@ v_c, v_mu = ufl.TestFunctions(V)
 I_global = dfx.fem.Constant(mesh, 1e-1)
 
 I_particle = dfx.fem.Function(V0)
-OCP = dfx.fem.Function(V0)
+OCP = - Ls / L * a_ratios * mu * dA_R
 
-OCP_expr = dfx.fem.Expression(- Ls / L * a_ratios * mu,
-                              V0.element.interpolation_points())
-
-V_cell_form = dfx.fem.form(- (I_global / L - OCP) * dA_R)
+V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
 
 
 def callback():
-
-    OCP.interpolate(OCP_expr)
 
     V_cell = dfx.fem.assemble_scalar(V_cell_form)
     V_cell = comm.allreduce(V_cell)  # op=MPI.SUM is default
