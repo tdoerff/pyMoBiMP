@@ -638,14 +638,11 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         *args,
         c_of_y=c_of_y,
         free_energy=lambda u: 0.5 * u**2,
-        filename=None,
         num_particles=None,
         **kwargs,
     ):
         self.free_energy = free_energy
         self.c_of_y = c_of_y
-
-        self.filename = filename
 
         self.Ls = Ls
 
