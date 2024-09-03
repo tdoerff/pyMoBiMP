@@ -6,6 +6,8 @@ from mpi4py.MPI import COMM_WORLD as comm
 
 import numpy as np
 
+from petsc4py import PETSc
+
 import pyvista as pv
 
 import ufl
@@ -292,6 +294,12 @@ residual = dfx.fem.form(F)
 
 problem = NonlinearProblem(F, u)
 solver = NewtonSolver(comm, problem)
+ksp = solver.krylov_solver
+opts = PETSc.Options()
+option_prefix = ksp.getOptionsPrefix()
+opts[f"{option_prefix}ksp_type"] = "preonly"
+opts[f"{option_prefix}pc_type"] = "lu"
+ksp.setFromOptions()
 
 # %% Runtime analysis and output
 # ==============================
