@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
     dt.value = 1e-8
 
-    T_final = 25.0
+    T_final = 65.0
     tol = 1e-4
 
     I_global.value = 0.01
