@@ -436,7 +436,6 @@ class BlockNewtonSolver:
     def line_search(self, solver, ch, ch_last, dc):
         alpha = 1.
         beta = 0.5
-        c = 1e-4
 
         return alpha
 
