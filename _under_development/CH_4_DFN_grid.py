@@ -67,8 +67,14 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
         dA_R = dA(1)
 
-        # particle parameters
-        L_ufl = a_ratios * Ls * dA
+        # By integrating over the boundary we get a measure of the
+        # number of particles.
+        num_particles = dfx.fem.assemble_scalar(
+            dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA_R)
+        )
+
+        # Weighted mean affinity parameter taken from particle surfaces.
+        L_ufl = a_ratios * Ls * dA_R
         L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))  # weighted reaction affinity
 
         y, mu = self.u_state.split()
@@ -76,14 +82,12 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         # compute state of charge
         c = c_of_y(y)
 
-        self.soc_form = dfx.fem.form(3 * c * r**2 * ufl.dx)
+        self.soc_form = dfx.fem.form(3 / num_particles * c * r**2 * ufl.dx)
 
         # Compute cell potential
-        OCP = dfx.fem.Function(V0)
+        OCP = - Ls / L * a_ratios * mu * dA_R
 
-        OCP = - Ls / L * a_ratios * mu
-
-        self.V_cell_form = dfx.fem.form(- (I_global / L - OCP) * dA_R)
+        self.V_cell_form = dfx.fem.form(- (I_global / L) * dA_R + OCP)
 
     def analyze(self, t):
 
