@@ -11,6 +11,8 @@ from mpi4py import MPI
 
 import numpy as np
 
+from petsc4py import PETSc
+
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
@@ -44,7 +46,7 @@ def log(*args, **kwargs):
 # %%
 # create the mesh
 
-mesh, ct, ft = dfx_spherical_mesh(comm_world, resolution=0.5)
+mesh, ct, ft = dfx_spherical_mesh(comm_world, resolution=1.0)
 
 # %%
 # Discretization details
@@ -90,7 +92,7 @@ c = c_of_y(y)
 c_bc_form = dfx.fem.form(r2 * c * ufl.ds)
 
 
-def experiment(t, u, I_charge, cell_voltage, **kwargs):
+def experiment(t, I_charge, cell_voltage, **kwargs):
 
     return charge_discharge_stop(t, u, I_charge, c_bc_form, c_of_y=c_of_y)
 
@@ -109,7 +111,7 @@ F = cahn_hilliard_form(
     u0,
     dt,
     free_energy=free_energy,
-    theta=0.75,
+    theta=1.0,
     c_of_y=c_of_y,
     M=lambda c: 1.0 * c * (1 - c),
     lam=0.1,
@@ -139,6 +141,13 @@ log(">>> Setting up the solver ...")
 problem = NonlinearProblem(F, u)
 
 solver = NewtonSolver(comm_world, problem)
+ksp = solver.krylov_solver
+opts = PETSc.Options()
+option_prefix = ksp.getOptionsPrefix()
+opts[f"{option_prefix}ksp_type"] = "gmres"
+opts[f"{option_prefix}pc_type"] = "sor"
+# opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+ksp.setFromOptions()
 
 # %%
 
@@ -149,10 +158,14 @@ u.interpolate(u_ini)
 n_out = 51
 
 output = FileOutput(
-    u, np.linspace(0, T_final, 51), filename="simulation_output/CH_4_true_3d.xdmf"
+    u,
+    np.linspace(0, T_final, 51),
+    filename="simulation_output/CH_4_true_3d.xdmf"
 )
 
-rt_analysis = AnalyzeOCP(u, c_of_y=c_of_y)
+rt_analysis = AnalyzeOCP(u,
+                         c_of_y=c_of_y,
+                         filename="simulation_output/CH_4_true_3d_rt.txt")
 
 time_stepping(
     solver,
