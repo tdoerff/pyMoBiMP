@@ -175,6 +175,7 @@ Rs.x.scatter_forward()
 
 As = 4 * np.pi * Rs**2
 
+# Reaction affinity of the particles.
 L_mean = 10.
 L_var_rel = 0.1
 
@@ -186,7 +187,8 @@ A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
 
 a_ratios = As / A
 
-L_ufl = a_ratios * Ls * dA
+# Weighted mean reaction affinity parameter taken from particle surfaces.
+L_ufl = a_ratios * Ls * dA_R
 L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
 
 # %% The FEM form
