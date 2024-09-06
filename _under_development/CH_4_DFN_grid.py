@@ -300,11 +300,6 @@ opts[f"{option_prefix}ksp_type"] = "preonly"
 opts[f"{option_prefix}pc_type"] = "lu"
 ksp.setFromOptions()
 
-# %% Runtime analysis and output
-# ==============================
-
-rt_analysis = AnalyzeOCP(u, c_of_y, I_global, Ls, a_ratios, filename="CH_4_DFN_rt.txt")
-
 # %% Initial data
 # ===============
 u0.sub(0).x.array[:] = -6  # This corresponds to roughly c = 1e-3
@@ -328,6 +323,22 @@ if __name__ == "__main__":
     iterations, success = solver.solve(u)
     print(iterations, success)
 
+    # %% Runtime analysis and output
+    # ==============================
+    rt_analysis = AnalyzeOCP(u,
+                             c_of_y,
+                             I_global,
+                             Ls,
+                             a_ratios,
+                             filename="CH_4_DFN_rt.txt")
+
+    output = FileOutput(u,
+                        np.linspace(0, T_final, 101),
+                        filename="CH_4_DFN.xdmf",
+                        variable_transform=c_of_y)
+
+    # %% Run the simulation
+    # =====================
     time_stepping(
         solver,
         u,
@@ -339,12 +350,5 @@ if __name__ == "__main__":
         dt_increase=1.01,
         tol=tol,
         runtime_analysis=rt_analysis,
+        output=output
     )
-
-    y = u.sub(0)
-
-    c = dfx.fem.Function(V0)
-    c.interpolate(
-        dfx.fem.Expression(c_of_y(y), V0.element.interpolation_points()))
-
-    plot_solution_on_grid(c)
