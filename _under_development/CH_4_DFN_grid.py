@@ -193,7 +193,8 @@ L_mean = 10.
 L_var_rel = 0.1
 
 Ls = dfx.fem.Function(V0)
-Ls.x.array[:] = 1 + L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
+Ls.x.array[:] = L_mean + \
+    L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
 
 A_ufl = As * dA_R
 A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
