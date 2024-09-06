@@ -219,21 +219,19 @@ v_c, v_mu = ufl.TestFunctions(V)
 
 I_global = dfx.fem.Constant(mesh, 1e-1)
 
-I_particle = dfx.fem.Function(V0)
 OCP = - Ls / L * a_ratios * mu * dA_R
 
 V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
 
+V_cell = dfx.fem.Constant(mesh, 0.0)
+
+I_particle = - Ls * (mu + V_cell)
+
 
 def callback():
 
-    V_cell = dfx.fem.assemble_scalar(V_cell_form)
-    V_cell = comm.allreduce(V_cell)  # op=MPI.SUM is default
-
-    mu = u.sub(1).collapse()
-
-    I_particle.x.array[:] = - Ls.x.array * (mu.x.array + V_cell)
-    I_particle.x.scatter_forward()
+    V_cell_value = dfx.fem.assemble_scalar(V_cell_form)
+    V_cell.value = comm.allreduce(V_cell_value, op=SUM)  # op=MPI.SUM is default
 
 
 # With this dirty hack we make sure the voltage is updated
