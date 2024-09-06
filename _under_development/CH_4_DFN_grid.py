@@ -2,7 +2,7 @@ import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
 from dolfinx.nls.petsc import NewtonSolver
 
-from mpi4py.MPI import COMM_WORLD as comm
+from mpi4py.MPI import COMM_WORLD as comm, SUM
 
 import numpy as np
 
@@ -74,12 +74,12 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         num_particles = dfx.fem.assemble_scalar(
             dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA_R)
         )
-        num_particles = mesh.comm.allreduce(num_particles)
+        num_particles = mesh.comm.allreduce(num_particles, op=SUM)
 
         # Weighted mean affinity parameter taken from particle surfaces.
         L_ufl = a_ratios * Ls * dA_R
         L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))  # weighted reaction affinity
-        L = mesh.comm.allreduce(L)
+        L = mesh.comm.allreduce(L, op=SUM)
 
         y, mu = self.u_state.split()
 
@@ -98,10 +98,10 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         mesh = self.u_state.function_space.mesh
 
         soc = dfx.fem.assemble_scalar(self.soc_form)
-        soc = mesh.comm.allreduce(soc)
+        soc = mesh.comm.allreduce(soc, op=SUM)
 
         V_cell = dfx.fem.assemble_scalar(self.V_cell_form)
-        V_cell = mesh.comm.allreduce(V_cell)
+        V_cell = mesh.comm.allreduce(V_cell, op=SUM)
 
         self.data.append([soc, V_cell])
 
@@ -197,14 +197,14 @@ Ls.x.array[:] = 1 + L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
 
 A_ufl = As * dA_R
 A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
-A = mesh.comm.allreduce(A)
+A = mesh.comm.allreduce(A, op=SUM)
 
 a_ratios = As / A
 
 # Weighted mean reaction affinity parameter taken from particle surfaces.
 L_ufl = a_ratios * Ls * dA_R
 L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
-L = mesh.comm.allreduce(L)
+L = mesh.comm.allreduce(L, op=SUM)
 
 # %% The FEM form
 # ===============
