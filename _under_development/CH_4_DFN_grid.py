@@ -233,7 +233,7 @@ I_particle = - Ls * (mu + V_cell)
 def callback():
 
     V_cell_value = dfx.fem.assemble_scalar(V_cell_form)
-    V_cell.value = comm.allreduce(V_cell_value, op=SUM)  # op=MPI.SUM is default
+    V_cell.value = comm.allreduce(V_cell_value, op=SUM)
 
 
 # With this dirty hack we make sure the voltage is updated
