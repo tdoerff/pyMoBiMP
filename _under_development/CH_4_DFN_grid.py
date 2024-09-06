@@ -18,6 +18,7 @@ from pyMoBiMP.cahn_hilliard_utils import (
     _free_energy as free_energy)
 
 from pyMoBiMP.fenicsx_utils import (
+    FileOutput,
     RuntimeAnalysisBase,
     time_stepping)
 
