@@ -347,7 +347,7 @@ if __name__ == "__main__":
         dt,
         dt_max=dt_max,
         dt_min=dt_min,
-        dt_increase=1.01,
+        dt_increase=1.1,
         tol=tol,
         runtime_analysis=rt_analysis,
         output=output
