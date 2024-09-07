@@ -46,7 +46,7 @@ def get_mesh_spacing(mesh, return_full=False):
 
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
-    h = mesh.h(tdim, range(num_cells))
+    h = mesh.h(tdim, np.array(range(num_cells)))
 
     dx_cell = h.min()
 

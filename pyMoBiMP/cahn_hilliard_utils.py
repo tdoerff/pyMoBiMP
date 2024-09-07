@@ -1,3 +1,5 @@
+import basix
+
 from collections.abc import Callable
 
 import dolfinx as dfx
@@ -487,7 +489,7 @@ class SingleParticleSimulation:
     def __init__(
         self,
         mesh: dfx.mesh.Mesh = _mesh,
-        element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
+        element: Optional[ufl.AbstractFiniteElement] = None,
         free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
         T_final: float = 2.0,
         experiment: Callable[
@@ -974,22 +976,13 @@ class MultiParticleSimulation():
         )
 
     def create_function_space(self, mesh, num_particles):
-        elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+        elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
 
         elem_c = elem1
         elem_mu = elem1
 
-        multi_particle_element = ufl.MixedElement(
-            [
-                [
-                    elem_c,
-                ]
-                * num_particles,
-                [
-                    elem_mu,
-                ]
-                * num_particles,
-            ]
+        multi_particle_element = basix.ufl.quadrature_element(
+
         )
 
         V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
@@ -1081,7 +1074,7 @@ class SingleParticleODEProblem():
     def __init__(
             self,
             mesh: dfx.mesh.Mesh = _mesh,
-            element: Optional[ufl.FiniteElement | ufl.MixedElement] = None,
+            element: Optional[ufl.AbstractFiniteElement] = None,
             c_of_y: Callable[[dfx.fem.Function], dfx.fem.Expression] = c_of_y,
             free_energy: Callable[[dfx.fem.Function], dfx.fem.Expression] = _free_energy,
             experiment: Callable[

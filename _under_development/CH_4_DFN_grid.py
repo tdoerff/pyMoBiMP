@@ -1,3 +1,4 @@
+import basix
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
 from dolfinx.nls.petsc import NewtonSolver
@@ -154,15 +155,18 @@ gdim = 2
 shape = "interval"
 degree = 1
 
-cell = ufl.Cell(shape, geometric_dimension=gdim)
-domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, degree))
+domain = ufl.Mesh(
+    basix.ufl.element("Lagrange",
+                      shape,
+                      degree,
+                      shape=(coords_grid_flat.shape[1],)))
 
 mesh = dfx.mesh.create_mesh(comm, elements[:, :2], coords_grid_flat, domain)
 
 # %% The DOLFINx function space
 # -----------------------------
-elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
-V = dfx.fem.FunctionSpace(mesh, elem1 * elem1)
+elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
+V = dfx.fem.functionspace(mesh, basix.ufl.mixed_element([elem1, elem1]))
 
 V0, _ = V.sub(0).collapse()  # <- auxiliary space for coefficient functions
 
