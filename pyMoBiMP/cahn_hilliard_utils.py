@@ -981,11 +981,12 @@ class MultiParticleSimulation():
         elem_c = elem1
         elem_mu = elem1
 
-        multi_particle_element = basix.ufl.quadrature_element(
-
+        multi_particle_element = basix.ufl.mixed_element(
+            [basix.ufl.mixed_element([elem_c, ] * num_particles),
+             basix.ufl.mixed_element([elem_mu, ] * num_particles)]
         )
 
-        V = dfx.fem.FunctionSpace(mesh, multi_particle_element)
+        V = dfx.fem.functionspace(mesh, multi_particle_element)
         return V
 
     def initial_data(self):
