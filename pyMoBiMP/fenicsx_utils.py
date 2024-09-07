@@ -856,7 +856,7 @@ class StopEvent(Exception):
     pass
 
 
-def strip_off_xdmf_file_ending(file_name, ending=None):
+def strip_off_xdmf_file_ending(file_name, ending=""):
 
     # Strip off the file ending for uniform file handling
     if file_name[-3:] == ".h5":
