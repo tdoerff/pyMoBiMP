@@ -88,11 +88,11 @@ def time_stepping(
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
-            voltage_old = 0.
-            error_voltage = 1e99
             tol_voltage = 1e-9
             voltage_it_max = 10
             it_voltage = 0
+
+            error_voltage = 1e99  # To enter the loop at least once.
 
             while error_voltage > tol_voltage and \
                     it_voltage <= voltage_it_max:
@@ -100,8 +100,7 @@ def time_stepping(
                 callback(t, u)
                 iterations, success = solver.solve(u)
 
-                error_voltage = np.abs(voltage_old - callback.V_cell.value)
-                voltage_old = callback.V_cell.value
+                error_voltage = callback.error()
 
                 it_voltage += 1
 
@@ -419,15 +418,24 @@ I_particle = - Ls * (mu + V_cell)
 
 class Callback():
 
-    def __init__(self, V_cell):
+    def __init__(self, V_cell: dfx.fem.Constant):
 
         self.V_cell = V_cell
         self.V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
+        self.voltage_old = 0.
 
     def __call__(self, t, u):
 
         V_cell_value = dfx.fem.assemble_scalar(self.V_cell_form)
         self.V_cell.value = comm.allreduce(V_cell_value, op=SUM)
+
+    def error(self):
+
+        error = np.abs(self.V_cell.value - self.voltage_old)
+
+        self.voltage_old = self.V_cell.value
+
+        return error
 
 
 callback = Callback(V_cell)
