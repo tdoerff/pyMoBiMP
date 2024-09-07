@@ -77,6 +77,7 @@ def time_stepping(
 
     assert dt_min < dt_max
     assert tol > 0.
+    assert dt_increase > 1.
 
     t = t_start
     dt.value = dt_min * dt_increase
