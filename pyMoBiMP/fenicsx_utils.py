@@ -942,16 +942,40 @@ def read_data(filebasename):
         else:
             raise ValueError("Neither 'Mesh' nor 'Grid' detected in " + filebasename)
 
-        t_keys = f["Function/y_0"].keys()
+        if "y_0" in f["Function"].keys():
+            t_keys = f["Function/y_0"].keys()
+        elif "y" in f["Function"].keys():
+            t_keys = f["Function/y"].keys()
+        else:
+            raise KeyError("No appropriate key found in 'f'!")
 
         # time steps (convert from string to float)
         t = [float(t.replace("_", ".")) for t in t_keys]
 
         # list of data stored as numpy arrays
-        u_data = np.array([
-            [(f[f"Function/y_{i_part}"][u_key][()].squeeze(),
-              f[f"Function/mu_{i_part}"][u_key][()].squeeze())
-             for i_part in range(num_particles)] for u_key in t_keys])
+        if "y_0" in f["Function"].keys():
+            u_data = np.array(
+                [
+                    [
+                        (
+                            f[f"Function/y_{i_part}"][u_key][()].squeeze(),
+                            f[f"Function/mu_{i_part}"][u_key][()].squeeze(),
+                        )
+                        for i_part in range(num_particles)
+                    ]
+                    for u_key in t_keys
+                ]
+            )
+        else:
+            u_data = np.array(
+                [
+                    [
+                        f["Function/y"][u_key][()].squeeze(),
+                        f["Function/mu"][u_key][()].squeeze(),
+                    ]
+                    for u_key in t_keys
+                ]
+            )
 
     # It is necessary to sort the input by the time.
     sorted_indx = np.argsort(t)
