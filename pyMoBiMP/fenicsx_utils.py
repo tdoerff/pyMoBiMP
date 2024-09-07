@@ -135,7 +135,7 @@ def time_stepping(
                 inc_factor = dt_increase
             elif iterations < solver.max_it / 2:
                 # Reduce the increment if we take more iterations.
-                inc_factor = 1 + 0.1 * (1 - dt_increase)
+                inc_factor = 1 + 0.1 * (dt_increase - 1)
             elif iterations > solver.max_it * 0.8:
                 # Reduce the timestep in case we are approaching max_it
                 inc_factor = 0.9
