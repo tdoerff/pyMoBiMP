@@ -74,12 +74,8 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
-            if runtime_analysis is not None:
-                voltage = runtime_analysis.data[-1][-1]
-            else:
-                voltage = 0.
-
-            stop = event_handler(t, cell_voltage=voltage, **event_pars)
+            callback(t, u)  # compute voltage
+            stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
 
             if stop:
                 break
@@ -88,26 +84,29 @@ def time_stepping(
 
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
-            tol_voltage = 1e-9
-            voltage_it_max = 10
+            tol_voltage = 1e-6
+            voltage_it_max = 20
             it_voltage = 0
 
-            error_voltage = 1e99  # To enter the loop at least once.
+            inc_voltage = 1e99  # To enter the loop at least once.
 
-            while error_voltage > tol_voltage and \
+            # Note that value is an np.array, assignment is shallow copy!!!
+            V_cell_value_old = V_cell.value.copy()
+
+            pass
+
+            while inc_voltage > tol_voltage and \
                     it_voltage <= voltage_it_max:
 
-                callback(t, u)
                 iterations, success = solver.solve(u)
+                callback(t, u)  # recompute voltage.
 
-                error_voltage = callback.error()
+                inc_voltage = np.abs(V_cell.value - V_cell_value_old)
+                V_cell_value_old = V_cell.value.copy()
 
                 it_voltage += 1
-
-                # if MPI.COMM_WORLD.rank == 0:
-                #     print(it_voltage, error_voltage, flush=True)
             else:
-                success = error_voltage < tol_voltage
+                success = inc_voltage < tol_voltage
 
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
@@ -120,14 +119,14 @@ def time_stepping(
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
 
-            if iterations < solver.max_it / 5:
+            if it_voltage < voltage_it_max / 5:
                 # Use the given increment factor if we are in a safe region, i.e.,
                 # if the Newton solver converges sufficiently fast.
                 inc_factor = dt_increase
-            elif iterations < solver.max_it / 2:
+            elif it_voltage < voltage_it_max / 2:
                 # Reduce the increment if we take more iterations.
-                inc_factor = 1 + 0.1 * (1 - dt_increase)
-            elif iterations > solver.max_it * 0.8:
+                inc_factor = 1 + 0.1 * (dt_increase - 1.)
+            elif it_voltage > voltage_it_max * 0.8:
                 # Reduce the timestep in case we are approaching max_it
                 inc_factor = 0.9
             else:
@@ -197,6 +196,7 @@ def time_stepping(
                     f"t[{it:06}] = {t:1.6f}, "
                     f"dt = {dt.value:1.3e}, "
                     f"its = {iterations}",
+                    f"its_V = {it_voltage}",
                     flush=True
                 )
 
@@ -275,7 +275,8 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         # Compute cell potential
         OCP = - Ls / L * a_ratios * mu * dA_R
 
-        self.V_cell_form = dfx.fem.form(- (I_global / L) * dA_R + OCP)
+        self.V_cell_form = dfx.fem.form(
+            - (I_global / L) * a_ratios * dA_R + OCP)
 
     def analyze(self, t):
 
@@ -410,10 +411,12 @@ I_global = dfx.fem.Constant(mesh, 1e-1)
 OCP = - Ls / L * a_ratios * mu * dA_R
 
 V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
-
-V_cell = dfx.fem.Constant(mesh, 0.0)
+V_cell = dfx.fem.Constant(mesh,
+                          dfx.fem.assemble_scalar(V_cell_form))
 
 I_particle = - Ls * (mu + V_cell)
+
+I_global_ref_form = dfx.fem.form(a_ratios * I_particle * dA_R)
 
 
 class Callback():
@@ -421,13 +424,19 @@ class Callback():
     def __init__(self, V_cell: dfx.fem.Constant):
 
         self.V_cell = V_cell
-        self.V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
+        self.V_OCP_form = dfx.fem.form(OCP)
         self.voltage_old = 0.
 
     def __call__(self, t, u):
 
-        V_cell_value = dfx.fem.assemble_scalar(self.V_cell_form)
+        V_cell_value = dfx.fem.assemble_scalar(self.V_OCP_form) - \
+            I_global.value / L
         self.V_cell.value = comm.allreduce(V_cell_value, op=SUM)
+
+        I_global_ref = dfx.fem.assemble_scalar(I_global_ref_form)
+        I_global_ref = comm.allreduce(I_global_ref, op=SUM)
+
+        assert np.isclose(I_global_ref, I_global.value)
 
     def error(self):
 
@@ -490,6 +499,8 @@ residual = dfx.fem.form(F)
 
 problem = NonlinearProblem(F, u)
 solver = NewtonSolver(comm, problem)
+solver.rtol = 1e-9
+
 ksp = solver.krylov_solver
 opts = PETSc.Options()
 option_prefix = ksp.getOptionsPrefix()
@@ -499,8 +510,8 @@ ksp.setFromOptions()
 
 # %% Initial data
 # ===============
-u0.sub(0).x.array[:] = -6  # This corresponds to roughly c = 1e-3
-
+u.sub(0).x.array[:] = -6  # This corresponds to roughly c = 1e-3
+callback(0., u)
 
 if __name__ == "__main__":
 
@@ -516,9 +527,6 @@ if __name__ == "__main__":
 
     u.x.scatter_forward()
     u0.x.scatter_forward()
-
-    iterations, success = solver.solve(u)
-    print(iterations, success)
 
     # %% Runtime analysis and output
     # ==============================
