@@ -425,14 +425,17 @@ class Callback():
 
     def __call__(self, t, u):
 
-        V_cell_value = dfx.fem.assemble_scalar(self.V_OCP_form) - \
+        V_cell_value = dfx.fem.assemble_scalar(self.V_OCP_form)
+        self.V_cell.value = comm.allreduce(V_cell_value, op=SUM) - \
             I_global.value / L
-        self.V_cell.value = comm.allreduce(V_cell_value, op=SUM)
 
         I_global_ref = dfx.fem.assemble_scalar(I_global_ref_form)
         I_global_ref = comm.allreduce(I_global_ref, op=SUM)
 
-        assert np.isclose(I_global_ref, I_global.value)
+        if not np.isclose(I_global_ref, I_global.value):
+            raise AssertionError(
+                "Error in global current computation" +
+                f"I_global_ref = {I_global_ref} != {I_global.value} = I_global.value")
 
     def error(self):
 
