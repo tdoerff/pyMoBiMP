@@ -110,11 +110,8 @@ def time_stepping(
 
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
-            else:
-                iterations = MPI.COMM_WORLD.allreduce(iterations, op=MPI.MAX)
 
             # Adaptive timestepping a la Yibao Li et al. (2017)
-            # TODO: Timestepping through free energy
             u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
@@ -133,8 +130,7 @@ def time_stepping(
                 # Do not increase timestep between [0.5*max_it, 0.8*max_it]
                 inc_factor = 1.0
 
-            dt.value = min(
-                           max(tol / u_err_max, dt_min),
+            dt.value = min(max(tol / u_err_max, dt_min),
                            dt_max,
                            inc_factor * dt.value)
 
@@ -454,9 +450,7 @@ dt = dfx.fem.Constant(mesh, 1e-6)
 
 c = c_of_y(y)
 
-V0, dofs = V.sub(0).collapse()
-r = dfx.fem.Function(V0)
-r.interpolate(lambda x: x[0])
+r, _ = ufl.SpatialCoordinate(mesh)
 
 
 def M(c):
