@@ -407,8 +407,9 @@ I_global = dfx.fem.Constant(mesh, 1e-1)
 OCP = - Ls / L * a_ratios * mu * dA_R
 
 V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
-V_cell = dfx.fem.Constant(mesh,
-                          dfx.fem.assemble_scalar(V_cell_form))
+V_cell_value = dfx.fem.assemble_scalar(V_cell_form)
+V_cell_value = mesh.comm.allreduce(V_cell_value)
+V_cell = dfx.fem.Constant(mesh, V_cell_value)
 
 I_particle = - Ls * (mu + V_cell)
 
