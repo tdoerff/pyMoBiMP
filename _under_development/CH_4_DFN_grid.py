@@ -498,6 +498,9 @@ residual = dfx.fem.form(F)
 problem = NonlinearProblem(F, u)
 solver = NewtonSolver(comm, problem)
 solver.rtol = 1e-9
+solver.max_it = 50
+solver.convergence_criterion = "incremental"
+solver.relaxation_parameter = 0.75
 
 ksp = solver.krylov_solver
 opts = PETSc.Options()
