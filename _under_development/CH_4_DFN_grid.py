@@ -508,8 +508,8 @@ ksp.setFromOptions()
 
 # %% Initial data
 # ===============
-u.sub(0).x.array[:] = -6  # This corresponds to roughly c = 1e-3
-callback(0., u)
+u.sub(0).x.array[:] = -6.90675478  # This corresponds to the leftmost minimum of F
+callback()
 
 if __name__ == "__main__":
 
