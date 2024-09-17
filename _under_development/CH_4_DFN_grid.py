@@ -422,7 +422,7 @@ class Callback():
 
         self.V_cell = V_cell
         self.V_OCP_form = dfx.fem.form(OCP)
-        self.voltage_old = 0.
+        self.voltage_old = float(V_cell.value)
 
     def __call__(self, t, u):
 
@@ -442,7 +442,7 @@ class Callback():
 
         error = np.abs(self.V_cell.value - self.voltage_old)
 
-        self.voltage_old = self.V_cell.value
+        self.voltage_old = float(self.V_cell.value)
 
         return error
 
