@@ -34,6 +34,7 @@ def time_stepping(
     u0,
     T,
     dt,
+    V_cell,
     t_start=0,
     dt_max=10.0,
     dt_min=1e-9,
@@ -43,7 +44,7 @@ def time_stepping(
     output=None,
     runtime_analysis=None,
     logging=True,
-    callback=lambda t, u: None,
+    callback=lambda: None,
     **event_pars,
 ):
 
@@ -74,7 +75,8 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
-            callback(t, u)  # compute voltage
+            V_cell.update()
+            callback()  # check current
             stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
 
             if stop:
@@ -90,7 +92,6 @@ def time_stepping(
 
             inc_voltage = 1e99  # To enter the loop at least once.
 
-            # Note that value is an np.array, assignment is shallow copy!!!
             V_cell_value_old = V_cell.value.copy()
 
             pass
@@ -99,7 +100,9 @@ def time_stepping(
                     it_voltage <= voltage_it_max:
 
                 iterations, success = solver.solve(u)
-                callback(t, u)  # recompute voltage.
+
+                V_cell.update()  # recompute voltage.
+                callback()
 
                 inc_voltage = np.abs(V_cell.value - V_cell_value_old)
                 V_cell_value_old = V_cell.value.copy()
@@ -224,8 +227,96 @@ def plot_solution_on_grid(u):
     plotter.show()
 
 
+class Voltage(dfx.fem.Constant):
+
+    def __init__(self,
+                 u: dfx.fem.Function,
+                 I_global: float | dfx.fem.Constant):
+
+        self.u = u
+        self.function_space = u.function_space
+        self.I_global = I_global
+
+        dA_R = create_particle_summation_measure(self.function_space.mesh)
+        A, a_ratios, L, Ls = physical_setup(self.function_space)
+
+        self.L = L
+        self.Ls = Ls
+        self.a_ratios = a_ratios
+        self.A = A
+
+        _, mu = ufl.split(u)
+
+        V_cell_ufl = - mu * Ls / L * a_ratios * dA_R
+        V_cell_ufl -= I_global / L * a_ratios * dA_R
+
+        self.V_cell_cpp = dfx.fem.form(V_cell_ufl)
+
+        super().__init__(self.function_space.mesh,
+                         self.compute_voltage())
+
+    def compute_voltage(self):
+
+        V_cell_value = float(dfx.fem.assemble_scalar(self.V_cell_cpp))
+        voltage = comm.allreduce(V_cell_value, op=SUM)
+
+        return voltage
+
+    def update(self):
+        voltage = self.compute_voltage()
+
+        np.copyto(self._cpp_object.value, np.asarray(voltage))
+
+    @property
+    def value(self):
+
+        self.update()
+
+        return float(self._cpp_object.value)
+
+    @property
+    def form(self):
+        return self.V_cell_cpp
+
+
+class TestCurrent():
+    def __init__(self, u, V_cell, I_global):
+
+        _, mu = ufl.split(u)
+
+        a_ratios = V_cell.a_ratios
+        Ls = V_cell.Ls
+
+        dA = create_particle_summation_measure(u.function_space.mesh)
+
+        I_particle = - Ls * (mu + V_cell)
+
+        I_global_ref_ufl = a_ratios * I_particle * dA
+
+        self.I_global_ref_form = dfx.fem.form(I_global_ref_ufl)
+        self.I_global = I_global
+        self.V_cell = V_cell
+
+    def compute_current(self):
+        I_global_ref = dfx.fem.assemble_scalar(self.I_global_ref_form)
+        I_global_ref = comm.allreduce(I_global_ref, op=SUM)
+
+        return I_global_ref
+
+    def __call__(self):
+
+        I_global_ref = self.compute_current()
+
+        if not np.isclose(I_global_ref, self.I_global.value):
+            raise AssertionError(
+                "Error in global current computation" +
+                f"I_global_ref = {I_global_ref} != {self.I_global.value} = I_global.value")
+
+        return I_global_ref
+
+
 class AnalyzeOCP(RuntimeAnalysisBase):
-    def setup(self, u_state, c_of_y, I_global, Ls, a_ratios, *args, **kwargs):
+    def setup(self, u_state, c_of_y, V_cell, *args, **kwargs):
         super().setup(u_state, *args, **kwargs)
 
         # Function space(s) and mesh information
@@ -256,11 +347,6 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         )
         num_particles = mesh.comm.allreduce(num_particles, op=SUM)
 
-        # Weighted mean affinity parameter taken from particle surfaces.
-        L_ufl = a_ratios * Ls * dA_R
-        L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))  # weighted reaction affinity
-        L = mesh.comm.allreduce(L, op=SUM)
-
         y, mu = self.u_state.split()
 
         # compute state of charge
@@ -268,11 +354,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         self.soc_form = dfx.fem.form(3 / num_particles * c * r**2 * ufl.dx)
 
-        # Compute cell potential
-        OCP = - Ls / L * a_ratios * mu * dA_R
-
-        self.V_cell_form = dfx.fem.form(
-            - (I_global / L) * a_ratios * dA_R + OCP)
+        self.V_cell_form = V_cell.form
 
     def analyze(self, t):
 
@@ -289,213 +371,236 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         return super().analyze(t)
 
 
-# %% Grid setup
-# =============
-n_rad = 16
-n_part = 192
+def create_1p1_DFN_mesh(comm, n_rad=16, n_part=192):
 
-mesh = dfx.mesh.create_unit_square(comm, n_rad, n_part)
+    # Nodes
+    # -----
+    radial_grid = np.linspace(0, 1, n_rad)
+    particle_grid = np.linspace(0, 1, n_part)
 
-# %% The DOLFINx function space
-# -----------------------------
-elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
-V = dfx.fem.functionspace(mesh, basix.ufl.mixed_element([elem1, elem1]))
+    rr, pp = np.meshgrid(radial_grid, particle_grid)
 
-V0, _ = V.sub(0).collapse()  # <- auxiliary space for coefficient functions
+    coords_grid = np.stack((rr, pp)).transpose((-1, 1, 0)).copy()
 
-# %% Create integral measure on the particle surface
-# --------------------------------------------------
-fdim = mesh.topology.dim - 1
+    if comm.rank == 0:
+        coords_grid_flat = coords_grid.reshape(-1, 2).copy()
+    else:
+        coords_grid_flat = np.empty((0, 2), dtype=np.float64)
 
-facets = dfx.mesh.locate_entities(mesh, fdim, lambda x: np.isclose(x[0], 1.))
+    # Elements
+    # --------
+    # All the radial connections
+    elements_radial = [
+        [[n_part * i + k, n_part * (i + 1) + k] for i in range(n_rad - 1)]
+        for k in range(n_part)
+    ]
 
-facet_markers = np.full_like(facets, 1)
+    elements_radial = np.array(elements_radial).reshape(-1, 2)
 
-facet_tag = dfx.mesh.meshtags(mesh, fdim, facets, facet_markers)
+    # Connections between particles
+    elements_bc = (n_rad - 1) * n_part + np.array([[k, k + 1] for k in range(n_part - 1)])
+    elements_bc = []  # With elements at the outer edge the integration fails.
 
-dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
-dA_R = dA(1)
+    if comm.rank == 0:
+        elements = np.array(list(elements_bc) + list(elements_radial))
+    else:
+        elements = np.empty((0, 2), dtype=np.int64)
 
-# %% Physical setup of the problem
-# ================================
+    # %% The DOLFINx grid
+    # -------------------
 
-# particle parameters
-Rs = dfx.fem.Function(V0)
-Rs.x.array[:] = 1.
-Rs.x.scatter_forward()
+    gdim = coords_grid_flat.shape[1]
+    shape = "interval"
+    degree = 1
 
-As = 4 * np.pi * Rs**2
+    domain = ufl.Mesh(
+        basix.ufl.element("Lagrange",
+                          shape,
+                          degree,
+                          shape=(gdim,)))
 
-# Reaction affinity of the particles.
-L_mean = 10.
-L_var_rel = 0.1
+    mesh = dfx.mesh.create_mesh(comm,
+                                elements[:, :gdim],
+                                coords_grid_flat,
+                                domain)
 
-Ls = dfx.fem.Function(V0)
-Ls.x.array[:] = L_mean + \
-    L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
-
-A_ufl = As * dA_R
-A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
-A = mesh.comm.allreduce(A, op=SUM)
-
-a_ratios = As / A
-
-# Weighted mean reaction affinity parameter taken from particle surfaces.
-L_ufl = a_ratios * Ls * dA_R
-L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
-L = mesh.comm.allreduce(L, op=SUM)
-
-# %% The FEM form
-# ===============
-
-u = dfx.fem.Function(V)
-u0 = dfx.fem.Function(V)
-
-y, mu = ufl.split(u)
-y0, mu0 = ufl.split(u0)
-
-v_c, v_mu = ufl.TestFunctions(V)
-
-I_global = dfx.fem.Constant(mesh, 1e-1)
-
-OCP = - Ls / L * a_ratios * mu * dA_R
-
-V_cell_form = dfx.fem.form(OCP - I_global / L * a_ratios * dA_R)
-V_cell_value = dfx.fem.assemble_scalar(V_cell_form)
-V_cell_value = mesh.comm.allreduce(V_cell_value)
-V_cell = dfx.fem.Constant(mesh, V_cell_value)
-
-I_particle = - Ls * (mu + V_cell)
-
-I_global_ref_form = dfx.fem.form(a_ratios * I_particle * dA_R)
+    return mesh
 
 
-class Callback():
+def DFN_function_space(mesh):
+    # %% The DOLFINx function space
+    # -----------------------------
+    elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
+    V = dfx.fem.functionspace(mesh, basix.ufl.mixed_element([elem1, elem1]))
 
-    def __init__(self, V_cell: dfx.fem.Constant):
-
-        self.V_cell = V_cell
-        self.V_OCP_form = dfx.fem.form(OCP)
-        self.voltage_old = float(V_cell.value)
-
-    def __call__(self, t, u):
-
-        V_cell_value = dfx.fem.assemble_scalar(self.V_OCP_form)
-        self.V_cell.value = comm.allreduce(V_cell_value, op=SUM) - \
-            I_global.value / L
-
-        I_global_ref = dfx.fem.assemble_scalar(I_global_ref_form)
-        I_global_ref = comm.allreduce(I_global_ref, op=SUM)
-
-        if not np.isclose(I_global_ref, I_global.value):
-            raise AssertionError(
-                "Error in global current computation" +
-                f"I_global_ref = {I_global_ref} != {I_global.value} = I_global.value")
-
-    def error(self):
-
-        error = np.abs(self.V_cell.value - self.voltage_old)
-
-        self.voltage_old = float(self.V_cell.value)
-
-        return error
+    return V
 
 
-callback = Callback(V_cell)
+def create_particle_summation_measure(mesh):
+    # %% Create integral measure on the particle surface
+    # --------------------------------------------------
+    fdim = mesh.topology.dim - 1
 
-theta = 1.0
-dt = dfx.fem.Constant(mesh, 1e-6)
+    facets = dfx.mesh.locate_entities(mesh, fdim, lambda x: np.isclose(x[0], 1.))
 
-c = c_of_y(y)
+    facet_markers = np.full_like(facets, 1)
 
-r, _ = ufl.SpatialCoordinate(mesh)
+    facet_tag = dfx.mesh.meshtags(mesh, fdim, facets, facet_markers)
 
+    dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
+    dA_R = dA(1)
 
-def M(c):
-    return c * (1 - c)
-
-
-lam = 0.1
-
-
-def grad_c_bc(c):
-    return 0.
+    return dA_R
 
 
-s_V = 4 * np.pi * r**2
-s_A = 2 * np.pi * r**2
+def physical_setup(V):
 
-dx = ufl.dx  # The volume element
+    mesh = V.mesh
 
-mu_chem = compute_chemical_potential(free_energy, c)
-mu_theta = theta * mu + (theta - 1.0) * mu0
+    dA_R = create_particle_summation_measure(mesh)
 
-flux = M(c) * mu_theta.dx(0)
+    V0, _ = V.sub(0).collapse()  # <- auxiliary space for coefficient functions
 
-F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_mu * dx
-F1 += s_V * flux * v_mu.dx(0) * dt * dx
-F1 -= I_particle * s_A * v_mu * dt * dA_R
+    # %% Physical setup of the problem
+    # ================================
 
-F2 = s_V * mu * v_c * dx
-F2 -= s_V * mu_chem * v_c * dx
-F2 -= lam * (s_V * c.dx(0) * v_c.dx(0) * dx)
-F2 += grad_c_bc(c) * (s_A * v_c * dA_R)
+    # particle parameters
+    Rs = dfx.fem.Function(V0)
+    Rs.x.array[:] = 1.
+    Rs.x.scatter_forward()
 
-F = F1 + F2
+    As = 4 * np.pi * Rs**2
 
-residual = dfx.fem.form(F)
+    # Reaction affinity of the particles.
+    L_mean = 10.
+    L_var_rel = 0.1
+
+    Ls = dfx.fem.Function(V0)
+    Ls.x.array[:] = L_mean + \
+        L_var_rel * (2 * np.random.random(Ls.x.array.shape) - 1)
+
+    A_ufl = As * dA_R
+    A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
+    A = mesh.comm.allreduce(A, op=SUM)
+
+    a_ratios = As / A
+
+    # Weighted mean reaction affinity parameter taken from particle surfaces.
+    L_ufl = a_ratios * Ls * dA_R
+    L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
+    L = mesh.comm.allreduce(L, op=SUM)
+
+    return A, a_ratios, L, Ls
 
 
-# %% DOLFINx problem and solver setup
-# ===================================
+def DFN_FEM_form(
+    u, u0, v, I_global, V_cell,
+    M=lambda c: c * (1 - c), lam=0.1, grad_c_bc=lambda c: 0.0
+):
 
-problem = NonlinearProblem(F, u)
-solver = NewtonSolver(comm, problem)
-solver.rtol = 1e-9
-solver.max_it = 50
-solver.convergence_criterion = "incremental"
-solver.relaxation_parameter = 0.75
+    V = u.function_space
+    mesh = V.mesh
+    y, mu = ufl.split(u)
+    y0, mu0 = ufl.split(u0)
 
-ksp = solver.krylov_solver
-opts = PETSc.Options()
-option_prefix = ksp.getOptionsPrefix()
-opts[f"{option_prefix}ksp_type"] = "preonly"
-opts[f"{option_prefix}pc_type"] = "lu"
-ksp.setFromOptions()
+    v_c, v_mu = ufl.split(v)
 
-# %% Initial data
-# ===============
-u.sub(0).x.array[:] = -6.90675478  # This corresponds to the leftmost minimum of F
-callback()
+    dA_R = create_particle_summation_measure(mesh)
+    Ls = V_cell.Ls
+
+    I_particle = - Ls * (mu + V_cell)
+
+    theta = 1.0
+    dt = dfx.fem.Constant(mesh, 1e-6)
+
+    c = c_of_y(y)
+
+    r, _ = ufl.SpatialCoordinate(mesh)
+
+    s_V = 4 * np.pi * r**2
+    s_A = 2 * np.pi * r**2
+
+    dx = ufl.dx  # The volume element
+
+    mu_chem = compute_chemical_potential(free_energy, c)
+    mu_theta = theta * mu + (theta - 1.0) * mu0
+
+    flux = M(c) * mu_theta.dx(0)
+
+    # %% The FEM form
+    # ===============
+    F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_mu * dx
+    F1 += s_V * flux * v_mu.dx(0) * dt * dx
+    F1 -= I_particle * s_A * v_mu * dt * dA_R
+
+    F2 = s_V * mu * v_c * dx
+    F2 -= s_V * mu_chem * v_c * dx
+    F2 -= lam * (s_V * c.dx(0) * v_c.dx(0) * dx)
+    F2 += grad_c_bc(c) * (s_A * v_c * dA_R)
+
+    F = F1 + F2
+
+    return F
+
 
 if __name__ == "__main__":
 
+    mesh = create_1p1_DFN_mesh(comm, n_rad=16, n_part=1)
+
+    V = DFN_function_space(mesh)
+
+    u = dfx.fem.Function(V)
+    u0 = dfx.fem.Function(V)
+
+    v = ufl.TestFunction(V)
+
+    # Initial data
+    u.sub(0).x.array[:] = -6.90675478  # This corresponds to the leftmost minimum of F
+
     dt_min = 1e-9
-    dt_max = 1e-3
+    dt_max = 1e1
 
-    dt.value = 1e-8
+    dt = dfx.fem.Constant(mesh, 1e-8)
 
-    T_final = 65.0
-    tol = 1e-4
+    T_final = 650.0
 
-    I_global.value = 0.01
+    I_global = dfx.fem.Constant(mesh, 1.)
+    V_cell = Voltage(u, I_global)
 
-    u.x.scatter_forward()
-    u0.x.scatter_forward()
+    # FEM Form
+    # ========
+    F = DFN_FEM_form(u, u0, v, I_global, V_cell)
 
     # %% Runtime analysis and output
     # ==============================
     rt_analysis = AnalyzeOCP(u,
                              c_of_y,
-                             I_global,
-                             Ls,
-                             a_ratios,
+                             V_cell,
                              filename="CH_4_DFN_rt.txt")
 
     output = FileOutput(u,
                         np.linspace(0, T_final, 101),
                         filename="CH_4_DFN.xdmf",
                         variable_transform=c_of_y)
+
+    callback = TestCurrent(u, V_cell, I_global)
+
+    # %% DOLFINx problem and solver setup
+    # ===================================
+
+    problem = NonlinearProblem(F, u)
+    solver = NewtonSolver(comm, problem)
+    solver.rtol = 1e-9
+    solver.max_it = 50
+    solver.convergence_criterion = "incremental"
+    solver.relaxation_parameter = 0.75
+
+    ksp = solver.krylov_solver
+    opts = PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    opts[f"{option_prefix}ksp_type"] = "preonly"
+    opts[f"{option_prefix}pc_type"] = "lu"
+    ksp.setFromOptions()
 
     # %% Run the simulation
     # =====================
@@ -505,10 +610,11 @@ if __name__ == "__main__":
         u0,
         T_final,
         dt,
+        V_cell,
         dt_max=dt_max,
         dt_min=dt_min,
         dt_increase=1.1,
-        tol=tol,
+        tol=1e-4,
         runtime_analysis=rt_analysis,
         output=output,
         callback=callback
