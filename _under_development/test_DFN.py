@@ -83,6 +83,10 @@ def test_particle_current():
 
     u = dfx.fem.Function(V)
 
+    # Randomize the particle chemical potentials to have
+    # non-trivial particle current.
+    u.x.array[:] = np.random.random(u.x.array.shape)
+
     I_global = dfx.fem.Constant(mesh, 0.)
 
     voltage = Voltage(u, I_global)
