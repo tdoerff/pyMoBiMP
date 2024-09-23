@@ -92,7 +92,7 @@ def time_stepping(
 
             inc_voltage = 1e99  # To enter the loop at least once.
 
-            V_cell_value_old = V_cell.value.copy()
+            V_cell_value_old = V_cell.value
 
             pass
 
@@ -105,7 +105,7 @@ def time_stepping(
                 callback()
 
                 inc_voltage = np.abs(V_cell.value - V_cell_value_old)
-                V_cell_value_old = V_cell.value.copy()
+                V_cell_value_old = V_cell.value
 
                 it_voltage += 1
             else:
