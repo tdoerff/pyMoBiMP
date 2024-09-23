@@ -563,7 +563,7 @@ if __name__ == "__main__":
 
     T_final = 650.0
 
-    I_global = dfx.fem.Constant(mesh, 1.)
+    I_global = dfx.fem.Constant(mesh, 0.01)
     V_cell = Voltage(u, I_global)
 
     # FEM Form
