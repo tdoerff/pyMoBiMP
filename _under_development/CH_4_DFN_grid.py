@@ -1,6 +1,6 @@
 import basix
 import dolfinx as dfx
-from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
 from dolfinx.nls.petsc import NewtonSolver
 
 from mpi4py import MPI
@@ -28,7 +28,7 @@ from pyMoBiMP.fenicsx_utils import (
 # ===================
 
 
-def time_stepping(
+def time_stepping_iterate_over_voltage(
     solver,
     u,
     u0,
@@ -208,6 +208,174 @@ def time_stepping(
     return
 
 
+def time_stepping(
+    solver,
+    u,
+    u0,
+    T,
+    dt,
+    V_cell,
+    t_start=0,
+    dt_max=10.0,
+    dt_min=1e-9,
+    dt_increase=1.1,
+    tol=1e-6,
+    event_handler=lambda t, **pars: None,
+    output=None,
+    runtime_analysis=None,
+    logging=True,
+    callback=lambda: None,
+    **event_pars,
+):
+
+    assert dt_min < dt_max
+    assert tol > 0.
+
+    t = t_start
+    dt.value = dt_min * dt_increase
+
+    # Make sure initial time step does not exceed limits.
+    dt.value = np.minimum(dt.value, dt_max)
+
+    # Prepare outout
+    if output is not None:
+        output = np.atleast_1d(output)
+
+    it = 0
+
+    while t < T:
+
+        it += 1
+
+        if runtime_analysis is not None:
+            runtime_analysis.analyze(t)
+
+        try:
+            u.x.scatter_forward()
+            u0.x.array[:] = u.x.array[:]
+            u0.x.scatter_forward()
+
+            V_cell.update()
+            callback()  # check current
+            stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
+
+            if stop:
+                break
+
+            if float(dt) < dt_min:
+
+                raise ValueError(f"Timestep too small (dt={dt.value})!")
+
+            iterations, success = solver.solve(u)
+
+            if not success:
+                raise RuntimeError("Newton solver did not converge.")
+
+            # Adaptive timestepping a la Yibao Li et al. (2017)
+            u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
+
+            u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+
+            if iterations < solver.max_it / 5:
+                # Use the given increment factor if we are in a safe region, i.e.,
+                # if the Newton solver converges sufficiently fast.
+                inc_factor = dt_increase
+            elif iterations < solver.max_it / 2:
+                # Reduce the increment if we take more iterations.
+                inc_factor = 1 + 0.1 * (dt_increase - 1.)
+            elif iterations > solver.max_it * 0.8:
+                # Reduce the timestep in case we are approaching max_it
+                inc_factor = 0.9
+            else:
+                # Do not increase timestep between [0.5*max_it, 0.8*max_it]
+                inc_factor = 1.0
+
+            dt.value = min(max(tol / u_err_max, dt_min),
+                           dt_max,
+                           inc_factor * dt.value)
+
+        except StopEvent as e:
+
+            print(e)
+            print(">>> Stop integration.")
+
+            break
+
+        except RuntimeError as e:
+
+            print(e)
+
+            # reset and continue with smaller time step.
+            u.x.array[:] = u0.x.array[:]
+
+            iterations = solver.max_it
+
+            if dt.value > dt_min:
+                dt.value *= 0.5
+
+                print(f"Decrease timestep to dt={dt.value:1.3e}")
+
+                continue
+
+            else:
+                if output is not None:
+
+                    [o.save_snapshot(u, t) for o in output]
+
+        except ValueError as e:
+
+            print(e)
+
+            if output is not None:
+                [o.save_snapshot(u, t, force=True) for o in output]
+
+            break
+
+        # Find the minimum timestep among all processes.
+        # Note that we explicitly use COMM_WORLD since the mesh communicator
+        # only groups the processes belonging to one particle.
+        dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
+
+        dt.value = dt_global
+
+        t += float(dt)
+
+        if output is not None:
+            [o.save_snapshot(u, t) for o in output]
+
+        if logging:
+            perc = (t - t_start) / (T - t_start) * 100
+
+            if MPI.COMM_WORLD.rank == 0:
+                print(
+                    f"{perc:>3.0f} % :",
+                    f"t[{it:06}] = {t:1.6f}, "
+                    f"dt = {dt.value:1.3e}, "
+                    f"its = {iterations}",
+                    flush=True
+                )
+
+    else:
+
+        if output is not None:
+
+            [o.finalize() for o in output]
+
+    return
+
+
+class NonlinearProblem(NonlinearProblemBase):
+    def __init__(self, *args, callback=lambda: None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.callback = callback
+
+    def form(self, x):
+        super().form(x)
+
+        self.callback()
+
+
 def plot_solution_on_grid(u):
 
     V = u.function_space
@@ -298,6 +466,7 @@ class TestCurrent():
         self.V_cell = V_cell
 
     def compute_current(self):
+        self.V_cell.update()
         I_global_ref = dfx.fem.assemble_scalar(self.I_global_ref_form)
         I_global_ref = comm.allreduce(I_global_ref, op=SUM)
 
@@ -544,7 +713,7 @@ def DFN_FEM_form(
 
 if __name__ == "__main__":
 
-    mesh = create_1p1_DFN_mesh(comm, n_rad=16, n_part=1)
+    mesh = create_1p1_DFN_mesh(comm, n_rad=16, n_part=256)
 
     V = DFN_function_space(mesh)
 
@@ -587,12 +756,12 @@ if __name__ == "__main__":
     # %% DOLFINx problem and solver setup
     # ===================================
 
-    problem = NonlinearProblem(F, u)
+    problem = NonlinearProblem(F, u, callback=callback)
     solver = NewtonSolver(comm, problem)
     solver.rtol = 1e-9
     solver.max_it = 50
     solver.convergence_criterion = "incremental"
-    solver.relaxation_parameter = 0.75
+    solver.relaxation_parameter = 1.0
 
     ksp = solver.krylov_solver
     opts = PETSc.Options()
