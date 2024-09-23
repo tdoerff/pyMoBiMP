@@ -494,7 +494,7 @@ def physical_setup(V):
 
 
 def DFN_FEM_form(
-    u, u0, v, I_global, V_cell,
+    u, u0, v, dt, I_global, V_cell,
     M=lambda c: c * (1 - c), lam=0.1, grad_c_bc=lambda c: 0.0
 ):
 
@@ -511,7 +511,6 @@ def DFN_FEM_form(
     I_particle = - Ls * (mu + V_cell)
 
     theta = 1.0
-    dt = dfx.fem.Constant(mesh, 1e-6)
 
     c = c_of_y(y)
 
@@ -569,7 +568,7 @@ if __name__ == "__main__":
 
     # FEM Form
     # ========
-    F = DFN_FEM_form(u, u0, v, I_global, V_cell)
+    F = DFN_FEM_form(u, u0, v, dt, I_global, V_cell)
 
     # %% Runtime analysis and output
     # ==============================
