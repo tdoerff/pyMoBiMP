@@ -306,8 +306,8 @@ class NewtonSolver():
 
         self.problem = problem
 
-        self.A = problem.matrix()
-        self.L = problem.vector()
+        self.A = dfx.fem.petsc.create_matrix(problem.a)
+        self.L = dfx.fem.petsc.create_vector(problem.L)
 
         self.max_it = max_iterations
         self.rtol = rtol

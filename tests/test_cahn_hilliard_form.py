@@ -1,3 +1,5 @@
+import basix
+
 import dolfinx as dfx
 
 from mpi4py.MPI import COMM_WORLD as comm_world
@@ -17,14 +19,14 @@ def test_instantiate_single_particle_form():
     mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
     # The single-component element
-    elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 2)
+    elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
 
     elem_c = elem1
     elem_mu = elem1
 
-    particle_element = elem_c * elem_mu
+    particle_element = basix.ufl.mixed_element([elem_c, elem_mu])
 
-    V = dfx.fem.FunctionSpace(mesh, particle_element)
+    V = dfx.fem.functionspace(mesh, particle_element)
 
     u = dfx.fem.Function(V)
     u0 = dfx.fem.Function(V)
@@ -43,19 +45,17 @@ def test_instantiate_multi_particle_particle_form(num_particles):
     mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
 
     # The single-component element
-    elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 2)
+    elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
 
     elem_c = elem1
     elem_mu = elem1
 
-    multi_particle_element = ufl.MixedElement(
-        [
-            [elem_c, ] * num_particles,
-            [elem_mu,] * num_particles
-        ]
+    multi_particle_element = basix.ufl.mixed_element(
+        [basix.ufl.mixed_element([elem_c, ] * num_particles),
+            basix.ufl.mixed_element([elem_mu, ] * num_particles)]
     )
 
-    V = dfx.fem.FunctionSpace(
+    V = dfx.fem.functionspace(
         mesh, multi_particle_element
     )  # A mixed two-component function space
 

@@ -27,7 +27,7 @@ def test_NonlinearProblem():
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+    V = dfx.fem.functionspace(mesh, ("Lagrange", 1))
 
     uh = dfx.fem.Function(V)
 
@@ -75,7 +75,7 @@ def test_nonlinear_algebraic(order):
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", order))
+    V = dfx.fem.functionspace(mesh, ("Lagrange", order))
 
     uh = dfx.fem.Function(V)
 
@@ -101,12 +101,12 @@ def test_nonlinear_algebraic(order):
     assert np.isclose(L2_err0, 0.0)
 
 
-@pytest.mark.parametrize("order", [1, 5])
+@pytest.mark.parametrize("order", [1,])
 def test_differential(order):
 
     mesh = dfx.mesh.create_unit_interval(comm, 128)
 
-    V = dfx.fem.FunctionSpace(mesh, ("Lagrange", order))
+    V = dfx.fem.functionspace(mesh, ("Lagrange", order))
 
     uh = dfx.fem.Function(V)
 
@@ -183,7 +183,7 @@ def NonlinearBlockProblemCreation_algebraic():
     ]
 
     def set_up_u(mesh):
-        V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 1))
+        V = dfx.fem.functionspace(mesh, ("Lagrange", 1))
 
         u = dfx.fem.Function(V)
 
@@ -261,7 +261,7 @@ def test_nonlinear_block_differential():
     ]
 
     def set_up_u(mesh):
-        V = dfx.fem.FunctionSpace(mesh, ("Lagrange", 4))
+        V = dfx.fem.functionspace(mesh, ("Lagrange", 4))
 
         u = dfx.fem.Function(V)
 

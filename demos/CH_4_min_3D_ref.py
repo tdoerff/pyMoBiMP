@@ -3,6 +3,8 @@
 # %autoreload 2
 
 # %%
+import basix
+
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
@@ -63,12 +65,13 @@ dt = dfx.fem.Constant(mesh, dx_cell * 0.01)
 log(f"timestep size: dt = {dt.value:1.3e}")
 
 # %%
-elem1 = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+elem1 = basix.ufl.element("Lagrange", mesh.basix_cell(), 1)
 
-mixed_element = elem1 * elem1
+elem_c = elem1
+elem_mu = elem1
 
-V = dfx.fem.FunctionSpace(mesh, mixed_element)  # A mixed two-component function space
-
+# A mixed two-component function space
+V = dfx.fem.functionspace(mesh, basix.ufl.mixed_element([elem1, elem1]))
 # %%
 # The mixed-element functions
 u = dfx.fem.Function(V)
