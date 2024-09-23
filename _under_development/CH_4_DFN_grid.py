@@ -613,7 +613,7 @@ if __name__ == "__main__":
         dt_max=dt_max,
         dt_min=dt_min,
         dt_increase=1.1,
-        tol=1e-4,
+        tol=1e-5,
         runtime_analysis=rt_analysis,
         output=output,
         callback=callback
