@@ -667,7 +667,7 @@ def physical_setup(V):
 
 
 def DFN_FEM_form(
-    u, u0, v, dt, I_global, V_cell,
+    u, u0, v, dt, V_cell,
     M=lambda c: c * (1 - c), lam=0.1, grad_c_bc=lambda c: 0.0
 ):
 
@@ -678,7 +678,7 @@ def DFN_FEM_form(
 
     v_c, v_mu = ufl.split(v)
 
-    dA_R = create_particle_summation_measure(mesh)
+    dA = create_particle_summation_measure(mesh)
     Ls = V_cell.Ls
 
     I_particle = - Ls * (mu + V_cell)
@@ -686,6 +686,7 @@ def DFN_FEM_form(
     theta = 1.0
 
     c = c_of_y(y)
+    c0 = c_of_y(y0)
 
     r, _ = ufl.SpatialCoordinate(mesh)
 
@@ -699,16 +700,14 @@ def DFN_FEM_form(
 
     flux = M(c) * mu_theta.dx(0)
 
-    # %% The FEM form
-    # ===============
-    F1 = s_V * (c_of_y(y) - c_of_y(y0)) * v_mu * dx
-    F1 += s_V * flux * v_mu.dx(0) * dt * dx
-    F1 -= I_particle * s_A * v_mu * dt * dA_R
+    F1 = s_V * (c - c0) * v_c * dx
+    F1 += s_V * flux * v_c.dx(0) * dt * dx
+    F1 -= I_particle * v_c * dt * dA
 
-    F2 = s_V * mu * v_c * dx
-    F2 -= s_V * mu_chem * v_c * dx
-    F2 -= lam * (s_V * c.dx(0) * v_c.dx(0) * dx)
-    F2 += grad_c_bc(c) * (s_A * v_c * dA_R)
+    F2 = s_V * mu * v_mu * dx
+    F2 -= s_V * mu_chem * v_mu * dx
+    F2 -= lam * (s_V * c.dx(0) * v_mu.dx(0) * dx)
+    F2 += grad_c_bc(c) * (s_A * v_mu * dA)
 
     F = F1 + F2
 
@@ -741,7 +740,7 @@ if __name__ == "__main__":
 
     # FEM Form
     # ========
-    F = DFN_FEM_form(u, u0, v, dt, I_global, V_cell)
+    F = DFN_FEM_form(u, u0, v, dt, V_cell)
 
     # %% Runtime analysis and output
     # ==============================
