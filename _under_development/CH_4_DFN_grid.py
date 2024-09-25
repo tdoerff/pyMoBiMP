@@ -1,7 +1,6 @@
 import basix
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
-from dolfinx.nls.petsc import NewtonSolver
 
 from mpi4py import MPI
 from mpi4py.MPI import COMM_WORLD as comm, SUM
@@ -21,6 +20,7 @@ from pyMoBiMP.cahn_hilliard_utils import (
 
 from pyMoBiMP.fenicsx_utils import (
     FileOutput,
+    NewtonSolver,
     RuntimeAnalysisBase,
     StopEvent)
 
