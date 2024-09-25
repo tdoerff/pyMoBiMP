@@ -483,7 +483,8 @@ class TestCurrent():
         if not np.isclose(I_global_ref, self.I_global.value):
             raise AssertionError(
                 "Error in global current computation" +
-                f"I_global_ref = {I_global_ref} != {self.I_global.value} = I_global.value")
+                f"I_global_ref = {I_global_ref} " +
+                f"!= {self.I_global.value} = I_global.value")
 
         return I_global_ref
 
