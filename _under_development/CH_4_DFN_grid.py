@@ -381,6 +381,10 @@ def plot_solution_on_grid(u):
     V = u.function_space
 
     topology, cell_types, x = dfx.plot.vtk_mesh(V)
+
+    n_particles = np.max(x)
+    x[:, 1] /= n_particles
+
     grid = pv.UnstructuredGrid(topology, cell_types, x)
 
     grid['u'] = u.x.array
