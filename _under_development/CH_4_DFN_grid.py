@@ -687,7 +687,7 @@ def DFN_FEM_form(
 
     F1 = s_V * (c - c0) * v_c * dx
     F1 += s_V * flux * v_c.dx(0) * dt * dx
-    F1 -= I_particle * v_c * dt * dA
+    F1 -= s_A * I_particle * v_c * dt * dA
 
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
