@@ -121,11 +121,8 @@ def time_stepping(
 
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
-            else:
-                iterations = MPI.COMM_WORLD.allreduce(iterations, op=MPI.MAX)
 
             # Adaptive timestepping a la Yibao Li et al. (2017)
-            # TODO: Timestepping through free energy
             u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
 
             u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)

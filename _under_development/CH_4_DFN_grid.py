@@ -301,7 +301,7 @@ def time_stepping(
 
             break
 
-        except RuntimeError as e:
+        except (RuntimeError, AssertionError) as e:
 
             print(e)
 
