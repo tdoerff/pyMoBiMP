@@ -2,6 +2,7 @@ import dolfinx as dfx
 from mpi4py.MPI import COMM_WORLD as comm
 import numpy as np
 import pytest
+import ufl
 
 from CH_4_DFN_grid import (TestCurrent,
                            create_1p1_DFN_mesh,
@@ -25,6 +26,40 @@ def test_physical_setup():
     assert np.isclose(
         dfx.fem.assemble_scalar(dfx.fem.form(Ls * a_ratios * dA_R)),
         L)
+
+
+def test_mesh():
+
+    n_particles = 128
+
+    mesh = create_1p1_DFN_mesh(comm, n_part=n_particles)
+    dA = create_particle_summation_measure(mesh)
+
+    form = dfx.fem.form(dfx.fem.Constant(mesh, 1.) * ufl.dx)
+    value = dfx.fem.assemble_scalar(form)
+
+    print(value)
+    assert np.isclose(value, n_particles)
+
+    form = dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA)
+    value = dfx.fem.assemble_scalar(form)
+
+    print(value)
+    assert np.isclose(value, n_particles)
+
+    r, _ = ufl.SpatialCoordinate(mesh)
+
+    form = dfx.fem.form(r * dA)
+    value = dfx.fem.assemble_scalar(form)
+
+    print(value)
+    assert np.isclose(value, n_particles)
+
+    form = dfx.fem.form((1 - r) * dA)
+    value = dfx.fem.assemble_scalar(form)
+
+    print(value)
+    assert np.isclose(value, 0.)
 
 
 @pytest.mark.parametrize("I_global_value", [0., 1e-3, 0.1, 1.0, 10., 100.])
