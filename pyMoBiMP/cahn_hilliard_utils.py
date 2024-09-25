@@ -956,7 +956,8 @@ class MultiParticleSimulation():
     def run(self,
             dt_max=1e-1,
             dt_min=1e-8,
-            tol=1e-4):
+            tol=1e-4,
+            dt_increase=1.1):
         # %%
         # Run the experiment
         # ------------------
@@ -969,6 +970,7 @@ class MultiParticleSimulation():
             self.dt,
             dt_max=dt_max,
             dt_min=dt_min,
+            dt_increase=dt_increase,
             tol=tol,
             event_handler=self.experiment,
             output=self.output_xdmf,
