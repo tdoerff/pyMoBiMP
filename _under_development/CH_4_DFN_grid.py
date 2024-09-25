@@ -762,7 +762,7 @@ if __name__ == "__main__":
 
     problem = NonlinearProblem(F, u, callback=callback)
     solver = NewtonSolver(comm, problem)
-    solver.rtol = 1e-9
+    solver.rtol = 1e-5
     solver.max_it = 50
     solver.convergence_criterion = "incremental"
     solver.relaxation_parameter = 1.0
@@ -785,8 +785,8 @@ if __name__ == "__main__":
         V_cell,
         dt_max=dt_max,
         dt_min=dt_min,
-        dt_increase=1.1,
-        tol=1e-5,
+        dt_increase=1.5,
+        tol=1e-2,
         runtime_analysis=rt_analysis,
         output=output,
         callback=callback
