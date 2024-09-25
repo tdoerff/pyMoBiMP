@@ -718,7 +718,7 @@ if __name__ == "__main__":
 
     problem = NonlinearProblem(F, u, callback=callback)
     solver = NewtonSolver(comm, problem)
-    solver.rtol = 1e-5
+    solver.rtol = 1e-7
     solver.max_it = 50
     solver.convergence_criterion = "incremental"
     solver.relaxation_parameter = 1.0
@@ -729,6 +729,21 @@ if __name__ == "__main__":
     opts[f"{option_prefix}ksp_type"] = "preonly"
     opts[f"{option_prefix}pc_type"] = "lu"
     ksp.setFromOptions()
+
+    # TODO: source out to function
+    u0.sub(0).x.array[:] = -6.90675478  # This corresponds to roughly c = 1e-3
+
+    dt.value = 0.
+
+    # u.interpolate(u0)  # Initial guess
+
+    residual = dfx.fem.form(F)
+
+    print(dfx.fem.petsc.assemble_vector(residual).norm())
+    its, success = solver.solve(u)
+    error = dfx.fem.petsc.assemble_vector(residual).norm()
+    print(its, error)
+    assert np.isclose(error, 0.)
 
     # %% Run the simulation
     # =====================
@@ -741,8 +756,8 @@ if __name__ == "__main__":
         V_cell,
         dt_max=dt_max,
         dt_min=dt_min,
-        dt_increase=1.5,
-        tol=1e-2,
+        dt_increase=1.1,
+        tol=1e-4,
         runtime_analysis=rt_analysis,
         output=output,
         callback=callback
