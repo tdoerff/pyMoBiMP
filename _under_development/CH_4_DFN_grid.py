@@ -566,6 +566,7 @@ def DFN_function_space(mesh):
 
 
 def create_particle_summation_measure(mesh):
+    # TODO: rename to particle_summation_measure
     # %% Create integral measure on the particle surface
     # --------------------------------------------------
     fdim = mesh.topology.dim - 1
