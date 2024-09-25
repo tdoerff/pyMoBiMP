@@ -268,6 +268,8 @@ def time_stepping(
 
             iterations, success = solver.solve(u)
 
+            t += float(dt)
+
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
 
@@ -337,8 +339,6 @@ def time_stepping(
         dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
 
         dt.value = dt_global
-
-        t += float(dt)
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
