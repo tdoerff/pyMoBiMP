@@ -588,7 +588,7 @@ if __name__ == "__main__":
     opts = PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
     opts[f"{option_prefix}ksp_type"] = "preonly"
-    opts[f"{option_prefix}pc_type"] = "lu"
+    opts[f"{option_prefix}pc_type"] = "ksp"
     ksp.setFromOptions()
 
     # TODO: source out to function
