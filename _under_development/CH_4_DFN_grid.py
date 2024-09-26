@@ -109,10 +109,21 @@ def time_stepping(
             iterations = solver.max_it
 
             if dt.value > dt_min:
+
+                # Reset the timestep
+                t -= float(dt)
+                it -= 1
+
+                # Lower the timestep size ...
                 dt.value *= 0.5
+
+                # ... reset the solution array ...
+                u.x.array[:] = u0.x.array[:]
+                u.x.scatter_forward()
 
                 print(f"Decrease timestep to dt={dt.value:1.3e}")
 
+                # ... and restart the current iteration.
                 continue
 
             else:
