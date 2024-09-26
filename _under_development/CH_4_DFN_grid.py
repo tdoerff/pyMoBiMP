@@ -302,7 +302,7 @@ class TestCurrent():
         self.V_cell = V_cell
 
     def compute_current(self):
-        self.V_cell.update()
+
         I_global_ref = dfx.fem.assemble_scalar(self.I_global_ref_form)
         I_global_ref = comm.allreduce(I_global_ref, op=SUM)
 
@@ -582,7 +582,7 @@ if __name__ == "__main__":
     # ===================================
 
     problem = NonlinearProblem(F, u, callback=callback)
-    solver = NewtonSolver(comm, problem)
+    solver = NewtonSolver(comm, problem, callback=lambda solver, uh: V_cell.update())
     solver.rtol = 1e-7
     solver.max_it = 50
     solver.convergence_criterion = "incremental"
