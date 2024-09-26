@@ -74,6 +74,8 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
+            t += float(dt)
+
             V_cell.update()
             callback()  # check current
             stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
@@ -86,8 +88,6 @@ def time_stepping(
                 raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
-
-            t += float(dt)
 
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
