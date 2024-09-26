@@ -1,7 +1,7 @@
 {
     "julia.executablePath": "~/local/opt/anaconda/envs/julia/bin/julia",
     "python.testing.pytestArgs": [
-        "experiments", "tests"
+        "experiments", "tests", "_under_development"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
