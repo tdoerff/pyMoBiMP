@@ -56,7 +56,7 @@ def time_stepping(
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
 
-    # Prepare outout
+    # Prepare output
     if output is not None:
         output = np.atleast_1d(output)
 
