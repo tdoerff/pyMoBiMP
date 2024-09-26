@@ -547,32 +547,37 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
 def create_1p1_DFN_mesh(comm, n_rad=16, n_part=192):
 
-    radial_grid = np.linspace(0, 1, n_rad)
-    particle_grid = np.linspace(0, 1, n_part)
+    if comm.rank == 1:
+        radial_grid = np.linspace(0, 1, n_rad)
+        particle_grid = np.linspace(0, 1, n_part)
 
-    rr, pp = np.meshgrid(radial_grid, particle_grid)
+        rr, pp = np.meshgrid(radial_grid, particle_grid)
 
-    coords_grid = np.stack((rr, pp)).transpose((-1, 1, 0)).copy()
+        coords_grid = np.stack((rr, pp)).transpose((-1, 1, 0)).copy()
 
-    coords_grid.shape
+        coords_grid.shape
 
-    coords_grid_flat = coords_grid.reshape(-1, 2).copy()
+        coords_grid_flat = coords_grid.reshape(-1, 2).copy()
 
-    # All the radial connections
-    elements_radial = [
-        [[n_part * i + k, n_part * (i + 1) + k] for i in range(n_rad - 1)]
-        for k in range(n_part)
-    ]
+        # All the radial connections
+        elements_radial = [
+            [[n_part * i + k, n_part * (i + 1) + k] for i in range(n_rad - 1)]
+            for k in range(n_part)
+        ]
 
-    elements_radial = np.array(elements_radial).reshape(-1, 2)
+        elements_radial = np.array(elements_radial).reshape(-1, 2)
 
-    # Connections between particles
-    elements_bc = (n_rad - 1) * n_part + np.array(
-        [[k, k + 1] for k in range(n_part - 1)]
-    )
-    elements_bc = []  # With elements at the outer edge the integration fails.
+        # Connections between particles
+        elements_bc = (n_rad - 1) * n_part + np.array(
+            [[k, k + 1] for k in range(n_part - 1)]
+        )
+        elements_bc = []  # With elements at the outer edge the integration fails.
 
-    elements = np.array(list(elements_bc) + list(elements_radial))
+        elements = np.array(list(elements_bc) + list(elements_radial))
+
+    else:
+        coords_grid_flat = np.empty((0, 2), dtype=np.float64)
+        elements = np.empty((0, 2), dtype=np.int64)
 
     gdim = 2
     shape = "interval"
