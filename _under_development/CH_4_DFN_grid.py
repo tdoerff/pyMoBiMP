@@ -24,6 +24,7 @@ from pyMoBiMP.fenicsx_utils import (
     RuntimeAnalysisBase,
     StopEvent)
 
+
 # %% Helper functions
 # ===================
 def time_stepping(
@@ -91,29 +92,6 @@ def time_stepping(
             if not success:
                 raise RuntimeError("Newton solver did not converge.")
 
-            # Adaptive timestepping a la Yibao Li et al. (2017)
-            u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
-
-            u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
-
-            if iterations < solver.max_it / 5:
-                # Use the given increment factor if we are in a safe region, i.e.,
-                # if the Newton solver converges sufficiently fast.
-                inc_factor = dt_increase
-            elif iterations < solver.max_it / 2:
-                # Reduce the increment if we take more iterations.
-                inc_factor = 1 + 0.1 * (dt_increase - 1.)
-            elif iterations > solver.max_it * 0.8:
-                # Reduce the timestep in case we are approaching max_it
-                inc_factor = 0.9
-            else:
-                # Do not increase timestep between [0.5*max_it, 0.8*max_it]
-                inc_factor = 1.0
-
-            dt.value = min(max(tol / u_err_max, dt_min),
-                           dt_max,
-                           inc_factor * dt.value)
-
         except StopEvent as e:
 
             print(e)
@@ -150,6 +128,27 @@ def time_stepping(
                 [o.save_snapshot(u, t, force=True) for o in output]
 
             break
+
+        # Adaptive timestepping a la Yibao Li et al. (2017)
+        u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
+
+        u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+
+        if iterations < solver.max_it / 5:
+            # Use the given increment factor if we are in a safe region, i.e.,
+            # if the Newton solver converges sufficiently fast.
+            inc_factor = dt_increase
+        elif iterations < solver.max_it / 2:
+            # Reduce the increment if we take more iterations.
+            inc_factor = 1 + 0.1 * (dt_increase - 1.)
+        elif iterations > solver.max_it * 0.8:
+            # Reduce the timestep in case we are approaching max_it
+            inc_factor = 0.9
+        else:
+            # Do not increase timestep between [0.5*max_it, 0.8*max_it]
+            inc_factor = 1.0
+
+        dt.value = min(max(tol / u_err_max, dt_min), dt_max, inc_factor * dt.value)
 
         # Find the minimum timestep among all processes.
         # Note that we explicitly use COMM_WORLD since the mesh communicator
