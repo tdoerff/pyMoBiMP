@@ -59,15 +59,16 @@ def time_stepping(
     # Prepare output
     if output is not None:
         output = np.atleast_1d(output)
+        [o.save_snapshot(u, t, force=True) for o in output]
+
+    if runtime_analysis is not None:
+        runtime_analysis.analyze(t)
 
     it = 0
 
     while t < T:
 
         it += 1
-
-        if runtime_analysis is not None:
-            runtime_analysis.analyze(t)
 
         try:
             u.x.scatter_forward()
@@ -167,6 +168,9 @@ def time_stepping(
         dt_global = MPI.COMM_WORLD.allreduce(dt.value, op=MPI.MIN)
 
         dt.value = dt_global
+
+        if runtime_analysis is not None:
+            runtime_analysis.analyze(t)
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
