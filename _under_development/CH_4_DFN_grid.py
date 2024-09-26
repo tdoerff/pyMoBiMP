@@ -365,7 +365,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
 def create_1p1_DFN_mesh(comm, n_rad=16, n_part=192):
 
-    if comm.rank == 1:
+    if comm.rank == 0:
         radial_grid = np.linspace(0, 1, n_rad)
         particle_grid = np.linspace(0, 1, n_part)
 
