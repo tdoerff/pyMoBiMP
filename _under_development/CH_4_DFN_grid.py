@@ -334,17 +334,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         coords = ufl.SpatialCoordinate(mesh)
         r = coords[0]
 
-        # Create integral measure on the particle surface
-        fdim = mesh.topology.dim - 1
-
-        facets = dfx.mesh.locate_entities(mesh, fdim, lambda x: np.isclose(x[0], 1.))
-
-        facet_markers = np.full_like(facets, 1)
-
-        facet_tag = dfx.mesh.meshtags(mesh, fdim, facets, facet_markers)
-
-        dA = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tag)
-        dA_R = dA(1)
+        dA_R = create_particle_summation_measure(mesh)
 
         # By integrating over the boundary we get a measure of the
         # number of particles.
