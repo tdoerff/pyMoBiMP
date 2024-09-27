@@ -536,11 +536,8 @@ if __name__ == "__main__":
 
     v = ufl.TestFunction(V)
 
-    # Initial data
-    u.sub(0).x.array[:] = -6.90675478  # This corresponds to the leftmost minimum of F
-
     dt_min = 1e-9
-    dt_max = 1e1
+    dt_max = 1e-3
 
     dt = dfx.fem.Constant(mesh, 1e-8)
 
@@ -570,7 +567,7 @@ if __name__ == "__main__":
     # %% DOLFINx problem and solver setup
     # ===================================
 
-    problem = NonlinearProblem(F, u, callback=callback)
+    problem = NonlinearProblem(F, u)
     solver = NewtonSolver(comm, problem, callback=lambda solver, uh: V_cell.update())
     solver.rtol = 1e-7
     solver.max_it = 50
