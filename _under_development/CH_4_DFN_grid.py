@@ -224,8 +224,9 @@ def plot_solution_on_grid(u):
 
     warped = grid.warp_by_scalar('u')
 
-    plotter.add_mesh(warped, show_edges=True, show_vertices=False, )
+    plotter.add_mesh(warped, show_edges=True, show_vertices=False, show_scalar_bar=True)
     plotter.add_axes()
+    plotter.add_bounding_box()
 
     plotter.show()
 
