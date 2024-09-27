@@ -75,6 +75,9 @@ def time_stepping(
             u0.x.array[:] = u.x.array[:]
             u0.x.scatter_forward()
 
+            if float(dt) < dt_min:
+                raise ValueError(f"Timestep too small (dt={dt.value})!")
+
             t += float(dt)
 
             V_cell.update()
@@ -83,10 +86,6 @@ def time_stepping(
 
             if stop:
                 break
-
-            if float(dt) < dt_min:
-
-                raise ValueError(f"Timestep too small (dt={dt.value})!")
 
             iterations, success = solver.solve(u)
 
