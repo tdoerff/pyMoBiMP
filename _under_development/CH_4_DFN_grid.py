@@ -27,6 +27,21 @@ from pyMoBiMP.fenicsx_utils import (
 
 # %% Helper functions
 # ===================
+
+def log(*msg, my_rank=0, all_procs=False):
+
+    rank = MPI.COMM_WORLD.rank
+
+    if not all_procs and rank == my_rank:
+        print("[0] ", *msg, flush=True)
+
+    else:
+        size = MPI.COMM_WORLD.size
+        digits = np.ceil(np.log10(size))
+
+        print(f"[{rank:0{digits}}] ", *msg)
+
+
 def time_stepping(
     solver,
     u,
