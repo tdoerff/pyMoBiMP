@@ -32,8 +32,9 @@ def log(*msg, my_rank=0, all_procs=False):
 
     rank = MPI.COMM_WORLD.rank
 
-    if not all_procs and rank == my_rank:
-        print("[0] ", *msg, flush=True)
+    if not all_procs:
+        if rank == my_rank:
+            print("[0] ", *msg, flush=True)
 
     else:
         size = MPI.COMM_WORLD.size
