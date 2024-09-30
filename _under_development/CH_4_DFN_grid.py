@@ -647,7 +647,8 @@ class DFNSimulationBase(abc.ABC):
             t_final: float = 650.,
             dt_min: float = 1e-9,
             dt_max: float = 1e-3,
-            dt_increase: float = 1.1):
+            dt_increase: float = 1.1,
+            tol: float = 1e-4):
 
         self.output = self.Output(
             self.u,
@@ -667,7 +668,7 @@ class DFNSimulationBase(abc.ABC):
             dt_max=dt_max,
             dt_min=dt_min,
             dt_increase=dt_increase,
-            tol=1e-4,
+            tol=tol,
             runtime_analysis=self.rt_analysis,
             output=self.output,
             callback=self.callback
