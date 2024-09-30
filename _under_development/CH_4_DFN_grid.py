@@ -526,91 +526,128 @@ def DFN_FEM_form(
     return F
 
 
+class DFNSimulation():
+
+    RuntimeAnalysis = NotImplemented
+    Output = NotImplemented
+    Experiment = NotImplemented
+
+    def __init__(
+            self,
+            comm: MPI.Intracomm = MPI.COMM_WORLD,
+            n_particles: int = 1024,
+            n_radius: int = 128):
+
+        self.comm = comm
+
+        self.n_particles = n_particles
+        self.n_radius = n_radius
+
+        self.create_mesh()
+
+        self.create_function_space()
+
+        # Shorthands
+        V = self.function_space
+        mesh = V.mesh
+
+        self.u = u = dfx.fem.Function(V)
+        self.u0 = u0 = dfx.fem.Function(V)
+
+        v = ufl.TestFunction(V)
+
+        self.dt = dt = dfx.fem.Constant(mesh, 1e-8)
+
+        I_global = dfx.fem.Constant(mesh, 0.01)
+        self.V_cell = V_cell = Voltage(u, I_global)
+
+        # FEM Form
+        # ========
+        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell)
+
+        # %% Runtime analysis and output
+        # ==============================
+        self.rt_analysis = AnalyzeOCP(
+            u, c_of_y, V_cell, filename="CH_4_DFN_rt.txt")
+
+        self.callback = TestCurrent(u, V_cell, I_global)
+
+        # %% DOLFINx problem and solver setup
+        # ===================================
+
+        problem = NonlinearProblem(F, u)
+        self.solver = solver = NewtonSolver(
+            comm, problem, callback=lambda solver, uh: V_cell.update())
+        solver.rtol = 1e-7
+        solver.max_it = 50
+        solver.convergence_criterion = "incremental"
+        solver.relaxation_parameter = 1.0
+
+        ksp = solver.krylov_solver
+        opts = PETSc.Options()
+        option_prefix = ksp.getOptionsPrefix()
+        opts[f"{option_prefix}ksp_type"] = "preonly"
+        opts[f"{option_prefix}pc_type"] = "ksp"
+        ksp.setFromOptions()
+
+        # TODO: source out to function
+        u0.sub(0).x.array[:] = -6.90675478  # This corresponds to roughly c = 1e-3
+
+        dt.value = 0.
+
+        # u.interpolate(u0)  # Initial guess
+
+        residual = dfx.fem.form(F)
+
+        print(dfx.fem.petsc.assemble_vector(residual).norm())
+        its, success = solver.solve(u)
+        error = dfx.fem.petsc.assemble_vector(residual).norm()
+        print(its, error)
+        assert np.isclose(error, 0.)
+
+    def create_mesh(self):
+
+        self.mesh = create_1p1_DFN_mesh(
+            self.comm, self.n_radius, self.n_particles)
+
+    def create_function_space(self):
+
+        self.function_space = DFN_function_space(self.mesh)
+
+    def run(self,
+            t_start: float = 0.,
+            t_final: float = 650.,
+            dt_min: float = 1e-9,
+            dt_max: float = 1e-3,
+            dt_increase: float = 1.1):
+
+        self.output = FileOutput(
+            self.u,
+            np.linspace(t_start, t_final, 101),
+            filename="CH_4_DFN.xdmf",
+            variable_transform=c_of_y,
+        )
+
+        time_stepping(
+            self.solver,
+            self.u,
+            self.u0,
+            t_final,
+            self.dt,
+            self.V_cell,
+            t_start=t_start,
+            dt_max=dt_max,
+            dt_min=dt_min,
+            dt_increase=dt_increase,
+            tol=1e-4,
+            runtime_analysis=self.rt_analysis,
+            output=self.output,
+            callback=self.callback
+        )
+
+
 if __name__ == "__main__":
 
-    mesh = create_1p1_DFN_mesh(comm, n_rad=16, n_part=256)
+    simulation = DFNSimulation(n_particles=128, n_radius=16)
 
-    V = DFN_function_space(mesh)
-
-    u = dfx.fem.Function(V)
-    u0 = dfx.fem.Function(V)
-
-    v = ufl.TestFunction(V)
-
-    dt_min = 1e-9
-    dt_max = 1e-3
-
-    dt = dfx.fem.Constant(mesh, 1e-8)
-
-    T_final = 650.0
-
-    I_global = dfx.fem.Constant(mesh, 0.01)
-    V_cell = Voltage(u, I_global)
-
-    # FEM Form
-    # ========
-    F = DFN_FEM_form(u, u0, v, dt, V_cell)
-
-    # %% Runtime analysis and output
-    # ==============================
-    rt_analysis = AnalyzeOCP(u,
-                             c_of_y,
-                             V_cell,
-                             filename="CH_4_DFN_rt.txt")
-
-    output = FileOutput(u,
-                        np.linspace(0, T_final, 101),
-                        filename="CH_4_DFN.xdmf",
-                        variable_transform=c_of_y)
-
-    callback = TestCurrent(u, V_cell, I_global)
-
-    # %% DOLFINx problem and solver setup
-    # ===================================
-
-    problem = NonlinearProblem(F, u)
-    solver = NewtonSolver(comm, problem, callback=lambda solver, uh: V_cell.update())
-    solver.rtol = 1e-7
-    solver.max_it = 50
-    solver.convergence_criterion = "incremental"
-    solver.relaxation_parameter = 1.0
-
-    ksp = solver.krylov_solver
-    opts = PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-    opts[f"{option_prefix}ksp_type"] = "preonly"
-    opts[f"{option_prefix}pc_type"] = "ksp"
-    ksp.setFromOptions()
-
-    # TODO: source out to function
-    u0.sub(0).x.array[:] = -6.90675478  # This corresponds to roughly c = 1e-3
-
-    dt.value = 0.
-
-    # u.interpolate(u0)  # Initial guess
-
-    residual = dfx.fem.form(F)
-
-    print(dfx.fem.petsc.assemble_vector(residual).norm())
-    its, success = solver.solve(u)
-    error = dfx.fem.petsc.assemble_vector(residual).norm()
-    print(its, error)
-    assert np.isclose(error, 0.)
-
-    # %% Run the simulation
-    # =====================
-    time_stepping(
-        solver,
-        u,
-        u0,
-        T_final,
-        dt,
-        V_cell,
-        dt_max=dt_max,
-        dt_min=dt_min,
-        dt_increase=1.1,
-        tol=1e-4,
-        runtime_analysis=rt_analysis,
-        output=output,
-        callback=callback
-    )
+    simulation.run()
