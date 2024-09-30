@@ -575,20 +575,7 @@ class DFNSimulation():
         # %% DOLFINx problem and solver setup
         # ===================================
 
-        problem = NonlinearProblem(F, u)
-        self.solver = solver = NewtonSolver(
-            comm, problem, callback=lambda solver, uh: V_cell.update())
-        solver.rtol = 1e-7
-        solver.max_it = 50
-        solver.convergence_criterion = "incremental"
-        solver.relaxation_parameter = 1.0
-
-        ksp = solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "ksp"
-        ksp.setFromOptions()
+        solver = self.solver_setup(comm, u, V_cell, F)
 
         # TODO: source out to function
         u0.sub(0).x.array[:] = -6.90675478  # This corresponds to roughly c = 1e-3
@@ -604,6 +591,23 @@ class DFNSimulation():
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         print(its, error)
         assert np.isclose(error, 0.)
+
+    def solver_setup(self, comm, u, V_cell, F):
+        problem = NonlinearProblem(F, u)
+        self.solver = solver = NewtonSolver(
+            comm, problem, callback=lambda solver, uh: V_cell.update())
+        solver.rtol = 1e-7
+        solver.max_it = 50
+        solver.convergence_criterion = "incremental"
+        solver.relaxation_parameter = 1.0
+
+        ksp = solver.krylov_solver
+        opts = PETSc.Options()
+        option_prefix = ksp.getOptionsPrefix()
+        opts[f"{option_prefix}ksp_type"] = "preonly"
+        opts[f"{option_prefix}pc_type"] = "ksp"
+        ksp.setFromOptions()
+        return solver
 
     def create_mesh(self):
 
