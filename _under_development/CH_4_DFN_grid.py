@@ -589,6 +589,7 @@ class DFNSimulation():
 
         # %% DOLFINx problem and solver setup
         # ===================================
+        self.solver_setup(comm, u, V_cell, F)
 
         solver = self.solver_setup(comm, u, V_cell, F)
 
@@ -622,7 +623,8 @@ class DFNSimulation():
         opts[f"{option_prefix}ksp_type"] = "preonly"
         opts[f"{option_prefix}pc_type"] = "ksp"
         ksp.setFromOptions()
-        return solver
+
+        self.solver
 
     def create_mesh(self):
 
