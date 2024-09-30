@@ -1,3 +1,5 @@
+import abc
+
 import basix
 import dolfinx as dfx
 from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
@@ -542,7 +544,7 @@ def DFN_FEM_form(
     return F
 
 
-class DFNSimulation():
+class DFNSimulationBase(abc.ABC):
 
     RuntimeAnalysis = NotImplemented
     Output = NotImplemented
@@ -583,7 +585,7 @@ class DFNSimulation():
 
         # %% Runtime analysis and output
         # ==============================
-        self.rt_analysis = AnalyzeOCP(
+        self.rt_analysis = self.RuntimeAnalysis(
             u, c_of_y, V_cell, filename="CH_4_DFN_rt.txt")
 
         self.callback = TestCurrent(u, V_cell, I_global)
@@ -647,7 +649,7 @@ class DFNSimulation():
             dt_max: float = 1e-3,
             dt_increase: float = 1.1):
 
-        self.output = FileOutput(
+        self.output = self.Output(
             self.u,
             np.linspace(t_start, t_final, 101),
             filename="CH_4_DFN.xdmf",
@@ -673,6 +675,10 @@ class DFNSimulation():
 
 
 if __name__ == "__main__":
+
+    class DFNSimulation(DFNSimulationBase):
+        Output = FileOutput
+        RuntimeAnalysis = AnalyzeOCP
 
     simulation = DFNSimulation(n_particles=128, n_radius=16)
 
