@@ -591,19 +591,23 @@ class DFNSimulation():
         # ===================================
         self.solver_setup(comm, u, V_cell, F)
 
-        solver = self.solver_setup(comm, u, V_cell, F)
+        self.initial_data()
 
-        # TODO: source out to function
-        u0.sub(0).x.array[:] = -6.90675478  # This corresponds to roughly c = 1e-3
+    def initial_data(self):
 
-        dt.value = 0.
+        # This corresponds to roughly c = 1e-3
+        self.u0.sub(0).x.array[:] = -6.90675478
 
-        # u.interpolate(u0)  # Initial guess
+        # By setting dt=0, we have the first equation to be y=y0 and
+        # solve for the chemical potential, only.
+        self.dt.value = 0.
 
-        residual = dfx.fem.form(F)
+        # Do some diagnostic checks to see whether the solver did ok.
+        residual = dfx.fem.form(self.F)
 
-        print(dfx.fem.petsc.assemble_vector(residual).norm())
-        its, success = solver.solve(u)
+        log(dfx.fem.petsc.assemble_vector(residual).norm())
+
+        its, success = self.solver.solve(self.u)
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         print(its, error)
         assert np.isclose(error, 0.)
