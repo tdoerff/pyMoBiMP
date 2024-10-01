@@ -24,7 +24,8 @@ from pyMoBiMP.fenicsx_utils import (
     FileOutput,
     NewtonSolver,
     RuntimeAnalysisBase,
-    StopEvent)
+    StopEvent,
+    strip_off_xdmf_file_ending)
 
 
 # %% Helper functions
@@ -618,7 +619,8 @@ class DFNSimulationBase(abc.ABC):
             self,
             comm: MPI.Intracomm = MPI.COMM_WORLD,
             n_particles: int = 1024,
-            n_radius: int = 128):
+            n_radius: int = 128,
+            output_destination: str = "CH_4_DFN.xdmf"):
 
         self.comm = comm
 
@@ -649,8 +651,12 @@ class DFNSimulationBase(abc.ABC):
 
         # %% Runtime analysis and output
         # ==============================
+        self.output_file_name_base = strip_off_xdmf_file_ending(
+            output_destination
+        )
+        
         self.rt_analysis = self.RuntimeAnalysis(
-            u, c_of_y, V_cell, filename="CH_4_DFN_rt.txt")
+            u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
 
         self.callback = TestCurrent(u, V_cell, I_global)
         
@@ -719,7 +725,7 @@ class DFNSimulationBase(abc.ABC):
         self.output = self.Output(
             self.u,
             np.linspace(t_start, t_final, 101),
-            filename="CH_4_DFN.xdmf",
+            filename=self.output_file_name_base + ".xdmf",
             variable_transform=c_of_y,
         )
 
