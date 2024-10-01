@@ -384,8 +384,8 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         self.data.append([soc, V_cell])
 
         return super().analyze(t)
-    
-    
+
+
 class ChargeDischargeExperiment():
 
     # Global parameters
@@ -404,7 +404,7 @@ class ChargeDischargeExperiment():
         return self.experiment(t, cell_voltage)
 
     def experiment(self, t, cell_voltage):
-        
+
         if self.logging:
             log(
                 f"t={t:1.5f} ; V_cell = {cell_voltage}")
@@ -649,20 +649,20 @@ class DFNSimulationBase(abc.ABC):
         # ========
         self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell)
 
-        # %% Runtime analysis and output
+        # Runtime analysis and output
         # ==============================
         self.output_file_name_base = strip_off_xdmf_file_ending(
             output_destination
         )
-        
+
         self.rt_analysis = self.RuntimeAnalysis(
             u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
 
         self.callback = TestCurrent(u, V_cell, I_global)
-        
+
         self.experiment = self.Experiment(u, V_cell)
 
-        # %% DOLFINx problem and solver setup
+        # DOLFINx problem and solver setup
         # ===================================
         self.solver_setup(comm, u, V_cell, F)
 
@@ -756,6 +756,6 @@ if __name__ == "__main__":
         RuntimeAnalysis = AnalyzeOCP
         Experiment = ChargeDischargeExperiment
 
-    simulation = DFNSimulation(n_particles=128, n_radius=16)
+    simulation = DFNSimulation(n_particles=1024, n_radius=16)
 
     simulation.run()
