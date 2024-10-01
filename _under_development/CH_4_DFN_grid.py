@@ -660,7 +660,7 @@ class DFNSimulationBase(abc.ABC):
 
         self.callback = TestCurrent(u, V_cell, I_global)
 
-        self.experiment = self.Experiment(u, V_cell)
+        self.experiment = self.Experiment(u, I_global)
 
         # DOLFINx problem and solver setup
         # ===================================
