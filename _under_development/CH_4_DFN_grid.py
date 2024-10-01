@@ -383,6 +383,70 @@ class AnalyzeOCP(RuntimeAnalysisBase):
         self.data.append([soc, V_cell])
 
         return super().analyze(t)
+    
+    
+class ChargeDischargeExperiment():
+
+    # Global parameters
+    v_cell_bounds = [-3.7, 3.7]
+    stop_at_empty = False
+    stop_on_full = False
+    cycling = False
+    logging = False
+
+    def __init__(self, u: dfx.fem.Function, I_charge: dfx.fem.Constant):
+
+        self.u = u
+        self.I_charge = I_charge
+
+    def __call__(self, t, cell_voltage):
+        return self.experiment(t, cell_voltage)
+
+    def experiment(self, t, cell_voltage):
+        
+        if self.logging:
+            log(
+                f"t={t:1.5f} ; V_cell = {cell_voltage}")
+
+        # Whenever you may ask yourself whether this works, mind the sign!
+        # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
+        # it increases with chemical potential at the surface of the particles.
+        # The actual cell voltage as measured is the negative of it.
+        if cell_voltage > self.v_cell_bounds[1] and self.I_charge.value > 0.0:
+            log(
+                ">>> Cell voltage exceeds maximum " +
+                f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
+            )
+
+            if self.stop_on_full:
+                log(">>> Cell is filled.")
+
+                return True
+
+            self.I_charge.value *= -1.0
+
+            return False
+
+        if cell_voltage < self.v_cell_bounds[0] and self.I_charge.value < 0.0:
+
+            if self.stop_at_empty:
+                log(">>> Cell voltage exceeds minimum." +
+                    f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[0]:1.3f}).")
+
+                return True
+
+            else:
+                if self.cycling:
+                    print(">>> Start charging.")
+                    self.I_charge.value *= -1.0
+
+                else:
+                    print(">>> Stop charging.")
+                    self.I_charge.value = 0.0
+
+                return False
+
+        return False
 
 
 def create_1p1_DFN_mesh(comm, n_rad=16, n_part=192):
@@ -589,6 +653,8 @@ class DFNSimulationBase(abc.ABC):
             u, c_of_y, V_cell, filename="CH_4_DFN_rt.txt")
 
         self.callback = TestCurrent(u, V_cell, I_global)
+        
+        self.experiment = self.Experiment(u, V_cell)
 
         # %% DOLFINx problem and solver setup
         # ===================================
@@ -671,6 +737,7 @@ class DFNSimulationBase(abc.ABC):
             tol=tol,
             runtime_analysis=self.rt_analysis,
             output=self.output,
+            event_handler=self.experiment.experiment,
             callback=self.callback
         )
 
@@ -680,6 +747,7 @@ if __name__ == "__main__":
     class DFNSimulation(DFNSimulationBase):
         Output = FileOutput
         RuntimeAnalysis = AnalyzeOCP
+        Experiment = ChargeDischargeExperiment
 
     simulation = DFNSimulation(n_particles=128, n_radius=16)
 
