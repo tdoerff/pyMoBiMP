@@ -717,6 +717,7 @@ class DFNSimulationBase(abc.ABC):
     def run(self,
             t_start: float = 0.,
             t_final: float = 650.,
+            n_out: int = 101,
             dt_min: float = 1e-9,
             dt_max: float = 1e-3,
             dt_increase: float = 1.1,
@@ -724,7 +725,7 @@ class DFNSimulationBase(abc.ABC):
 
         self.output = self.Output(
             self.u,
-            np.linspace(t_start, t_final, 101),
+            np.linspace(t_start, t_final, n_out),
             filename=self.output_file_name_base + ".xdmf",
             variable_transform=c_of_y,
         )
