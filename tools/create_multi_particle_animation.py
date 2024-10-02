@@ -117,6 +117,27 @@ def parse_vars(items):
     return d
 
 
+def write_output(args, anim):
+    output = args.output
+
+    print(args.additional_args)
+
+    additional_args = parse_vars(args.additional_args)
+
+    # Write as a movie file.
+    if output[-4:] == ".mp4" or \
+        output[-4:] == ".mpg" or \
+            output[-5:] == ".mpeg":
+        anim.get_mp4_animation(output, additional_options=additional_args)
+
+    # Write as a GIF file.
+    elif output[-4:] == ".gif":
+        anim.get_gif_animation(output, additional_options=additional_args)
+
+    else:
+        raise ValueError(f"Format not recognized ({output})!")
+
+
 if __name__ == "__main__":
 
     # Parse input arguments
@@ -220,23 +241,4 @@ if __name__ == "__main__":
         metallic=0.5,
     )
 
-    output = args.output
-
-    print(args.additional_args)
-
-    additional_args = parse_vars(args.additional_args)
-
-    # Write as a movie file.
-    if output[-4:] == ".mp4" or \
-        output[-4:] == ".mpg" or \
-            output[-5:] == ".mpeg":
-
-        anim.get_mp4_animation(output, additional_options=additional_args)
-
-    # Write as a GIF file.
-    elif output[-4:] == ".gif":
-
-        anim.get_gif_animation(output, additional_options=additional_args)
-
-    else:
-        raise ValueError(f"Format not recognized ({output})!")
+    write_output(args, anim)
