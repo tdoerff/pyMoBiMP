@@ -385,7 +385,7 @@ class PyvistaAnimation:
 
         for i_particle in range(num_particles):
 
-            V = dolfinx.fem.FunctionSpace(self.meshes[i_particle], ("CG", 1))
+            V = dolfinx.fem.functionspace(self.meshes[i_particle], ("CG", 1))
 
             topology, cell_types, x = dolfinx.plot.vtk_mesh(V)
 

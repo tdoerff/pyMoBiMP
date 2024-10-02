@@ -171,6 +171,8 @@ if __name__ == "__main__":
 
             # Use default chemical potential
             f_of_q = f_of_q_default
+    else:
+        f_of_q = None
 
     # Create or get the mesh(es)
     # --------------------------
