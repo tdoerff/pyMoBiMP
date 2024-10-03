@@ -344,14 +344,14 @@ class PyvistaAnimation:
             # Retrieve the charge.
             q = rt_data[:, 1]
 
-            # take the last column which is either voltage or mu.
-            mu = rt_data[:, -1]
+            # Retrieve voltage.
+            V = rt_data[:, -1]
 
-            chart.line(q, -mu, color="k", label=r"$V_{cell}$")
+            chart.line(q, V, color="k", label=r"$V_{cell}$")
 
             chart.x_range = [0, 1]
             eps = 0.5
-            chart.y_range = [min(mu) - eps, max(mu) + eps]
+            chart.y_range = [min(V) - eps, max(V) + eps]
 
             if f_of_q is not None:
                 eps = 1e-3
@@ -557,7 +557,7 @@ class PyvistaAnimation:
 
         self.q_mu_chart.remove_plot(self.q_mu_scatter)
 
-        self.q_mu_scatter = self.q_mu_chart.scatter([q], [-V], color='r')
+        self.q_mu_scatter = self.q_mu_chart.scatter([q], [V], color='r')
 
 
 def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):
