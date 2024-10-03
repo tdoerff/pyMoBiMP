@@ -177,7 +177,12 @@ if __name__ == "__main__":
     # First read the XMDF simulation output
     filebasename = args.filename
 
-    num_particles, t, x_data, u_data, rt_data = read_data(filebasename)
+    return_container = read_data(filebasename)
+
+    num_particles, t, x_data, u_data, rt_data = return_container
+
+    if len(x_data.shape) == 3:
+        x_data = x_data[0:1, 0, :]
 
     # read chemical potential from experiment script
     if args.experiment is not None:
