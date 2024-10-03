@@ -921,7 +921,24 @@ class SimulationFile(h5py.File):
         os.remove(self._file_name_tmp)
 
 
-def read_data(filebasename):
+def get_particle_number_from_mesh(mesh):
+    from pyMoBiMP.cahn_hilliard_utils import (
+        create_particle_summation_measure)
+
+    dA = create_particle_summation_measure(mesh)
+
+    nop_form = dfx.fem.form(dfx.fem.Constant(mesh, 1.0) * dA)
+    num_particles_from_mesh = int(round(dfx.fem.assemble_scalar(nop_form)))
+
+    return num_particles_from_mesh
+
+
+def read_data(filebasename, comm=MPI.COMM_WORLD, return_grid=False):
+
+    mesh_file = strip_off_xdmf_file_ending(filebasename) + ".xdmf"
+
+    with dfx.io.XDMFFile(comm, mesh_file, 'r') as file:
+        mesh = file.read_mesh()
 
     print(f"Read data from {filebasename} ...")
 
@@ -975,6 +992,13 @@ def read_data(filebasename):
                 ]
             )
 
+    # Catch the DFN mesh case
+    if num_particles == 1:
+        num_particles = get_particle_number_from_mesh(mesh)
+
+        u_data = u_data.reshape(len(t), 2, num_particles, -1)
+        u_data = u_data.transpose(0, 2, 1, 3)
+
     # It is necessary to sort the input by the time.
     sorted_indx = np.argsort(t)
 
@@ -989,4 +1013,12 @@ def read_data(filebasename):
     # Total charge is not normalized.
     rt_data[:, 1] /= num_particles
 
-    return num_particles, t, x_data, u_data, rt_data
+    # Check the output shape of the array:
+    # Dimensions are [time, num_particles, variable_name, radius]
+    # assert u_data.shape[:3] == (len(t), num_particles, 2)
+
+    if return_grid:
+        return (num_particles, t, x_data, u_data, rt_data), mesh
+
+    else:
+        return num_particles, t, x_data, u_data, rt_data
