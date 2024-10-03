@@ -949,8 +949,6 @@ def read_data(filebasename: str,
 
         num_particles = len(f["Function"].keys()) // 2
 
-        print(f"Found {num_particles} particles.")
-
         # grid coordinates
         if "mesh" in f["Mesh"].keys():
             x_data = f["Mesh/mesh/geometry"][()]
@@ -1000,6 +998,13 @@ def read_data(filebasename: str,
 
         u_data = u_data.reshape(len(t), 2, num_particles, -1)
         u_data = u_data.transpose(0, 2, 1, 3)
+
+        x_data = x_data.reshape(num_particles, -1, 2).transpose((-1, 0, 1))
+
+    else:
+        x_data = x_data.T
+
+    print(f"Found {num_particles} particles.")
 
     # It is necessary to sort the input by the time.
     sorted_indx = np.argsort(t)

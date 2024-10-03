@@ -1,15 +1,6 @@
-import basix
-
-import dolfinx as dfx
-
 from mpi4py.MPI import COMM_WORLD as comm
 
-import pytest
-
 import os
-
-from pyMoBiMP.cahn_hilliard_utils import (
-    create_1p1_DFN_mesh)
 
 from pyMoBiMP.fenicsx_utils import read_data
 
@@ -27,6 +18,8 @@ def test_read_data_DFN_shape():
 
     assert num_particles == n_particles
 
+    # In case of a DFN mesh we get two arrays of dimension [particles, radius]
+    assert x_data.shape == (2, n_particles, n_radius)
     assert u_data.shape == (len(t), n_particles, 2, n_radius)
 
 
@@ -44,4 +37,5 @@ def test_read_data_multi_particle_shape():
     assert num_particles == n_particles
 
     # Note that we have the nodes stored in the output, not the elements.
+    assert x_data.shape == (2, n_radius + 1)
     assert u_data.shape == (len(t), n_particles, 2, n_radius + 1)
