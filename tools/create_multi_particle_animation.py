@@ -124,6 +124,8 @@ def write_output(args, anim):
 
     additional_args = parse_vars(args.additional_args)
 
+    print(f"Write output to {output}")
+
     # Write as a movie file.
     if output[-4:] == ".mp4" or \
         output[-4:] == ".mpg" or \
