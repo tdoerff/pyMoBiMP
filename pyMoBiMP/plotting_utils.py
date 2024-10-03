@@ -404,11 +404,6 @@ class PyvistaAnimation:
 
             grids.append(grid)
 
-            actor = self.plotter.add_mesh(grid, **self.plotter_kwargs)
-
-            # actor.prop.interpolation = "pbr"
-            # actor.prop.metallic = .25
-
         return grids
 
     def it_max_and_update(self):
