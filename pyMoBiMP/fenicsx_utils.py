@@ -1001,6 +1001,11 @@ def read_data(filebasename: str,
 
         x_data = x_data.reshape(num_particles, -1, 2).transpose((-1, 0, 1))
 
+        sorted_indx = np.argsort(x_data[1, :, 0])
+
+        x_data = x_data[:, sorted_indx, :]
+        u_data = u_data[:, sorted_indx, :, :]
+
     else:
         x_data = x_data.T
 
