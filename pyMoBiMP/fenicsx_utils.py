@@ -1022,9 +1022,6 @@ def read_data(filebasename: str,
     # Read the runtime analysis output.
     rt_data = np.loadtxt(filebasename + "_rt.txt")
 
-    # Total charge is not normalized.
-    rt_data[:, 1] /= num_particles
-
     # Check the output shape of the array:
     # Dimensions are [time, num_particles, variable_name, radius]
     # assert u_data.shape[:3] == (len(t), num_particles, 2)
