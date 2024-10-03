@@ -404,6 +404,8 @@ class PyvistaAnimation:
 
             grids.append(grid)
 
+            self.plotter.add_mesh(grid, **self.plotter_kwargs)
+
         return grids
 
     def it_max_and_update(self):
