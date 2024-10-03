@@ -933,7 +933,9 @@ def get_particle_number_from_mesh(mesh):
     return num_particles_from_mesh
 
 
-def read_data(filebasename, comm=MPI.COMM_WORLD, return_grid=False):
+def read_data(filebasename: str,
+              comm: MPI.Intracomm = MPI.COMM_WORLD,
+              return_grid: bool = False):
 
     mesh_file = strip_off_xdmf_file_ending(filebasename) + ".xdmf"
 
