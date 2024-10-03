@@ -17,6 +17,8 @@ import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
     c_of_y,
+    create_1p1_DFN_mesh,
+    create_particle_summation_measure,
     compute_chemical_potential,
     _free_energy as free_energy)
 
