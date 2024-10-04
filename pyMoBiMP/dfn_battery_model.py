@@ -624,7 +624,7 @@ class DFNSimulationBase(abc.ABC):
 
         its, success = self.solver.solve(self.u)
         error = dfx.fem.petsc.assemble_vector(residual).norm()
-        print(its, error)
+        log(its, error)
         assert np.isclose(error, 0.)
 
     def solver_setup(self, comm, u, V_cell, F):
