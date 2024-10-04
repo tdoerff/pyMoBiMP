@@ -8,8 +8,6 @@ import dolfinx
 
 import ipywidgets
 
-import math
-
 from matplotlib import colors as clrs
 from matplotlib import pyplot as plt
 
@@ -20,8 +18,6 @@ import os
 
 import vtk  # noqa: 401 necessary to use latex labels in pyvista
 import pyvista
-
-import scipy as sp
 
 from typing import List, Optional, Tuple
 
