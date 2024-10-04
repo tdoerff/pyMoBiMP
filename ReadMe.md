@@ -24,7 +24,7 @@ to skip channels that are unavailable.
 
 - install all necessary packages
 ```{bash}
-conda install colorcet fenics-dolfinx fenics-libdolfinx gmsh "h5py>=3.11=mpi*" imageio-ffmpeg ipympl jupyter jupyter pytest python-gmsh pyvista scipy tqdm vtk
+conda install colorcet fenics-dolfinx fenics-libdolfinx gmsh "h5py>=3.11=mpi*" imageio imageio-ffmpeg ipympl jupyter jupyter pytest python-gmsh pyvista scipy tqdm vtk
 ```
 
 Activate the ```widgets```extension for a seamless integration into ```VSCode```.
