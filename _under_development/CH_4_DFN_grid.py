@@ -502,7 +502,7 @@ def physical_setup(V):
 
 
 def DFN_FEM_form(
-    u, u0, v, dt, V_cell,
+    u, u0, v, dt, V_cell, free_energy,
     M=lambda c: c * (1 - c), lam=0.1, grad_c_bc=lambda c: 0.0
 ):
 
@@ -554,12 +554,13 @@ class DFNSimulationBase(abc.ABC):
     RuntimeAnalysis = NotImplemented
     Output = NotImplemented
     Experiment = NotImplemented
+    free_energy = staticmethod(free_energy)
 
     def __init__(
             self,
             comm: MPI.Intracomm = MPI.COMM_WORLD,
             n_particles: int = 1024,
-            n_radius: int = 128,
+            n_radius: int = 16,
             output_destination: str = "CH_4_DFN.xdmf"):
 
         self.comm = comm
@@ -587,7 +588,7 @@ class DFNSimulationBase(abc.ABC):
 
         # FEM Form
         # ========
-        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell)
+        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy)
 
         # Runtime analysis and output
         # ==============================
@@ -656,10 +657,10 @@ class DFNSimulationBase(abc.ABC):
 
     def run(self,
             t_start: float = 0.,
-            t_final: float = 650.,
-            n_out: int = 101,
+            t_final: float = 150.,
+            n_out: int = 501,
             dt_min: float = 1e-9,
-            dt_max: float = 1e-3,
+            dt_max: float = 1e-4,
             dt_increase: float = 1.1,
             tol: float = 1e-4):
 
@@ -696,6 +697,6 @@ if __name__ == "__main__":
         RuntimeAnalysis = AnalyzeOCP
         Experiment = ChargeDischargeExperiment
 
-    simulation = DFNSimulation(n_particles=1024, n_radius=16)
+    simulation = DFNSimulation()
 
-    simulation.run(dt_max=1e-4)
+    simulation.run()
