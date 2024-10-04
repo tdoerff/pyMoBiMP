@@ -698,4 +698,4 @@ if __name__ == "__main__":
 
     simulation = DFNSimulation(n_particles=1024, n_radius=16)
 
-    simulation.run()
+    simulation.run(dt_max=1e-4)
