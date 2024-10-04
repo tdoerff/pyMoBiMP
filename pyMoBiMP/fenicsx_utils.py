@@ -940,7 +940,10 @@ def read_data(filebasename: str,
     mesh_file = strip_off_xdmf_file_ending(filebasename) + ".xdmf"
 
     with dfx.io.XDMFFile(comm, mesh_file, 'r') as file:
-        mesh = file.read_mesh()
+        try:
+            mesh = file.read_mesh()
+        except ValueError:
+            mesh = file.read_mesh(name="Grid")
 
     print(f"Read data from {filebasename} ...")
 
