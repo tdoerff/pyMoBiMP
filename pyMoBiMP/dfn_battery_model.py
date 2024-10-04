@@ -663,12 +663,15 @@ class DFNSimulationBase(abc.ABC):
             dt_increase: float = 1.1,
             tol: float = 1e-4):
 
-        self.output = self.Output(
-            self.u,
-            np.linspace(t_start, t_final, n_out),
-            filename=self.output_file_name_base + ".xdmf",
-            variable_transform=c_of_y,
-        )
+        if n_out > 0:
+            self.output = self.Output(
+                self.u,
+                np.linspace(t_start, t_final, n_out),
+                filename=self.output_file_name_base + ".xdmf",
+                variable_transform=c_of_y,
+            )
+        else:
+            self.output = None
 
         time_stepping(
             self.solver,
