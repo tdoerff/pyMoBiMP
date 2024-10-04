@@ -27,11 +27,11 @@ def f_of_q_default(q):
 
 
 def identity_function(n_points):
-    """Creates a identity dfx.fem.Function on a unit intervall"""
+    """Creates a identity dfx.fem.Function on a unit interval"""
 
     # Create a linspace array.
     mesh = dfx.mesh.create_unit_interval(comm, n_points)
-    V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+    V = dfx.fem.functionspace(mesh, ("CG", 1))
 
     c = dfx.fem.Function(V)
     c.interpolate(lambda x: x[0])
