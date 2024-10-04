@@ -253,7 +253,7 @@ class PyvistaAnimation:
         else:
             raise TypeError("Input is not List or Tuple or Fenicsx1DOutput!")
 
-        self.r = np.array(r)[:, 0]
+        self.r = np.array(r).squeeze()
 
         # make sure even for a single particle we can use the upcoming code
         shape = len(t_out), -1, 2, len(self.r)
