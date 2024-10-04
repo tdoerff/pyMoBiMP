@@ -27,11 +27,11 @@ def f_of_q_default(q):
 
 
 def identity_function(n_points):
-    """Creates a identity dfx.fem.Function on a unit intervall"""
+    """Creates a identity dfx.fem.Function on a unit interval"""
 
     # Create a linspace array.
     mesh = dfx.mesh.create_unit_interval(comm, n_points)
-    V = dfx.fem.FunctionSpace(mesh, ("CG", 1))
+    V = dfx.fem.functionspace(mesh, ("CG", 1))
 
     c = dfx.fem.Function(V)
     c.interpolate(lambda x: x[0])
@@ -117,6 +117,29 @@ def parse_vars(items):
     return d
 
 
+def write_output(args, anim):
+    output = args.output
+
+    print(args.additional_args)
+
+    additional_args = parse_vars(args.additional_args)
+
+    print(f"Write output to {output}")
+
+    # Write as a movie file.
+    if output[-4:] == ".mp4" or \
+        output[-4:] == ".mpg" or \
+            output[-5:] == ".mpeg":
+        anim.get_mp4_animation(output, additional_options=additional_args)
+
+    # Write as a GIF file.
+    elif output[-4:] == ".gif":
+        anim.get_gif_animation(output, additional_options=additional_args)
+
+    else:
+        raise ValueError(f"Format not recognized ({output})!")
+
+
 if __name__ == "__main__":
 
     # Parse input arguments
@@ -156,7 +179,12 @@ if __name__ == "__main__":
     # First read the XMDF simulation output
     filebasename = args.filename
 
-    num_particles, t, x_data, u_data, rt_data = read_data(filebasename)
+    return_container = read_data(filebasename)
+
+    num_particles, t, x_data, u_data, rt_data = return_container
+
+    if len(x_data.shape) == 3:
+        x_data = x_data[0:1, 0, :]
 
     # read chemical potential from experiment script
     if args.experiment is not None:
@@ -220,23 +248,4 @@ if __name__ == "__main__":
         metallic=0.5,
     )
 
-    output = args.output
-
-    print(args.additional_args)
-
-    additional_args = parse_vars(args.additional_args)
-
-    # Write as a movie file.
-    if output[-4:] == ".mp4" or \
-        output[-4:] == ".mpg" or \
-            output[-5:] == ".mpeg":
-
-        anim.get_mp4_animation(output, additional_options=additional_args)
-
-    # Write as a GIF file.
-    elif output[-4:] == ".gif":
-
-        anim.get_gif_animation(output, additional_options=additional_args)
-
-    else:
-        raise ValueError(f"Format not recognized ({output})!")
+    write_output(args, anim)

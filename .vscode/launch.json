@@ -20,7 +20,7 @@
             "console": "integratedTerminal",
             "args": ["simulation_output/Diff_10_particles",
                      "-r", "1.",
-                     "-e", "experiments.Diffusion_n_particles",
+                     "-e", "demos.Diffusion_n_particles",
                      "-o", "post_processing/test_output.mp4",
                     "--clipped"]
         }

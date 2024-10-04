@@ -8,8 +8,6 @@ import dolfinx
 
 import ipywidgets
 
-import math
-
 from matplotlib import colors as clrs
 from matplotlib import pyplot as plt
 
@@ -20,8 +18,6 @@ import os
 
 import vtk  # noqa: 401 necessary to use latex labels in pyvista
 import pyvista
-
-import scipy as sp
 
 from typing import List, Optional, Tuple
 
@@ -257,7 +253,7 @@ class PyvistaAnimation:
         else:
             raise TypeError("Input is not List or Tuple or Fenicsx1DOutput!")
 
-        self.r = np.array(r)[:, 0]
+        self.r = np.array(r).squeeze()
 
         # make sure even for a single particle we can use the upcoming code
         shape = len(t_out), -1, 2, len(self.r)
@@ -344,14 +340,14 @@ class PyvistaAnimation:
             # Retrieve the charge.
             q = rt_data[:, 1]
 
-            # take the last column which is either voltage or mu.
-            mu = rt_data[:, -1]
+            # Retrieve voltage.
+            V = rt_data[:, -1]
 
-            chart.line(q, -mu, color="k", label=r"$V_{cell}$")
+            chart.line(q, V, color="k", label=r"$V_{cell}$")
 
             chart.x_range = [0, 1]
             eps = 0.5
-            chart.y_range = [min(mu) - eps, max(mu) + eps]
+            chart.y_range = [min(V) - eps, max(V) + eps]
 
             if f_of_q is not None:
                 eps = 1e-3
@@ -404,10 +400,7 @@ class PyvistaAnimation:
 
             grids.append(grid)
 
-            actor = self.plotter.add_mesh(grid, **self.plotter_kwargs)
-
-            # actor.prop.interpolation = "pbr"
-            # actor.prop.metallic = .25
+            self.plotter.add_mesh(grid, **self.plotter_kwargs)
 
         return grids
 
@@ -543,21 +536,14 @@ class PyvistaAnimation:
 
     def _update_q_mu(self, it):
 
-        # The list of all radial charge distributions at each time.
-        cs = self.data_out[it, ..., 0, :].reshape(-1, len(self.r))
-
-        num_particles = self.data_out.shape[1]
-
-        # Compute charge ratio to maximum charge.
-        q = np.array([sp.integrate.trapezoid(
-            3 * self.r**2 * c, self.r, axis=-1) for c in cs]).sum(axis=0) / num_particles
-
         t = self.t_out[it]
+
+        q = np.interp(t, self.rt_data[:, 0], self.rt_data[:, 1])
         V = np.interp(t, self.rt_data[:, 0], self.rt_data[:, -1])
 
         self.q_mu_chart.remove_plot(self.q_mu_scatter)
 
-        self.q_mu_scatter = self.q_mu_chart.scatter([q], [-V], color='r')
+        self.q_mu_scatter = self.q_mu_chart.scatter([q], [V], color='r')
 
 
 def plot_charging_cycle(I_q_mu_bcs, f_A, eps=1e-3):

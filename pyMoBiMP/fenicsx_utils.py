@@ -921,7 +921,29 @@ class SimulationFile(h5py.File):
         os.remove(self._file_name_tmp)
 
 
-def read_data(filebasename):
+def get_particle_number_from_mesh(mesh):
+    from pyMoBiMP.cahn_hilliard_utils import (
+        create_particle_summation_measure)
+
+    dA = create_particle_summation_measure(mesh)
+
+    nop_form = dfx.fem.form(dfx.fem.Constant(mesh, 1.0) * dA)
+    num_particles_from_mesh = int(round(dfx.fem.assemble_scalar(nop_form)))
+
+    return num_particles_from_mesh
+
+
+def read_data(filebasename: str,
+              comm: MPI.Intracomm = MPI.COMM_WORLD,
+              return_grid: bool = False):
+
+    mesh_file = strip_off_xdmf_file_ending(filebasename) + ".xdmf"
+
+    with dfx.io.XDMFFile(comm, mesh_file, 'r') as file:
+        try:
+            mesh = file.read_mesh()
+        except ValueError:
+            mesh = file.read_mesh(name="Grid")
 
     print(f"Read data from {filebasename} ...")
 
@@ -929,8 +951,6 @@ def read_data(filebasename):
         print(f["Function"].keys())
 
         num_particles = len(f["Function"].keys()) // 2
-
-        print(f"Found {num_particles} particles.")
 
         # grid coordinates
         if "mesh" in f["Mesh"].keys():
@@ -975,6 +995,25 @@ def read_data(filebasename):
                 ]
             )
 
+    # Catch the DFN mesh case
+    if num_particles == 1:
+        num_particles = get_particle_number_from_mesh(mesh)
+
+        u_data = u_data.reshape(len(t), 2, num_particles, -1)
+        u_data = u_data.transpose(0, 2, 1, 3)
+
+        x_data = x_data.reshape(num_particles, -1, 2).transpose((-1, 0, 1))
+
+        sorted_indx = np.argsort(x_data[1, :, 0])
+
+        x_data = x_data[:, sorted_indx, :]
+        u_data = u_data[:, sorted_indx, :, :]
+
+    else:
+        x_data = x_data.T
+
+    print(f"Found {num_particles} particles.")
+
     # It is necessary to sort the input by the time.
     sorted_indx = np.argsort(t)
 
@@ -986,7 +1025,12 @@ def read_data(filebasename):
     # Read the runtime analysis output.
     rt_data = np.loadtxt(filebasename + "_rt.txt")
 
-    # Total charge is not normalized.
-    rt_data[:, 1] /= num_particles
+    # Check the output shape of the array:
+    # Dimensions are [time, num_particles, variable_name, radius]
+    # assert u_data.shape[:3] == (len(t), num_particles, 2)
 
-    return num_particles, t, x_data, u_data, rt_data
+    if return_grid:
+        return (num_particles, t, x_data, u_data, rt_data), mesh
+
+    else:
+        return num_particles, t, x_data, u_data, rt_data
