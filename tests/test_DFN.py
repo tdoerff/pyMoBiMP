@@ -4,12 +4,14 @@ import numpy as np
 import pytest
 import ufl
 
-from CH_4_DFN_grid import (TestCurrent,
-                           create_1p1_DFN_mesh,
-                           create_particle_summation_measure,
-                           DFN_function_space,
-                           physical_setup,
-                           Voltage)
+from pyMoBiMP.dfn_battery_model import (
+    TestCurrent,
+    create_1p1_DFN_mesh,
+    create_particle_summation_measure,
+    DFN_function_space,
+    physical_setup,
+    Voltage,
+)
 
 
 def test_physical_setup():
