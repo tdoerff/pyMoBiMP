@@ -152,24 +152,71 @@ if __name__ == "__main__":
         )
 
     parser.add_argument("filename", type=str)
-    parser.add_argument("-m", "--mesh-file", type=str)
-    parser.add_argument("-r", "--mesh-resolution", type=float, default=1.0)
-    parser.add_argument("-o", "--output", type=str,
-                        default="multi_particle_anim.mp4")
-    parser.add_argument("-c", "--clim", type=float, nargs=2, default=[0., 1.])
-    parser.add_argument("--cmap", type=str, default="graphite")
-    parser.add_argument("--close", action="store_true")
-    parser.add_argument("--clipped", action="store_true")
-    parser.add_argument("-e", "--experiment", type=str)
-    parser.add_argument("--additional-args",
-                        metavar="KEY=VALUE",
-                        nargs='+',
-                        help="Set a number of key-value pairs "
-                             "(do not put spaces before or after the = sign). "
-                             "If a value contains spaces, you should define "
-                             "it with double quotes: "
-                             'foo="this is a sentence". Note that '
-                             "values are always treated as strings.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "-m",
+        "--mesh-file",
+        type=str,
+        help="path to a xdmf mesh file of a suitable sphere grid",
+    )
+    group.add_argument(
+        "-r",
+        "--mesh-resolution",
+        type=float,
+        default=1.0,
+        help="resolution parameter for the online mesh generator",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="multi_particle_anim.mp4",
+        help="output file path of animation (ending determines the file type!)",
+    )
+    parser.add_argument(
+        "-c",
+        "--clim",
+        type=float,
+        nargs=2,
+        default=[0.0, 1.0],
+        help="data range of the concentration variable",
+    )
+    parser.add_argument(
+        "--cmap",
+        type=str,
+        default="graphite",
+        help="specify the colormap (make sure it is available "
+        "to matplotlib (eg. viacolorcet))",
+    )
+    parser.add_argument(
+        "--close",
+        action="store_true",
+        help="necessary in some rendering envs to close the window after plotting",
+    )
+    parser.add_argument(
+        "--clipped",
+        action="store_true",
+        help="visualize spheres with cut-outs to look inside",
+    )
+    parser.add_argument(
+        "-e",
+        "--experiment",
+        type=str,
+        help="Specify path to the experiment script."
+        "The file must provide a 'Simulation' class at module level"
+        "that contains an object 'free_energy' to be plotted here."
+    )
+    parser.add_argument(
+        "--additional-args",
+        metavar="KEY=VALUE",
+        nargs="+",
+        help="Set a number of key-value pairs "
+        "(do not put spaces before or after the = sign). "
+        "If a value contains spaces, you should define "
+        "it with double quotes: "
+        'foo="this is a sentence". Note that '
+        "values are always treated as strings.",
+    )
 
     args = parser.parse_args()
 
