@@ -251,28 +251,124 @@ def plot_solution_on_grid(u):
     plotter.show()
 
 
+class PhysicalSetup:
+
+    L_mean: float = 10.
+    L_var_rel: float = 0.1
+
+    def __init__(self, V):
+        self.function_space = V
+
+        self.mesh = V.mesh
+
+        self.dA = create_particle_summation_measure(self.mesh)
+
+        # auxiliary space for coefficient functions
+        self._V0, _ = V.sub(0).collapse()
+
+        self._setup_particle_radii()
+
+        self._setup_particle_surfaces()
+        self._setup_total_surface()
+        self._setup_surface_weights()
+
+        self._setup_reaction_affinity()
+        self._setup_mean_affinity()
+
+    def _setup_particle_radii(self):
+        # particle parameters
+        Rs = dfx.fem.Function(self._V0)
+        Rs.x.array[:] = 1.
+        Rs.x.scatter_forward()
+
+        self._Rs = Rs
+
+    @property
+    def particle_radii(self):
+        return self._Rs
+
+    def _setup_particle_surfaces(self):
+
+        self._As = 4 * np.pi * self._Rs**2
+
+    @property
+    def particle_surfaces(self):
+        return self._As
+
+    def _setup_total_surface(self):
+        A_ufl = self._As * self.dA
+
+        A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
+        A = self.mesh.comm.allreduce(A, op=SUM)
+
+        self._A = A
+
+    @property
+    def total_surface(self):
+        return self._A
+
+    def _setup_surface_weights(self):
+        self._a_ratios = self._As / self._A
+
+    @property
+    def surface_weights(self):
+        return self._a_ratios
+
+    def _setup_reaction_affinity(self):
+
+        Ls = dfx.fem.Function(self._V0)
+        Ls.interpolate(
+            lambda x: self.L_mean * (1. + self.L_var_rel * (2 * x[1] - 1.)))
+
+        self._Ls = Ls
+
+    @property
+    def reaction_affinities(self):
+        return self._Ls
+
+    def _setup_mean_affinity(self):
+        # Weighted mean reaction affinity parameter taken
+        # from particle surfaces.
+        L_ufl = self._a_ratios * self._Ls * self.dA
+
+        L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
+        L = self.mesh.comm.allreduce(L, op=SUM)
+
+        self._L = L
+
+    @property
+    def mean_affinity(self):
+        return self._L
+
+    def total_surface_and_weights(self):
+        return self.total_surface, self.surface_weights
+
+    def mean_and_particle_affinities(self):
+        return self.mean_affinity, self.reaction_affinities
+
+
 class Voltage(dfx.fem.Constant):
 
     def __init__(self,
                  u: dfx.fem.Function,
-                 I_global: float | dfx.fem.Constant):
+                 I_global: float | dfx.fem.Constant,
+                 physical_setup: PhysicalSetup):
 
         self.u = u
         self.function_space = u.function_space
         self.I_global = I_global
 
-        dA_R = create_particle_summation_measure(self.function_space.mesh)
-        A, a_ratios, L, Ls = physical_setup(self.function_space)
+        self.physical_setup = physical_setup
 
-        self.L = L
-        self.Ls = Ls
-        self.a_ratios = a_ratios
-        self.A = A
+        A, a_ratios = self.physical_setup.total_surface_and_weights()
+        L, Ls = self.physical_setup.mean_and_particle_affinities()
+
+        dA = self.physical_setup.dA
 
         _, mu = ufl.split(u)
 
-        V_cell_ufl = - mu * Ls / L * a_ratios * dA_R
-        V_cell_ufl -= I_global / L * a_ratios * dA_R
+        V_cell_ufl = - mu * Ls / L * a_ratios * dA
+        V_cell_ufl -= I_global / L * a_ratios * dA
 
         self.V_cell_cpp = dfx.fem.form(V_cell_ufl)
 
@@ -308,8 +404,8 @@ class TestCurrent():
 
         _, mu = ufl.split(u)
 
-        a_ratios = V_cell.a_ratios
-        Ls = V_cell.Ls
+        a_ratios = V_cell.physical_setup.surface_weights
+        Ls = V_cell.physical_setup.reaction_affinities
 
         dA = create_particle_summation_measure(u.function_space.mesh)
 
@@ -469,46 +565,6 @@ def DFN_function_space(mesh):
     return V
 
 
-def physical_setup(V):
-
-    mesh = V.mesh
-
-    dA_R = create_particle_summation_measure(mesh)
-
-    V0, _ = V.sub(0).collapse()  # <- auxiliary space for coefficient functions
-
-    # %% Physical setup of the problem
-    # ================================
-
-    # particle parameters
-    Rs = dfx.fem.Function(V0)
-    Rs.x.array[:] = 1.
-    Rs.x.scatter_forward()
-
-    As = 4 * np.pi * Rs**2
-
-    # Reaction affinity of the particles.
-    L_mean = 10.
-    L_var_rel = 0.1
-
-    Ls = dfx.fem.Function(V0)
-    Ls.interpolate(
-        lambda x: L_mean * (1. + L_var_rel * (2 * x[1] - 1.)))
-
-    A_ufl = As * dA_R
-    A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
-    A = mesh.comm.allreduce(A, op=SUM)
-
-    a_ratios = As / A
-
-    # Weighted mean reaction affinity parameter taken from particle surfaces.
-    L_ufl = a_ratios * Ls * dA_R
-    L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
-    L = mesh.comm.allreduce(L, op=SUM)
-
-    return A, a_ratios, L, Ls
-
-
 def DFN_FEM_form(
     u, u0, v, dt, V_cell, free_energy,
     M=lambda c: c * (1 - c), gamma=0.1, grad_c_bc=lambda c: 0.0
@@ -522,7 +578,7 @@ def DFN_FEM_form(
     v_c, v_mu = ufl.split(v)
 
     dA = create_particle_summation_measure(mesh)
-    Ls = V_cell.Ls
+    Ls = V_cell.physical_setup.reaction_affinities
 
     I_particle = - Ls * (mu + V_cell)
 
@@ -559,6 +615,7 @@ def DFN_FEM_form(
 
 class DFNSimulationBase(abc.ABC):
 
+    PhysicalSetup = PhysicalSetup
     RuntimeAnalysis = NotImplemented
     Output = NotImplemented
     Experiment = NotImplemented
@@ -598,9 +655,11 @@ class DFNSimulationBase(abc.ABC):
             output_destination
         )
 
+        self.physical_setup = PhysicalSetup(V)
+
         self.experiment = self.Experiment(u)
 
-        self.V_cell = V_cell = Voltage(u, self.experiment.I_charge)
+        self.V_cell = V_cell = Voltage(u, self.experiment.I_charge, self.physical_setup)
 
         self.rt_analysis = self.RuntimeAnalysis(
             u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
