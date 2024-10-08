@@ -390,16 +390,24 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 class ChargeDischargeExperiment():
 
     # Global parameters
+    c_rate: float = 0.01
     v_cell_bounds = [-3.7, 3.7]
     stop_at_empty = False
     stop_on_full = False
     cycling = False
     logging = False
 
-    def __init__(self, u: dfx.fem.Function, I_charge: dfx.fem.Constant):
+    def __init__(
+        self,
+        u: dfx.fem.Function,
+    ):
 
         self.u = u
-        self.I_charge = I_charge
+        self._I_charge = dfx.fem.Constant(u.function_space.mesh, 3 * self.c_rate)
+
+    @property
+    def I_charge(self):
+        return self._I_charge
 
     def __call__(self, t, cell_voltage):
         return self.experiment(t, cell_voltage)
@@ -583,26 +591,25 @@ class DFNSimulationBase(abc.ABC):
 
         self.dt = dt = dfx.fem.Constant(mesh, 1e-8)
 
-        I_global = dfx.fem.Constant(mesh, 0.01)
-        self.V_cell = V_cell = Voltage(u, I_global)
-
-        # FEM Form
-        # ========
-        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy,
-                                  gamma=gamma)
-
         # Runtime analysis and output
         # ==============================
         self.output_file_name_base = strip_off_xdmf_file_ending(
             output_destination
         )
 
+        self.experiment = self.Experiment(u)
+
+        self.V_cell = V_cell = Voltage(u, self.experiment.I_charge)
+
         self.rt_analysis = self.RuntimeAnalysis(
             u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
 
         self.callback = TestCurrent(u, V_cell)
 
-        self.experiment = self.Experiment(u, I_global)
+        # FEM Form
+        # ========
+        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy,
+                                  gamma=gamma)
 
         # DOLFINx problem and solver setup
         # ===================================

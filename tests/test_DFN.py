@@ -128,7 +128,7 @@ def test_particle_current():
 
     voltage = Voltage(u, I_global)
 
-    test_current = TestCurrent(u, voltage, I_global)
+    test_current = TestCurrent(u, voltage)
 
     for I_global_value in [0., 1e-3, 0.1, 1.0, 10., 100.]:
         I_global.value = I_global_value
