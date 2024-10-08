@@ -9,7 +9,7 @@ from pyMoBiMP.dfn_battery_model import (
     create_1p1_DFN_mesh,
     create_particle_summation_measure,
     DFN_function_space,
-    physical_setup,
+    PhysicalSetup,
     Voltage,
 )
 
@@ -19,8 +19,20 @@ def test_physical_setup():
     mesh = create_1p1_DFN_mesh(comm)
     V = DFN_function_space(mesh)
 
+    physical_setup = PhysicalSetup(V)
+
     dA_R = create_particle_summation_measure(mesh)
-    _, a_ratios, L, Ls = physical_setup(V)
+
+    num_particles = dfx.fem.assemble_scalar(
+        dfx.fem.form(
+            dfx.fem.Constant(mesh, 1.0) * dA_R
+        )
+    )
+
+    A, a_ratios = physical_setup.total_surface_and_weights()
+    L, Ls = physical_setup.mean_and_particle_affinities()
+
+    assert np.isclose(A, 4 * np.pi * num_particles)
 
     assert np.isclose(dfx.fem.assemble_scalar(dfx.fem.form(a_ratios * dA_R)),
                       1.0)
