@@ -251,7 +251,7 @@ def plot_solution_on_grid(u):
     plotter.show()
 
 
-class PhysicalSetup:
+class DefaultPhysicalSetup:
 
     L_mean: float = 10.
     L_var_rel: float = 0.1
@@ -352,7 +352,7 @@ class Voltage(dfx.fem.Constant):
     def __init__(self,
                  u: dfx.fem.Function,
                  I_global: float | dfx.fem.Constant,
-                 physical_setup: PhysicalSetup):
+                 physical_setup: DefaultPhysicalSetup):
 
         self.u = u
         self.function_space = u.function_space
@@ -615,7 +615,7 @@ def DFN_FEM_form(
 
 class DFNSimulationBase(abc.ABC):
 
-    PhysicalSetup = PhysicalSetup
+    PhysicalSetup = NotImplemented
     RuntimeAnalysis = NotImplemented
     Output = NotImplemented
     Experiment = NotImplemented
@@ -655,7 +655,7 @@ class DFNSimulationBase(abc.ABC):
             output_destination
         )
 
-        self.physical_setup = PhysicalSetup(V)
+        self.physical_setup = self.PhysicalSetup(V)
 
         self.experiment = self.Experiment(u)
 

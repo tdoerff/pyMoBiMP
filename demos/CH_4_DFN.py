@@ -4,7 +4,8 @@ from pathlib import Path
 from pyMoBiMP.dfn_battery_model import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
-    DFNSimulationBase)
+    DFNSimulationBase,
+    DefaultPhysicalSetup)
 
 from pyMoBiMP.fenicsx_utils import FileOutput
 
@@ -12,6 +13,7 @@ from pyMoBiMP.fenicsx_utils import FileOutput
 # The simulation class needs explicit input that
 # specifies output, runtime_analysis, and an experiment
 class Simulation(DFNSimulationBase):
+    PhysicalSetup = DefaultPhysicalSetup
     Output = FileOutput
     RuntimeAnalysis = AnalyzeOCP
     Experiment = ChargeDischargeExperiment

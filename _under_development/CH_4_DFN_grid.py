@@ -6,12 +6,14 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 from pyMoBiMP.dfn_battery_model import (  # noqa: 402
     AnalyzeOCP,
     ChargeDischargeExperiment,
-    DFNSimulationBase)
+    DFNSimulationBase,
+    DefaultPhysicalSetup)
 
 from pyMoBiMP.fenicsx_utils import FileOutput  # noqa: 402
 
 
 class Simulation(DFNSimulationBase):
+    PhysicalSetup = DefaultPhysicalSetup
     Output = FileOutput
     RuntimeAnalysis = AnalyzeOCP
     Experiment = ChargeDischargeExperiment

@@ -9,7 +9,7 @@ from pyMoBiMP.dfn_battery_model import (
     create_1p1_DFN_mesh,
     create_particle_summation_measure,
     DFN_function_space,
-    PhysicalSetup,
+    DefaultPhysicalSetup as PhysicalSetup,
     Voltage,
 )
 
