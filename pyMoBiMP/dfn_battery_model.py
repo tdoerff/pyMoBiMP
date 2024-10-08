@@ -560,7 +560,8 @@ class DFNSimulationBase(abc.ABC):
             comm: MPI.Intracomm = MPI.COMM_WORLD,
             n_particles: int = 1024,
             n_radius: int = 16,
-            output_destination: str = "CH_4_DFN.xdmf"):
+            output_destination: str = "CH_4_DFN.xdmf",
+            gamma: float = 0.1):
 
         self.comm = comm
 
@@ -587,7 +588,8 @@ class DFNSimulationBase(abc.ABC):
 
         # FEM Form
         # ========
-        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy)
+        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy,
+                                  gamma=gamma)
 
         # Runtime analysis and output
         # ==============================
