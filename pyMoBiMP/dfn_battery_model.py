@@ -659,9 +659,9 @@ class DFNSimulationBase(abc.ABC):
             t_final: float = 150.,
             n_out: int = 501,
             dt_min: float = 1e-9,
-            dt_max: float = 1e-4,
+            dt_max: float = 1e-3,
             dt_increase: float = 1.1,
-            tol: float = 1e-4):
+            tol: float = 1e-5):
 
         if n_out > 0:
             self.output = self.Output(
