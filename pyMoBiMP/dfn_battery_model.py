@@ -304,7 +304,7 @@ class Voltage(dfx.fem.Constant):
 
 
 class TestCurrent():
-    def __init__(self, u, V_cell, I_global):
+    def __init__(self, u, V_cell):
 
         _, mu = ufl.split(u)
 
@@ -318,7 +318,7 @@ class TestCurrent():
         I_global_ref_ufl = a_ratios * I_particle * dA
 
         self.I_global_ref_form = dfx.fem.form(I_global_ref_ufl)
-        self.I_global = I_global
+        self.I_global = V_cell.I_global
         self.V_cell = V_cell
 
     def compute_current(self):
@@ -600,7 +600,7 @@ class DFNSimulationBase(abc.ABC):
         self.rt_analysis = self.RuntimeAnalysis(
             u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
 
-        self.callback = TestCurrent(u, V_cell, I_global)
+        self.callback = TestCurrent(u, V_cell)
 
         self.experiment = self.Experiment(u, I_global)
 
