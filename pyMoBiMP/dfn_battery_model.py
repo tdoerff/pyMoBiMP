@@ -403,7 +403,8 @@ class ChargeDischargeExperiment():
     ):
 
         self.u = u
-        self._I_charge = dfx.fem.Constant(u.function_space.mesh, 3 * self.c_rate)
+        # FIXME: Find out where the factor of 2 is coming from!
+        self._I_charge = dfx.fem.Constant(u.function_space.mesh, 2 / 3 * self.c_rate)
 
     @property
     def I_charge(self):
