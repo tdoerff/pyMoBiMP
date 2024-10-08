@@ -502,7 +502,7 @@ def physical_setup(V):
 
 def DFN_FEM_form(
     u, u0, v, dt, V_cell, free_energy,
-    M=lambda c: c * (1 - c), lam=0.1, grad_c_bc=lambda c: 0.0
+    M=lambda c: c * (1 - c), gamma=0.1, grad_c_bc=lambda c: 0.0
 ):
 
     V = u.function_space
@@ -540,7 +540,7 @@ def DFN_FEM_form(
 
     F2 = s_V * mu * v_mu * dx
     F2 -= s_V * mu_chem * v_mu * dx
-    F2 -= lam * (s_V * c.dx(0) * v_mu.dx(0) * dx)
+    F2 -= gamma * (s_V * c.dx(0) * v_mu.dx(0) * dx)
     F2 += grad_c_bc(c) * (s_A * v_mu * dA)
 
     F = F1 + F2
