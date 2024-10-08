@@ -83,22 +83,29 @@ def test_Voltage_constant_mu(I_global_value: float):
 
     V = DFN_function_space(mesh)
 
+    physical_setup = PhysicalSetup(V)
+
     # Test for mu = 0
     u = dfx.fem.Function(V)  # mu = 0
 
     I_global = dfx.fem.Constant(mesh, I_global_value)
 
-    voltage = Voltage(u, I_global)
+    voltage = Voltage(u, I_global, physical_setup)
 
-    print(f"L * V(I={I_global.value}, mu=0) = ", voltage.L * voltage.value)
+    print(f"L * V(I={I_global.value}, mu=0) = ",
+          physical_setup.mean_affinity * voltage.value)
 
-    assert np.isclose(voltage.L * voltage.value, -I_global.value)
+    assert np.isclose(
+        voltage.physical_setup.mean_affinity * voltage.value,
+        -I_global.value)
 
     # Test for mu = 1
     _, mu = u.split()
     mu.x.array[:] = 1.
 
-    assert np.isclose(voltage.L * voltage.value, -I_global.value - voltage.L)
+    assert np.isclose(
+        voltage.physical_setup.mean_affinity * voltage.value,
+        -I_global.value - voltage.physical_setup.mean_affinity)
 
 
 def test_Voltage_constant_I_global():
@@ -107,11 +114,13 @@ def test_Voltage_constant_I_global():
 
     V = DFN_function_space(mesh)
 
+    physical_setup = PhysicalSetup(V)
+
     u = dfx.fem.Function(V)
 
     I_global = dfx.fem.Constant(mesh, 1.)
 
-    voltage = Voltage(u, I_global)
+    voltage = Voltage(u, I_global, physical_setup)
 
     # Test for mu = 1
     _, mu = u.split()
@@ -120,8 +129,9 @@ def test_Voltage_constant_I_global():
 
         mu.x.array[:] = mu_value
 
-        assert np.isclose(voltage.L * voltage.value,
-                          -I_global.value - mu_value * voltage.L)
+        assert np.isclose(
+            voltage.physical_setup.mean_affinity * voltage.value,
+            -I_global.value - mu_value * voltage.physical_setup.mean_affinity)
 
 
 def test_particle_current():
@@ -132,13 +142,15 @@ def test_particle_current():
 
     u = dfx.fem.Function(V)
 
+    physical_setup = PhysicalSetup(V)
+
     # Randomize the particle chemical potentials to have
     # non-trivial particle current.
     u.x.array[:] = np.random.random(u.x.array.shape)
 
     I_global = dfx.fem.Constant(mesh, 0.)
 
-    voltage = Voltage(u, I_global)
+    voltage = Voltage(u, I_global, physical_setup)
 
     test_current = TestCurrent(u, voltage)
 
