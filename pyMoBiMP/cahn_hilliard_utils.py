@@ -693,7 +693,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
             L_ / self.L * a_ * mu_ for L_, a_, mu_ in zip(self.Ls, self.aas, mus_bc)
         )
 
-        self.data.append([charge, chem_pot, mu_bc, cell_voltage])
+        self.data.append([charge, chem_pot, mu_bc, -cell_voltage])
 
         return super().analyze(t)
 
