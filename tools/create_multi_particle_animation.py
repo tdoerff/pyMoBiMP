@@ -230,8 +230,7 @@ if __name__ == "__main__":
 
     num_particles, t, x_data, u_data, rt_data = return_container
 
-    if len(x_data.shape) == 3:
-        x_data = x_data[0:1, 0, :]
+    print(x_data.shape)
 
     # read chemical potential from experiment script
     if args.experiment is not None:

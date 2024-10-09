@@ -1009,8 +1009,10 @@ def read_data(filebasename: str,
         x_data = x_data[:, sorted_indx, :]
         u_data = u_data[:, sorted_indx, :, :]
 
+        x_data = x_data[0, 0, :]
+
     else:
-        x_data = x_data.T
+        x_data = x_data[:, 0]
 
     print(f"Found {num_particles} particles.")
 
