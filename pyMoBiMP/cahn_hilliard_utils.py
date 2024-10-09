@@ -659,6 +659,8 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         cs = [self.c_of_y(y) for y in ys.split()]
 
+        num_particles = len(ys.split())
+
         # select one reference particle
         c = cs[0]
         mu = mus[0]
@@ -671,7 +673,9 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         self.chem_pot_form = dfx.fem.form(3 * dFdc * r_square * ufl.dx)
         self.mu_bc_form = dfx.fem.form(mu * r_square * ufl.ds)
-        self.charge_form = [dfx.fem.form(3 * c * r_square * ufl.dx) for c in cs]
+        self.charge_form = [
+            dfx.fem.form(3 * c * r_square * ufl.dx / num_particles) for c in cs
+        ]
         self.mus_bc_form = [dfx.fem.form(mu_ * r_square * ufl.ds) for mu_ in mus]
 
         return super().setup(u_state, *args, **kwargs)
