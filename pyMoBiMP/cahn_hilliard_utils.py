@@ -768,7 +768,7 @@ class ChargeDischargeExperiment():
         # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
         # it increases with chemical potential at the surface of the particles.
         # The actual cell voltage as measured is the negative of it.
-        if cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
+        if -cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
             print(
                 ">>> Cell voltage exceeds maximum " +
                 f"(V_cell = {cell_voltage:1.3f} > {self.c_bounds[1]:1.3f})."
@@ -783,7 +783,7 @@ class ChargeDischargeExperiment():
 
             return False
 
-        if cell_voltage < self.c_bounds[0] and self.I_charge.value < 0.0:
+        if -cell_voltage < self.c_bounds[0] and self.I_charge.value < 0.0:
 
             if self.stop_at_empty:
                 print(">>> Cell voltage exceeds minimum." +
