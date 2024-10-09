@@ -853,7 +853,7 @@ class MultiParticleSimulation():
         self.c_of_y = c_of_y
 
         # charging current
-        self.I_charge = I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
+        self.I_charge = I_charge = dfx.fem.Constant(mesh, 2. / 3. * C_rate)
 
         # Invoke the experiment
         self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
@@ -1055,7 +1055,7 @@ class MultiParticleSimulation():
 
     @property
     def T_final(self):
-        self._T = 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
+        self._T = 3.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
         return self._T
 
     @staticmethod
