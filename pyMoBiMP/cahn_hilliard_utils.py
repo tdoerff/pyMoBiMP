@@ -674,7 +674,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
         self.chem_pot_form = dfx.fem.form(3 * dFdc * r_square * ufl.dx)
         self.mu_bc_form = dfx.fem.form(mu * r_square * ufl.ds)
         self.charge_form = [
-            dfx.fem.form(3 * c * r_square * ufl.dx / num_particles) for c in cs
+            dfx.fem.form(3 / num_particles * c * r_square * ufl.dx) for c in cs
         ]
         self.mus_bc_form = [dfx.fem.form(mu_ * r_square * ufl.ds) for mu_ in mus]
 
