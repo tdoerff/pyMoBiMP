@@ -330,58 +330,6 @@ class DefaultPhysicalSetup:
         return self.mean_affinity, self.reaction_affinities
 
 
-class Voltage(dfx.fem.Constant):
-
-    def __init__(self,
-                 u: dfx.fem.Function,
-                 I_global: float | dfx.fem.Constant,
-                 physical_setup: DefaultPhysicalSetup):
-
-        self.u = u
-        self.function_space = u.function_space
-        self.I_global = I_global
-
-        self.physical_setup = physical_setup
-
-        A, a_ratios = self.physical_setup.total_surface_and_weights()
-        L, Ls = self.physical_setup.mean_and_particle_affinities()
-
-        dA = self.physical_setup.dA
-
-        _, mu = ufl.split(u)
-
-        V_cell_ufl = - mu * Ls / L * a_ratios * dA
-        V_cell_ufl -= I_global / L * a_ratios * dA
-
-        self.V_cell_cpp = dfx.fem.form(V_cell_ufl)
-
-        super().__init__(self.function_space.mesh,
-                         self.compute_voltage())
-
-    def compute_voltage(self):
-
-        V_cell_value = float(dfx.fem.assemble_scalar(self.V_cell_cpp))
-        voltage = comm.allreduce(V_cell_value, op=SUM)
-
-        return voltage
-
-    def update(self):
-        voltage = self.compute_voltage()
-
-        np.copyto(self._cpp_object.value, np.asarray(voltage))
-
-    @property
-    def value(self):
-
-        self.update()
-
-        return float(self._cpp_object.value)
-
-    @property
-    def form(self):
-        return self.V_cell_cpp
-
-
 class TestCurrent():
     def __init__(self, u, voltage, I_global, physical_setup):
 

@@ -2,6 +2,7 @@ import dolfinx as dfx
 from mpi4py.MPI import COMM_WORLD as comm
 import numpy as np
 import pytest
+import scifem
 import ufl
 
 from pyMoBiMP.dfn_battery_model import (
@@ -10,7 +11,7 @@ from pyMoBiMP.dfn_battery_model import (
     create_particle_summation_measure,
     DFN_function_space,
     DefaultPhysicalSetup as PhysicalSetup,
-    Voltage,
+    voltage_form
 )
 
 
@@ -82,21 +83,33 @@ def test_Voltage_constant_mu(I_global_value: float):
     mesh = create_1p1_DFN_mesh(comm)
 
     V = DFN_function_space(mesh)
+    W = scifem.create_real_functionspace(mesh)
 
     physical_setup = PhysicalSetup(V)
 
     # Test for mu = 0
     u = dfx.fem.Function(V)  # mu = 0
+    voltage = dfx.fem.Function(W)
+    v_voltage = ufl.TestFunction(W)
+    dvoltage = ufl.TrialFunction(W)
 
     I_global = dfx.fem.Constant(mesh, I_global_value)
 
-    voltage = Voltage(u, I_global, physical_setup)
+    voltage_ufl = voltage_form(u, voltage, v_voltage, I_global, physical_setup)
+
+    dvoltage_ufl = ufl.derivative(voltage_ufl, voltage, dvoltage)
+
+    solver = scifem.NewtonSolver([voltage_ufl], [[dvoltage_ufl]], [voltage])
+
+    solver.solve()
+
+    voltage_value = voltage.x.array[0]
 
     print(f"L * V(I={I_global.value}, mu=0) = ",
-          physical_setup.mean_affinity * voltage.value)
+          physical_setup.mean_affinity * voltage_value)
 
     assert np.isclose(
-        voltage.physical_setup.mean_affinity * voltage.value,
+        physical_setup.mean_affinity * voltage_value,
         -I_global.value)
 
     # Test for mu = 1
@@ -104,8 +117,8 @@ def test_Voltage_constant_mu(I_global_value: float):
     mu.x.array[:] = 1.
 
     assert np.isclose(
-        voltage.physical_setup.mean_affinity * voltage.value,
-        -I_global.value - voltage.physical_setup.mean_affinity)
+        physical_setup.mean_affinity * voltage_value,
+        -I_global.value - physical_setup.mean_affinity)
 
 
 def test_Voltage_constant_I_global():
