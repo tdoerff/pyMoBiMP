@@ -596,6 +596,23 @@ def DFN_FEM_form(
     return F
 
 
+def voltage_form(u, voltage, v_voltage, physical_setup):
+
+    y, mu = ufl.split(u)
+
+    mesh = u.function_space.mesh
+
+    dA = create_particle_summation_measure(mesh)
+
+    Ls = physical_setup.reaction_affinities
+    L = physical_setup.mean_affinity
+    a_ratios = physical_setup.surface_weights
+
+    F = (voltage - mu * Ls / L * a_ratios) * v_voltage * dA
+
+    return F
+
+
 class DFNSimulationBase(abc.ABC):
 
     PhysicalSetup = NotImplemented
@@ -630,6 +647,11 @@ class DFNSimulationBase(abc.ABC):
 
         v = ufl.TestFunction(V)
 
+        W = scifem.create_real_functionspace(mesh)
+
+        self.voltage = voltage = dfx.fem.Function(W)
+        v_voltage = ufl.TestFunction(W)
+
         self.dt = dt = dfx.fem.Constant(mesh, 1e-8)
 
         # Runtime analysis and output
@@ -651,12 +673,15 @@ class DFNSimulationBase(abc.ABC):
 
         # FEM Form
         # ========
-        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy,
-                                  gamma=gamma)
+        self.F = DFN_FEM_form(
+            u, u0, v, dt, V_cell, self.free_energy, gamma=gamma)
+
+        self.voltage_form = voltage_form(
+            u, voltage, v_voltage, self.physical_setup)
 
         # DOLFINx problem and solver setup
         # ===================================
-        self.solver_setup(comm, u, V_cell, F)
+        self.solver_setup(V_cell)
 
         self.initial_data()
 
@@ -679,11 +704,19 @@ class DFNSimulationBase(abc.ABC):
         log(its, error)
         assert np.isclose(error, 0.)
 
-    def solver_setup(self, comm, u, V_cell, F):
+    def solver_setup(self, V_cell):
 
-        du = ufl.TrialFunction(u.function_space)
+        du = ufl.TrialFunction(self.u.function_space)
+        dvoltage = ufl.TrialFunction(self.voltage.function_space)
 
-        J = ufl.derivative(F, u, du)
+        F = [self.F, self.voltage_form]
+
+        J = [[ufl.derivative(self.F, self.u, du),
+              ufl.derivative(self.F, self.voltage, dvoltage)],
+             [ufl.derivative(self.voltage_form, self.u, du),
+              ufl.derivative(self.voltage_form, self.voltage, dvoltage)]]
+
+        w = [self.u, self.voltage]
 
         petsc_options = {
             "ksp_type": "preonly",
@@ -692,7 +725,7 @@ class DFNSimulationBase(abc.ABC):
         }
 
         self.solver = solver = scifem.NewtonSolver(
-            [F], [[J]], [u], max_iterations=50, petsc_options=petsc_options
+            F, J, w, max_iterations=50, petsc_options=petsc_options
         )
 
         solver.max_it = solver.max_iterations
