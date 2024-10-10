@@ -608,7 +608,14 @@ def voltage_form(u, voltage, v_voltage, physical_setup):
     L = physical_setup.mean_affinity
     a_ratios = physical_setup.surface_weights
 
-    F = (voltage - mu * Ls / L * a_ratios) * v_voltage * dA
+    num_particles = scifem.assemble_scalar(
+        dfx.fem.form(dfx.fem.Constant(mesh, 1.) * ufl.dx)
+    )
+
+    F = (
+        (voltage / num_particles +
+         mu * Ls / L * a_ratios +
+         I_global / L * a_ratios) * v_voltage * dA)
 
     return F
 
