@@ -2,16 +2,15 @@ import abc
 
 import basix
 import dolfinx as dfx
-from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
 
 from mpi4py import MPI
 from mpi4py.MPI import COMM_WORLD as comm, SUM
 
 import numpy as np
 
-from petsc4py import PETSc
-
 import pyvista as pv
+
+import scifem
 
 import ufl
 
@@ -23,7 +22,6 @@ from pyMoBiMP.cahn_hilliard_utils import (
     _free_energy as free_energy)
 
 from pyMoBiMP.fenicsx_utils import (
-    NewtonSolver,
     RuntimeAnalysisBase,
     StopEvent,
     strip_off_xdmf_file_ending)
@@ -107,10 +105,7 @@ def time_stepping(
             if stop:
                 break
 
-            iterations, success = solver.solve(u)
-
-            if not success:
-                raise RuntimeError("Newton solver did not converge.")
+            iterations = solver.solve(tol=1e-7)
 
         except StopEvent as e:
 
@@ -213,18 +208,6 @@ def time_stepping(
             [o.finalize() for o in output]
 
     return
-
-
-class NonlinearProblem(NonlinearProblemBase):
-    def __init__(self, *args, callback=lambda: None, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.callback = callback
-
-    def form(self, x):
-        super().form(x)
-
-        self.callback()
 
 
 def plot_solution_on_grid(u):
@@ -691,28 +674,30 @@ class DFNSimulationBase(abc.ABC):
 
         log(dfx.fem.petsc.assemble_vector(residual).norm())
 
-        its, success = self.solver.solve(self.u)
+        its = self.solver.solve(tol=1e-7)
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         log(its, error)
         assert np.isclose(error, 0.)
 
     def solver_setup(self, comm, u, V_cell, F):
-        problem = NonlinearProblem(F, u)
-        self.solver = solver = NewtonSolver(
-            comm, problem, callback=lambda solver, uh: V_cell.update())
-        solver.rtol = 1e-7
-        solver.max_it = 50
-        solver.convergence_criterion = "incremental"
-        solver.relaxation_parameter = 1.0
 
-        ksp = solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "ksp"
-        ksp.setFromOptions()
+        du = ufl.TrialFunction(u.function_space)
 
-        self.solver
+        J = ufl.derivative(F, u, du)
+
+        petsc_options = {
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+        }
+
+        self.solver = solver = scifem.NewtonSolver(
+            [F], [[J]], [u], max_iterations=50, petsc_options=petsc_options
+        )
+
+        solver.max_it = solver.max_iterations
+
+        solver.set_pre_solve_callback(callback=lambda solver: V_cell.update())
 
     def create_mesh(self):
 
