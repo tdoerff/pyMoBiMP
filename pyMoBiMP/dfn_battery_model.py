@@ -48,10 +48,10 @@ def log(*msg, my_rank=0, all_procs=False):
 def time_stepping(
     solver,
     u,
+    voltage,
     u0,
     T,
     dt,
-    V_cell,
     t_start=0,
     dt_max=10.0,
     dt_min=1e-9,
@@ -98,9 +98,9 @@ def time_stepping(
 
             t += float(dt)
 
-            V_cell.update()
-            callback()  # check current
-            stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
+            stop = event_handler(t, cell_voltage=voltage.x.array[0], **event_pars)
+
+            callback()
 
             if stop:
                 break
@@ -383,22 +383,21 @@ class Voltage(dfx.fem.Constant):
 
 
 class TestCurrent():
-    def __init__(self, u, V_cell):
+    def __init__(self, u, voltage, I_global, physical_setup):
 
         _, mu = ufl.split(u)
 
-        a_ratios = V_cell.physical_setup.surface_weights
-        Ls = V_cell.physical_setup.reaction_affinities
+        a_ratios = physical_setup.surface_weights
+        Ls = physical_setup.reaction_affinities
 
         dA = create_particle_summation_measure(u.function_space.mesh)
 
-        I_particle = - Ls * (mu + V_cell)
+        I_particle = - Ls * (mu + voltage)
 
         I_global_ref_ufl = a_ratios * I_particle * dA
 
         self.I_global_ref_form = dfx.fem.form(I_global_ref_ufl)
-        self.I_global = V_cell.I_global
-        self.V_cell = V_cell
+        self.I_global = I_global
 
     def compute_current(self):
 
@@ -421,7 +420,7 @@ class TestCurrent():
 
 
 class AnalyzeOCP(RuntimeAnalysisBase):
-    def setup(self, u_state, c_of_y, V_cell, *args, **kwargs):
+    def setup(self, u_state, voltage, c_of_y, *args, **kwargs):
         super().setup(u_state, *args, **kwargs)
 
         # Function space(s) and mesh information
@@ -449,7 +448,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         self.soc_form = dfx.fem.form(3 / num_particles * c * r**2 * ufl.dx)
 
-        self.V_cell_form = V_cell.form
+        self.V_cell_form = dfx.fem.form(voltage / num_particles * ufl.dx)
 
     def analyze(self, t):
 
@@ -549,7 +548,7 @@ def DFN_function_space(mesh):
 
 
 def DFN_FEM_form(
-    u, u0, v, dt, V_cell, free_energy,
+    u, voltage, u0, v, dt, free_energy, Ls,
     M=lambda c: c * (1 - c), gamma=0.1, grad_c_bc=lambda c: 0.0
 ):
 
@@ -561,9 +560,8 @@ def DFN_FEM_form(
     v_c, v_mu = ufl.split(v)
 
     dA = create_particle_summation_measure(mesh)
-    Ls = V_cell.physical_setup.reaction_affinities
 
-    I_particle = - Ls * (mu + V_cell)
+    I_particle = - Ls * (mu + voltage)
 
     theta = 1.0
 
@@ -596,7 +594,7 @@ def DFN_FEM_form(
     return F
 
 
-def voltage_form(u, voltage, v_voltage, physical_setup):
+def voltage_form(u, voltage, v_voltage, I_global, physical_setup):
 
     y, mu = ufl.split(u)
 
@@ -671,24 +669,33 @@ class DFNSimulationBase(abc.ABC):
 
         self.experiment = self.Experiment(u)
 
-        self.V_cell = V_cell = Voltage(u, self.experiment.I_charge, self.physical_setup)
-
         self.rt_analysis = self.RuntimeAnalysis(
-            u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
+            u, voltage, c_of_y, filename=self.output_file_name_base + "_rt.txt"
+        )
 
-        self.callback = TestCurrent(u, V_cell)
+        self.callback = TestCurrent(
+            u, voltage, self.experiment.I_charge, self.physical_setup
+        )
 
         # FEM Form
         # ========
         self.F = DFN_FEM_form(
-            u, u0, v, dt, V_cell, self.free_energy, gamma=gamma)
+            u,
+            voltage,
+            u0,
+            v,
+            dt,
+            self.free_energy,
+            self.physical_setup.reaction_affinities,
+            gamma=gamma,
+        )
 
         self.voltage_form = voltage_form(
-            u, voltage, v_voltage, self.physical_setup)
+            u, voltage, v_voltage, self.experiment.I_charge, self.physical_setup)
 
         # DOLFINx problem and solver setup
         # ===================================
-        self.solver_setup(V_cell)
+        self.solver_setup()
 
         self.initial_data()
 
@@ -711,7 +718,7 @@ class DFNSimulationBase(abc.ABC):
         log(its, error)
         assert np.isclose(error, 0.)
 
-    def solver_setup(self, V_cell):
+    def solver_setup(self):
 
         du = ufl.TrialFunction(self.u.function_space)
         dvoltage = ufl.TrialFunction(self.voltage.function_space)
@@ -736,8 +743,6 @@ class DFNSimulationBase(abc.ABC):
         )
 
         solver.max_it = solver.max_iterations
-
-        solver.set_pre_solve_callback(callback=lambda solver: V_cell.update())
 
     def create_mesh(self):
 
@@ -770,10 +775,10 @@ class DFNSimulationBase(abc.ABC):
         time_stepping(
             self.solver,
             self.u,
+            self.voltage,
             self.u0,
             t_final,
             self.dt,
-            self.V_cell,
             t_start=t_start,
             dt_max=dt_max,
             dt_min=dt_min,
