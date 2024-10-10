@@ -116,6 +116,9 @@ def test_Voltage_constant_mu(I_global_value: float):
     _, mu = u.split()
     mu.x.array[:] = 1.
 
+    solver.solve()
+    voltage_value = voltage.x.array[0]
+
     assert np.isclose(
         physical_setup.mean_affinity * voltage_value,
         -I_global.value - physical_setup.mean_affinity)
@@ -126,25 +129,35 @@ def test_Voltage_constant_I_global():
     mesh = create_1p1_DFN_mesh(comm)
 
     V = DFN_function_space(mesh)
+    W = scifem.create_real_functionspace(mesh)
 
     physical_setup = PhysicalSetup(V)
 
     u = dfx.fem.Function(V)
+    voltage = dfx.fem.Function(W)
+    v_voltage = ufl.TestFunction(W)
+    dvoltage = ufl.TrialFunction(W)
 
     I_global = dfx.fem.Constant(mesh, 1.)
 
-    voltage = Voltage(u, I_global, physical_setup)
+    voltage_ufl = voltage_form(u, voltage, v_voltage, I_global, physical_setup)
 
-    # Test for mu = 1
+    dvoltage_ufl = ufl.derivative(voltage_ufl, voltage, dvoltage)
+
+    solver = scifem.NewtonSolver([voltage_ufl], [[dvoltage_ufl]], [voltage])
+
     _, mu = u.split()
 
     for mu_value in [-100., -10., -1., 0., 1e-3, 0.1, 1.0, 10., 100.]:
 
         mu.x.array[:] = mu_value
 
+        solver.solve()
+        voltage_value = voltage.x.array[0]
+
         assert np.isclose(
-            voltage.physical_setup.mean_affinity * voltage.value,
-            -I_global.value - mu_value * voltage.physical_setup.mean_affinity)
+            physical_setup.mean_affinity * voltage_value,
+            -I_global.value - mu_value * physical_setup.mean_affinity)
 
 
 def test_particle_current():
@@ -152,8 +165,13 @@ def test_particle_current():
     mesh = create_1p1_DFN_mesh(comm)
 
     V = DFN_function_space(mesh)
+    W = scifem.create_real_functionspace(mesh)
 
     u = dfx.fem.Function(V)
+
+    voltage = dfx.fem.Function(W)
+    v_voltage = ufl.TestFunction(W)
+    dvoltage = ufl.TrialFunction(W)
 
     physical_setup = PhysicalSetup(V)
 
@@ -163,14 +181,18 @@ def test_particle_current():
 
     I_global = dfx.fem.Constant(mesh, 0.)
 
-    voltage = Voltage(u, I_global, physical_setup)
+    voltage_ufl = voltage_form(u, voltage, v_voltage, I_global, physical_setup)
 
-    test_current = TestCurrent(u, voltage)
+    dvoltage_ufl = ufl.derivative(voltage_ufl, voltage, dvoltage)
+
+    solver = scifem.NewtonSolver([voltage_ufl], [[dvoltage_ufl]], [voltage])
+
+    test_current = TestCurrent(u, voltage, I_global, physical_setup)
 
     for I_global_value in [0., 1e-3, 0.1, 1.0, 10., 100.]:
         I_global.value = I_global_value
 
-        voltage.update()
+        solver.solve()
 
         I_global_ref = test_current.compute_current()
 
