@@ -23,4 +23,4 @@ if __name__ == "__main__":
 
     simulation = Simulation()
 
-    simulation.run()
+    simulation.run(dt_max=1e-2)

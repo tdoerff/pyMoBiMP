@@ -38,4 +38,4 @@ if __name__ == "__main__":
         output_destination=output_file
     )
 
-    simulation.run(dt_max=1e-3, n_out=501, tol=1e-5)
+    simulation.run(dt_max=1e-2, n_out=501, tol=1e-5)
