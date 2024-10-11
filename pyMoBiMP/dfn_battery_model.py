@@ -74,6 +74,8 @@ def time_stepping(
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
 
+    u_inc_form = dfx.fem.form(ufl.dot(u - u0, u - u0) * ufl.dx)
+
     # Prepare output
     if output is not None:
         output = np.atleast_1d(output)
@@ -100,12 +102,17 @@ def time_stepping(
 
             stop = event_handler(t, cell_voltage=voltage.x.array[0], **event_pars)
 
-            callback()
-
             if stop:
                 break
 
             iterations = solver.solve(tol=1e-7)
+
+            # Callback test for the total current density. That should be
+            # done after the timestep. Otherwise an unsucessul previous
+            # timestep might be evaluated leading to a AssertionError that
+            # again restarts the timestep with smaller step size until we
+            # reach dt_min.
+            callback()
 
         except StopEvent as e:
 
@@ -156,9 +163,7 @@ def time_stepping(
             break
 
         # Adaptive timestepping a la Yibao Li et al. (2017)
-        u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
-
-        u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+        u_inc = scifem.assemble_scalar(u_inc_form)
 
         if iterations < solver.max_it / 5:
             # Use the given increment factor if we are in a safe region, i.e.,
@@ -174,7 +179,7 @@ def time_stepping(
             # Do not increase timestep between [0.5*max_it, 0.8*max_it]
             inc_factor = 1.0
 
-        dt.value = min(max(tol / u_err_max, dt_min), dt_max, inc_factor * dt.value)
+        dt.value = min(max(tol / u_inc, dt_min), dt_max, inc_factor * dt.value)
 
         # Find the minimum timestep among all processes.
         # Note that we explicitly use COMM_WORLD since the mesh communicator
