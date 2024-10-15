@@ -522,7 +522,7 @@ class ChargeDischargeExperiment():
         if -cell_voltage > self.v_cell_bounds[1] and self.I_charge.value > 0.0:
             log(
                 ">>> Cell voltage exceeds maximum " +
-                f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
+                f"(V_cell = {-cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
             )
 
             if self.stop_on_full:
@@ -538,7 +538,7 @@ class ChargeDischargeExperiment():
 
             if self.stop_at_empty:
                 log(">>> Cell voltage exceeds minimum." +
-                    f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[0]:1.3f}).")
+                    f"(V_cell = {-cell_voltage:1.3f} < {self.v_cell_bounds[0]:1.3f}).")
 
                 return True
 
