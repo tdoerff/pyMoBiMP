@@ -580,6 +580,10 @@ class DFNSimulationBase(abc.ABC):
     Experiment = NotImplemented
     free_energy = staticmethod(free_energy)
 
+    @staticmethod
+    def mobility(c):
+        return c * (1 - c)
+
     def __init__(
             self,
             comm: MPI.Intracomm = MPI.COMM_WORLD,
@@ -641,6 +645,7 @@ class DFNSimulationBase(abc.ABC):
             dt,
             self.free_energy,
             self.physical_setup.reaction_affinities,
+            M=lambda c: self.mobility(c),
             gamma=gamma,
         )
 
