@@ -351,7 +351,25 @@ class PyvistaAnimation:
             # Retrieve voltage.
             V = rt_data[:, -1]
 
-            chart.line(q, V, color="k", label=r"$V_{cell}$")
+            # Retrieve time.
+            t = rt_data[:, 0]
+
+            dt = np.diff(t)
+
+            dq = np.zeros_like(q)
+            dq[:-1] = np.diff(q) / dt
+            dq[-1] = dq[-2]
+
+            eps = 1e-7
+
+            chart.line(q[dq > eps],
+                       V[dq > eps],
+                       color="r",
+                       label=r"$V_{cell}(I>0)$")
+            chart.line(q[dq < 0],
+                       V[dq < 0],
+                       color="b",
+                       label=r"$V_{cell}(I<0)$")
 
             chart.x_range = [0, 1]
             eps = 0.5
