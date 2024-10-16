@@ -164,6 +164,7 @@ def time_stepping(
 
         # Adaptive timestepping a la Yibao Li et al. (2017)
         u_inc = scifem.assemble_scalar(u_inc_form)
+        u_inc = max(u_inc, 1e-9)
 
         if iterations < solver.max_it / 5:
             # Use the given increment factor if we are in a safe region, i.e.,
