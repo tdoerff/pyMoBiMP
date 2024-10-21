@@ -228,7 +228,9 @@ class NonlinearProblem:
     Custom implementation of NonlinearProblem to make sure we have a Jacobian.
     """
 
-    def __init__(self, F, c, bcs=[]):
+    def __init__(
+        self, F: ufl.Form, c: dfx.fem.Function, bcs: List[dfx.fem.DirichletBC] = []
+    ):
 
         V = c.function_space
         self.mesh_comm = V.mesh.comm
@@ -273,7 +275,7 @@ class NonlinearProblem:
                     coeffs_L=coeffs_L,
                     constants_L=constants_L)
 
-    def scatter_Function_to_vector(self, w, x):
+    def scatter_Function_to_vector(self, w: dfx.fem.Function, x: PETSc.Vec):
         # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
 
         dfx.cpp.la.petsc.scatter_local_vectors(
@@ -290,7 +292,7 @@ class NonlinearProblem:
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
                       mode=PETSc.ScatterMode.FORWARD)
 
-    def update_solution(self, dx, beta, w):
+    def update_solution(self, dx: PETSc.Vec, beta: float, w: dfx.fem.Function):
         # Update solution
         offset_start = 0
         for s in [w]:
@@ -307,10 +309,10 @@ class NonlinearProblem:
             )
             offset_start += num_sub_dofs
 
-    def form(self, x):
+    def form(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-    def F(self, x, b):
+    def F(self, x: PETSc.Vec, b: PETSc.Vec):
         """Assemble residual vector."""
 
         with b.localForm() as b_local:
@@ -324,7 +326,7 @@ class NonlinearProblem:
 
         dfx.fem.petsc.set_bc(b, self.bcs, x, -1.0)
 
-    def J(self, x, A):
+    def J(self, x: PETSc.Vec, A: PETSc.Mat):
         """Assemble Jacobian matrix."""
 
         A.zeroEntries()
@@ -390,7 +392,7 @@ class NonlinearProblemBlock:
                     coeffs_L=coeffs_L,
                     constants_L=constants_L)
 
-    def scatter_Function_to_vector(self, w, x):
+    def scatter_Function_to_vector(self, w: List[dfx.fem.Function], x: PETSc.Vec):
         # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
         dfx.cpp.la.petsc.scatter_local_vectors(
             x,
@@ -406,8 +408,11 @@ class NonlinearProblemBlock:
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
                       mode=PETSc.ScatterMode.FORWARD)
 
-    def update_solution(self, dx, beta, w):
-        # Update solution
+    def update_solution(self,
+                        dx: PETSc.Vec,
+                        beta: float,
+                        w: List[dfx.fem.Function]):
+
         offset_start = 0
         for s in w:
             num_sub_dofs = (
@@ -423,10 +428,10 @@ class NonlinearProblemBlock:
             )
             offset_start += num_sub_dofs
 
-    def form(self, x):
+    def form(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-    def F(self, x, b):
+    def F(self, x: PETSc.Vec, b: PETSc.Vec):
         """Assemble residual vector."""
 
         with b.localForm() as b_local:
@@ -444,7 +449,7 @@ class NonlinearProblemBlock:
 
         b.ghostUpdate(PETSc.InsertMode.INSERT_VALUES, PETSc.ScatterMode.FORWARD)
 
-    def J(self, x, A):
+    def J(self, x: PETSc.Vec, A: PETSc.Mat):
         """Assemble Jacobian matrix."""
 
         A.zeroEntries()
@@ -515,23 +520,23 @@ class NewtonSolver():
         """Set a callback function that is called after each Newton iteration."""
         self._post_solve_callback = callback
 
-    def set_x(self, w):
+    def set_x(self, w: dfx.fem.Function | List[dfx.fem.Function]):
         self.problem.scatter_Function_to_vector(w, self.x)
 
-    def setF(self, x):
+    def setF(self, x: PETSc.Vec):
         # Assemble the residual vector
         self.problem.F(x, self.L)
 
-    def setJ(self, x):
+    def setJ(self, x: PETSc.Vec):
         self.problem.J(x, self.A)
 
-    def set_form(self, x):
+    def set_form(self, x: PETSc.Vec):
         self.problem.form(x)
 
-    def update_solution(self, w):
+    def update_solution(self, w: dfx.fem.Function | List[dfx.fem.Function]):
         self.problem.update_solution(self.dx, self.beta, w)
 
-    def solve(self, w):
+    def solve(self, w: dfx.fem.Function | List[dfx.fem.Function]):
 
         for it in range(self.max_it):
 
