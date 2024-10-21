@@ -9,7 +9,12 @@ from pyMoBiMP.dfn_battery_model import (  # noqa: 402
     DFNSimulationBase,
     DefaultPhysicalSetup)
 
+from pyMoBiMP.cahn_hilliard_utils import _free_energy  # noqa: 402
 from pyMoBiMP.fenicsx_utils import FileOutput  # noqa: 402
+
+
+def free_energy(c):
+    return _free_energy(c, a=0., b=0., c=0)
 
 
 class Simulation(DFNSimulationBase):
@@ -20,6 +25,7 @@ class Simulation(DFNSimulationBase):
 
 
 Simulation.Experiment.c_rate = 1e-2
+Simulation.free_energy = staticmethod(free_energy)
 
 
 if __name__ == "__main__":
@@ -29,9 +35,7 @@ if __name__ == "__main__":
     output_destination = dir + "/output"
 
     simulation = Simulation(
-        n_particles=12,
-        n_radius=128,
-        output_destination=output_destination,
-        gamma=0.01)
+        n_particles=256,
+        output_destination=output_destination)
 
-    simulation.run(dt_max=1e-3, tol=1e-7, t_final=300.)
+    simulation.run(dt_max=1e-3, tol=1e-6, t_final=300.)

@@ -2,3 +2,7 @@ pp_output/
 results/
 mesh_3d.xdmf
 mesh_3d.h5
+*.gif
+*.jpeg
+*.jpg
+*.mp4

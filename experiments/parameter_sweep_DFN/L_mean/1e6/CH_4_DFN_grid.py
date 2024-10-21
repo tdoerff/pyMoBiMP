@@ -19,6 +19,8 @@ class Simulation(DFNSimulationBase):
     Experiment = ChargeDischargeExperiment
 
 
+Simulation.PhysicalSetup.Lmean = 1e5
+
 Simulation.Experiment.c_rate = 1e-2
 
 
@@ -29,9 +31,7 @@ if __name__ == "__main__":
     output_destination = dir + "/output"
 
     simulation = Simulation(
-        n_particles=12,
-        n_radius=128,
-        output_destination=output_destination,
-        gamma=0.01)
+        n_particles=256,
+        output_destination=output_destination)
 
-    simulation.run(dt_max=1e-3, tol=1e-7, t_final=300.)
+    simulation.run(dt_max=1e-3, tol=1e-6, t_final=300.)
