@@ -105,7 +105,7 @@ def time_stepping(
             if stop:
                 break
 
-            iterations = solver.solve(tol=1e-7)
+            iterations = solver.solve(tol=1e-9)
 
             # Callback test for the total current density. That should be
             # done after the timestep. Otherwise an unsucessul previous
