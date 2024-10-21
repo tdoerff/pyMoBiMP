@@ -11,7 +11,7 @@ import scifem
 import ufl
 
 from pyMoBiMP.fenicsx_utils import (
-    read_data, NonlinearProblemBlock, NewtonSolverBlock)
+    read_data, NonlinearProblemBlock, NewtonSolver)
 
 
 def test_read_data_DFN_shape():
@@ -87,7 +87,7 @@ def test_NonlinearProblemBlock():
 
     problem = NonlinearProblemBlock(F, w)
 
-    solver = NewtonSolverBlock(problem)
+    solver = NewtonSolver(problem)
 
     its, success = solver.solve(w)
 
