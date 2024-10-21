@@ -4,6 +4,8 @@ import dolfinx as dfx
 
 import h5py
 
+import logging
+
 from mpi4py import MPI
 
 import numpy as np
@@ -14,9 +16,12 @@ from petsc4py import PETSc
 
 import shutil
 
-from typing import List
+from typing import Callable, List
 
 import ufl
+
+
+logger = logging.getLogger(__name__)
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -61,7 +66,9 @@ class NonlinearProblem:
     Custom implementation of NonlinearProblem to make sure we have a Jacobian.
     """
 
-    def __init__(self, F, c, bcs=[]):
+    def __init__(
+        self, F: ufl.Form, c: dfx.fem.Function, bcs: List[dfx.fem.DirichletBC] = []
+    ):
 
         V = c.function_space
         self.mesh_comm = V.mesh.comm
@@ -75,10 +82,75 @@ class NonlinearProblem:
 
         self.bcs = bcs
 
-    def form(self, x):
+    def pack_constants_and_coeffs(self):
+
+        constants_L = [
+            form and dfx.cpp.fem.pack_constants(form._cpp_object) for form in [self.L]
+        ]
+        coeffs_L = [
+            dfx.cpp.fem.pack_coefficients(form._cpp_object) for form in [self.L]]
+
+        constants_a = [
+            [
+                dfx.cpp.fem.pack_constants(form._cpp_object)
+                if form is not None
+                else np.array([], dtype=PETSc.ScalarType)
+                for form in forms
+            ]
+            for forms in [[self.a]]
+        ]
+
+        coeffs_a = [
+            [
+                {} if form is None else dfx.cpp.fem.pack_coefficients(form._cpp_object)
+                for form in forms
+            ]
+            for forms in [[self.a]]
+        ]
+
+        return dict(coeffs_a=coeffs_a,
+                    constants_a=constants_a,
+                    coeffs_L=coeffs_L,
+                    constants_L=constants_L)
+
+    def scatter_Function_to_vector(self, w: dfx.fem.Function, x: PETSc.Vec):
+        # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
+
+        dfx.cpp.la.petsc.scatter_local_vectors(
+            x,
+            [si.x.petsc_vec.array_r for si in [w]],
+            [
+                (
+                    si.function_space.dofmap.index_map,
+                    si.function_space.dofmap.index_map_bs,
+                )
+                for si in [w]
+            ],
+        )
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)
+
+    def update_solution(self, dx: PETSc.Vec, beta: float, w: dfx.fem.Function):
+        # Update solution
+        offset_start = 0
+        for s in [w]:
+            num_sub_dofs = (
+                s.function_space.dofmap.index_map.size_local
+                * s.function_space.dofmap.index_map_bs
+            )
+
+            s.x.petsc_vec.array_w[:num_sub_dofs] -= (
+                beta * dx.array_r[offset_start:offset_start + num_sub_dofs]
+            )
+            s.x.petsc_vec.ghostUpdate(
+                addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+            )
+            offset_start += num_sub_dofs
+
+    def form(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-    def F(self, x, b):
+    def F(self, x: PETSc.Vec, b: PETSc.Vec):
         """Assemble residual vector."""
 
         with b.localForm() as b_local:
@@ -92,7 +164,7 @@ class NonlinearProblem:
 
         dfx.fem.petsc.set_bc(b, self.bcs, x, -1.0)
 
-    def J(self, x, A):
+    def J(self, x: PETSc.Vec, A: PETSc.Mat):
         """Assemble Jacobian matrix."""
 
         A.zeroEntries()
@@ -106,52 +178,164 @@ class NonlinearProblem:
         return dfx.fem.petsc.create_vector(self.L)
 
 
-class BlockNonlinearProblem:
+class NonlinearProblemBlock:
     """
-    Wrapper class to collect independent block problems to be solved simultaneously.
+    Block-based implementation of NonlinearProblem to make sure we have a Jacobian.
     """
-    def __init__(self,
-                 Fs: List[ufl.Form],
-                 cs: List[dfx.fem.Function],
-                 bcss: List[List[dfx.fem.DirichletBC | None]] = []):
 
-        assert len(Fs) == len(cs)
+    def __init__(
+        self,
+        F: list[ufl.Form],
+        w: list[dfx.fem.Function],
+        bcs: list[dfx.fem.DirichletBC] = [],
+    ):
 
-        self.num_of_blocks = len(Fs)
+        dw = [ufl.TrialFunction(c.function_space) for c in w]
 
-        if len(bcss) == 0:
-            bcss = [[], ] * self.num_of_blocks
+        J = [[ufl.derivative(Fi, c, dc) for c, dc in zip(w, dw)] for Fi in F]
 
-        assert len(bcss) == self.num_of_blocks
+        self.L = dfx.fem.form(F)
+        self.a = dfx.fem.form(J)
 
-        self.problems = [
-            NonlinearProblem(F, c, bcs) for F, c, bcs in zip(Fs, cs, bcss)]
+        self.bcs = bcs
+
+    def pack_constants_and_coeffs(self):
+        # Pack constants and coefficients
+        constants_L = [
+            form and dfx.cpp.fem.pack_constants(form._cpp_object) for form in self.L
+        ]
+        coeffs_L = [
+            dfx.cpp.fem.pack_coefficients(form._cpp_object) for form in self.L]
+
+        constants_a = [
+            [
+                dfx.cpp.fem.pack_constants(form._cpp_object)
+                if form is not None
+                else np.array([], dtype=PETSc.ScalarType)
+                for form in forms
+            ]
+            for forms in self.a
+        ]
+
+        coeffs_a = [
+            [
+                {} if form is None else dfx.cpp.fem.pack_coefficients(form._cpp_object)
+                for form in forms
+            ]
+            for forms in self.a
+        ]
+
+        return dict(coeffs_a=coeffs_a,
+                    constants_a=constants_a,
+                    coeffs_L=coeffs_L,
+                    constants_L=constants_L)
+
+    def scatter_Function_to_vector(self, w: List[dfx.fem.Function], x: PETSc.Vec):
+        # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
+        dfx.cpp.la.petsc.scatter_local_vectors(
+            x,
+            [si.x.petsc_vec.array_r for si in w],
+            [
+                (
+                    si.function_space.dofmap.index_map,
+                    si.function_space.dofmap.index_map_bs,
+                )
+                for si in w
+            ],
+        )
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)
+
+    def update_solution(self,
+                        dx: PETSc.Vec,
+                        beta: float,
+                        w: List[dfx.fem.Function]):
+
+        offset_start = 0
+        for s in w:
+            num_sub_dofs = (
+                s.function_space.dofmap.index_map.size_local
+                * s.function_space.dofmap.index_map_bs
+            )
+
+            s.x.petsc_vec.array_w[:num_sub_dofs] -= (
+                beta * dx.array_r[offset_start:offset_start + num_sub_dofs]
+            )
+            s.x.petsc_vec.ghostUpdate(
+                addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+            )
+            offset_start += num_sub_dofs
+
+    def form(self, x: PETSc.Vec):
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+    def F(self, x: PETSc.Vec, b: PETSc.Vec):
+        """Assemble residual vector."""
+
+        with b.localForm() as b_local:
+            b_local.set(0.0)
+
+        dfx.fem.petsc.assemble_vector_block(
+            b,
+            self.L,
+            self.a,
+            self.bcs,
+            x0=x,
+            scale=-1,
+            **self.pack_constants_and_coeffs()
+            )
+
+        b.ghostUpdate(PETSc.InsertMode.INSERT_VALUES, PETSc.ScatterMode.FORWARD)
+
+    def J(self, x: PETSc.Vec, A: PETSc.Mat):
+        """Assemble Jacobian matrix."""
+
+        A.zeroEntries()
+        dfx.fem.petsc.assemble_matrix_block(A, self.a, bcs=self.bcs)
+        A.assemble()
+
+    def matrix(self):
+        return dfx.fem.petsc.create_matrix_block(self.a)
+
+    def vector(self):
+        return dfx.fem.petsc.create_vector_block(self.L)
 
 
 class NewtonSolver():
+    """
+    Custom block-based Newton solver inspired by scifem's NewtonSolver
+    implementation.
+    """
 
     def __init__(self,
-                 comm,
-                 problem,
-                 max_iterations=10,
-                 rtol=1e-10,
-                 callback=lambda solver, uh: None):
+                 comm: MPI.Intracomm,
+                 problem: NonlinearProblemBlock,
+                 max_iterations: int = 10,
+                 rtol: float = 1e-10,
+                 beta: float = 1.0,
+                 error_on_nonconvergence: bool = True):
 
-        self.comm = comm
+        self.comm = comm  # NOTE: This communicator is not used by this class.
 
         self.problem = problem
 
-        self.A = dfx.fem.petsc.create_matrix(problem.a)
-        self.L = dfx.fem.petsc.create_vector(problem.L)
+        self.A = problem.matrix()
+        self.L = problem.vector()
+        self.x = problem.vector()
+        self.dx = problem.vector()
+
+        # Store accessible/modifiable properties
+        self._pre_solve_callback = None
+        self._post_solve_callback = None
+        self.beta = beta
+        self._error_on_nonconvergence = error_on_nonconvergence
 
         self.max_it = max_iterations
         self.rtol = rtol
         self.convergence_criterion = "incremental"
 
-        self.callback = callback
-
         self.ksp = PETSc.KSP()
-        self.krylov_solver = self.ksp.create(comm)
+        self.krylov_solver = self.ksp.create(self.L.getComm().tompi4py())
         self.krylov_solver.setOperators(self.A)
 
         self.krylov_solver_setup()
@@ -165,255 +349,96 @@ class NewtonSolver():
         ksp.getPC().setFactorSetUpSolverType()
         ksp.getPC().setFactorSetUpSolverType()
 
-    def setF(self, x):
+        self.krylov_solver.setFromOptions()
+        self.A.setFromOptions()
+        self.L.setFromOptions()
+
+    def set_pre_solve_callback(self, callback: Callable[["NewtonSolver"], None]):
+        """Set a callback function that is called before each Newton iteration."""
+        self._pre_solve_callback = callback
+
+    def set_post_solve_callback(self, callback: Callable[["NewtonSolver"], None]):
+        """Set a callback function that is called after each Newton iteration."""
+        self._post_solve_callback = callback
+
+    def set_x(self, w: dfx.fem.Function | List[dfx.fem.Function]):
+        self.problem.scatter_Function_to_vector(w, self.x)
+
+    def setF(self, x: PETSc.Vec):
         # Assemble the residual vector
         self.problem.F(x, self.L)
 
-        # Scale residual by -1
-        self.L.scale(-1)
-        self.L.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT_VALUES,
-            mode=PETSc.ScatterMode.FORWARD)
-
-    def setJ(self, x):
+    def setJ(self, x: PETSc.Vec):
         self.problem.J(x, self.A)
 
-    def set_form(self, x):
+    def set_form(self, x: PETSc.Vec):
         self.problem.form(x)
 
-    def solve(self, ch):
+    def update_solution(self, w: dfx.fem.Function | List[dfx.fem.Function]):
+        self.problem.update_solution(self.dx, self.beta, w)
 
-        V = ch.function_space
-
-        dc = dfx.fem.Function(V)
-
-        success = False
-
-        # Hold a copy of the incoming data.
-        self.ch_array_ini = ch.x.array.copy()
+    def solve(self, w: dfx.fem.Function | List[dfx.fem.Function]):
 
         for it in range(self.max_it):
 
-            self.callback(self, ch)
+            if self._pre_solve_callback is not None:
+                self._pre_solve_callback(self)
+
+            self.set_x(w)
 
             # Assemble RHS
-            self.setF(ch.vector)
+            self.setF(self.x)
 
             # Assemble the Jacobian
-            self.setJ(ch.vector)
+            self.setJ(self.x)
 
             # Finally update ghost values
-            self.set_form(ch.vector)
+            self.set_form(self.x)
 
             # Solve linear problem
-            self.krylov_solver.solve(self.L, dc.vector)
+            self.krylov_solver.solve(self.L, self.dx)
+
+            if self._error_on_nonconvergence:
+                if (status := self.krylov_solver.getConvergedReason()) <= 0:
+                    raise RuntimeError(
+                        f"Linear solver did not converge, got reason: {status}")
 
             # Compute norm of update
-            correction_norm = dc.vector.norm(0)
+            correction_norm = self.dx.norm(0)
 
             if np.isnan(correction_norm) or np.isinf(correction_norm):
                 raise RuntimeError("NaNs in NewtonSolver!")
 
-            dc.x.scatter_forward()
-            # Update u_{i+1} = u_i + delta u_i
-            ch.x.array[:] += dc.x.array
+            self.update_solution(w)
             it += 1
+
+            if self._post_solve_callback is not None:
+                self._post_solve_callback(self)
 
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
-                if correction_norm < self.rtol * ch.vector.norm(0):
-                    success = True
-                    break
+
+                logger.info(f"Iteration {it}: |dx| = {correction_norm:1.3e}")
+
+                if correction_norm < self.rtol * self.x.norm(0):
+                    return it, True
 
             elif self.convergence_criterion == "residual":
                 if self.L.norm(0) < self.rtol:
-                    success = True
-                    break
+                    return it, True
 
             elif self.convergence_criterion == "none":
                 if it == self.max_it:
-                    success = True
-                    break
+                    return it, True
 
             else:
                 raise ValueError(
                     f"Convergence criterion `{self.convergence_criterion}` not suported")
 
-        return it, success
-
-
-class BlockNewtonSolver:
-
-    SingleBlockNewtonSolver = NewtonSolver
-
-    def __init__(self,
-                 comm,
-                 block_problem,
-                 max_iterations=50,
-                 rtol=1e-10,
-                 atol=1e-6,
-                 convergence_criterion="incremental",
-                 callback=lambda solver, uh: None):
-
-        self.comm = comm
-
-        self.problem = block_problem
-
-        self.max_it = max_iterations
-        self.rtol = rtol
-        self.atol = atol
-        self.convergence_criterion = convergence_criterion
-        self.callback = callback
-
-        self.block_solvers = [
-            self.SingleBlockNewtonSolver(comm, problem)
-            for problem in self.problem.problems]
-
-    def line_search(self, solver, ch, ch_last, dc):
-        alpha = 1.
-        beta = 0.5
-
-        return alpha
-
-        # Reference norm for the line search
-        norm_res_old = solver.L.norm()
-
-        solution_norm = ch.vector.norm()
-
-        # Compute composite tolerance
-        tolerance = self.rtol * solution_norm + self.atol
-
-        while alpha > tolerance:
-
-            ch.x.array[:] = ch_last.x.array
-            ch.vector.axpy(alpha, dc.vector)
-
-            solver.setF(ch.vector)
-
-            norm_res_new = solver.L.norm()
-
-            reduction = norm_res_new / norm_res_old
-
-            dfx.log.log(
-                dfx.log.LogLevel.INFO,
-                f"alpha = {alpha:1.3e}, " +
-                f"norm = {norm_res_new:1.3e}, " +
-                f"reduct = {reduction:1.3e}")
-
-            # We need a tolerance here, otherwise a solution close to machine
-            if norm_res_new < norm_res_old + tolerance:
-
-                dfx.log.log(
-                    dfx.log.LogLevel.INFO,
-                    f"Line Search: Accepted step with alpha={alpha}, " +
-                    f"reduction={reduction}")
-                break
-            else:
-                alpha *= beta
-
-        if alpha < tolerance:
-            raise RuntimeError("Line search failed to find a suitable step size.")
-
-        return alpha
-
-    def solve(self, chs):
-
-        num_blocks = len(chs)
-
-        Vs = [ch.function_space for ch in chs]
-
-        dcs = [dfx.fem.Function(V) for V in Vs]
-
-        # Hold a copy of the initial values for debugging purposes
-        self.chs_ini = [ch.copy() for ch in chs]
-
-        # Refence to the last solution array.
-        chs_last = self.chs_ini
-
-        success = False
-
-        alpha = 1.0
-        it = 0
-
-        while it < self.max_it and alpha > 1e-2:
-
-            it += 1
-
-            correction_norm = 0.
-            solution_norm = 0.
-            residual_norm = 0.
-
-            self.callback(self, chs)
-
-            for i_block in range(num_blocks):
-
-                # retrieve the structures belonging the the current block
-                solver = self.block_solvers[i_block]
-                ch = chs[i_block]
-                ch_last = chs_last[i_block]
-                dc = dcs[i_block]
-
-                # Assemble RHS
-                solver.setF(ch.vector)
-
-                # Assemble the Jacobian
-                solver.setJ(ch.vector)
-
-                # Finally update ghost values
-                solver.set_form(ch.vector)
-
-                # Solve linear problem
-                solver.krylov_solver.solve(solver.L, dc.vector)
-
-                dc.x.scatter_forward()
-
-                # Compute norm of update
-                correction_norm += dc.vector.norm(0)
-                solution_norm += ch.vector.norm(0)
-                residual_norm += solver.L.norm(0)
-
-                # Check now whether something went wrong and raise error
-                if np.isnan(correction_norm) or np.isinf(correction_norm):
-                    raise RuntimeError("NaNs in NewtonSolver!")
-
-                alpha = self.line_search(solver, ch, ch_last, dc)
-                # Update u_{i+1} = u_i + delta u_i
-                ch.x.array[:] = ch_last.x.array + alpha * dc.x.array
-
-            dfx.log.log(dfx.log.LogLevel.INFO,
-                        f"It = {it:>3}: " +
-                        f"L = {residual_norm:1.3e} ; " +
-                        f"dc = {correction_norm:1.3e}")
-
-            tolerance = self.rtol * solution_norm + self.atol
-
-            self.errors = dict(increment_norm=correction_norm,
-                               residual_norm=residual_norm)
-
-            # Hold the result of the last successful iteration to reset.
-            chs_last = [ch.copy() for ch in chs]
-
-            # print(f"Iteration {it}: Correction norm {correction_norm}")
-            if self.convergence_criterion == 'incremental':
-                if correction_norm < tolerance:
-                    success = True
-                    break
-
-            elif self.convergence_criterion == "residual":
-                if residual_norm < tolerance:
-                    success = True
-                    break
-
-            elif self.convergence_criterion == "none":
-                if it == self.max_it:
-                    success = True
-                    break
-
-            else:
-                raise ValueError(
-                    f"Convergence criterion `{self.convergence_criterion}` not suported")
-
-        return it, success
+        if self._error_on_convergence:
+            raise RuntimeError("Newton solver did not converge")
+        else:
+            return it, False
 
 
 class OutputBase(abc.ABC):
