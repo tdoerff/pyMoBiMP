@@ -88,7 +88,7 @@ def test_nonlinear_algebraic(order):
 
     problem = NonlinearProblem(F, uh)
 
-    solver = NewtonSolver(comm, problem, max_iterations=50)
+    solver = NewtonSolver(problem, max_iterations=50)
 
     solver.solve(uh)
 
@@ -123,7 +123,7 @@ def test_differential(order):
 
     problem = NonlinearProblem(F, uh)
 
-    solver = NewtonSolver(comm, problem, max_iterations=100)
+    solver = NewtonSolver(problem, max_iterations=100)
 
     const = dfx.fem.Function(V)
     const.interpolate(lambda x: np.ones_like(x[0]))

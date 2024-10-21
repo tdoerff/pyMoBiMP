@@ -242,6 +242,72 @@ class NonlinearProblem:
 
         self.bcs = bcs
 
+    def pack_constants_and_coeffs(self):
+
+        constants_L = [
+            form and dfx.cpp.fem.pack_constants(form._cpp_object) for form in [self.L]
+        ]
+        coeffs_L = [
+            dfx.cpp.fem.pack_coefficients(form._cpp_object) for form in [self.L]]
+
+        constants_a = [
+            [
+                dfx.cpp.fem.pack_constants(form._cpp_object)
+                if form is not None
+                else np.array([], dtype=PETSc.ScalarType)
+                for form in forms
+            ]
+            for forms in [[self.a]]
+        ]
+
+        coeffs_a = [
+            [
+                {} if form is None else dfx.cpp.fem.pack_coefficients(form._cpp_object)
+                for form in forms
+            ]
+            for forms in [[self.a]]
+        ]
+
+        return dict(coeffs_a=coeffs_a,
+                    constants_a=constants_a,
+                    coeffs_L=coeffs_L,
+                    constants_L=constants_L)
+
+    def scatter_Function_to_vector(self, w, x):
+        # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
+
+        dfx.cpp.la.petsc.scatter_local_vectors(
+            x,
+            [si.x.petsc_vec.array_r for si in [w]],
+            [
+                (
+                    si.function_space.dofmap.index_map,
+                    si.function_space.dofmap.index_map_bs,
+                )
+                for si in [w]
+            ],
+        )
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)
+
+    def update_solution(self, dx, beta, w):
+        # Update solution
+        offset_start = 0
+        for s in [w]:
+            num_sub_dofs = (
+                s.function_space.dofmap.index_map.size_local
+                * s.function_space.dofmap.index_map_bs
+            )
+
+            s.x.petsc_vec.array_w[:num_sub_dofs] -= (
+                beta * dx.array_r[offset_start:offset_start + num_sub_dofs]
+            )
+            s.x.petsc_vec.ghostUpdate(
+                addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+            )
+            offset_start += num_sub_dofs
+
+
     def form(self, x):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
@@ -553,31 +619,37 @@ class NewtonSolverBlock():
 
 
 class NewtonSolver():
+    """
+    Custom block-based Newton solver inspired by scifem's NewtonSolver
+    implementation.
+    """
 
     def __init__(self,
-                 comm,
-                 problem,
-                 max_iterations=10,
-                 rtol=1e-10,
-                 callback=lambda solver, uh: None):
-
-        self.comm = comm
+                 problem: NonlinearProblemBlock,
+                 max_iterations: int = 10,
+                 rtol: float = 1e-10,
+                 beta: float = 1.0,
+                 error_on_nonconvergence: bool = True):
 
         self.problem = problem
 
-        self.A = dfx.fem.petsc.create_matrix(problem.a)
-        self.L = dfx.fem.petsc.create_vector(problem.L)
-        self.x = dfx.fem.petsc.create_vector(problem.L)
-        self.dx = dfx.fem.petsc.create_vector(problem.L)
+        self.A = problem.matrix()
+        self.L = problem.vector()
+        self.x = problem.vector()
+        self.dx = problem.vector()
+
+        # Store accessible/modifiable properties
+        self._pre_solve_callback = None
+        self._post_solve_callback = None
+        self.beta = beta
+        self._error_on_nonconvergence = error_on_nonconvergence
 
         self.max_it = max_iterations
         self.rtol = rtol
         self.convergence_criterion = "incremental"
 
-        self.callback = callback
-
         self.ksp = PETSc.KSP()
-        self.krylov_solver = self.ksp.create(comm)
+        self.krylov_solver = self.ksp.create(self.L.getComm().tompi4py())
         self.krylov_solver.setOperators(self.A)
 
         self.krylov_solver_setup()
@@ -591,15 +663,24 @@ class NewtonSolver():
         ksp.getPC().setFactorSetUpSolverType()
         ksp.getPC().setFactorSetUpSolverType()
 
+        self.krylov_solver.setFromOptions()
+        self.A.setFromOptions()
+        self.L.setFromOptions()
+
+    def set_pre_solve_callback(self, callback: Callable[["NewtonSolver"], None]):
+        """Set a callback function that is called before each Newton iteration."""
+        self._pre_solve_callback = callback
+
+    def set_post_solve_callback(self, callback: Callable[["NewtonSolver"], None]):
+        """Set a callback function that is called after each Newton iteration."""
+        self._post_solve_callback = callback
+
+    def set_x(self, w):
+        self.problem.scatter_Function_to_vector(w, self.x)
+
     def setF(self, x):
         # Assemble the residual vector
         self.problem.F(x, self.L)
-
-        # Scale residual by -1
-        self.L.scale(-1)
-        self.L.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT_VALUES,
-            mode=PETSc.ScatterMode.FORWARD)
 
     def setJ(self, x):
         self.problem.J(x, self.A)
@@ -607,65 +688,71 @@ class NewtonSolver():
     def set_form(self, x):
         self.problem.form(x)
 
-    def solve(self, ch):
+    def update_solution(self, w):
+        self.problem.update_solution(self.dx, self.beta, w)
 
-        V = ch.function_space
-
-        dc = dfx.fem.Function(V)
-
-        success = False
-
-        # Hold a copy of the incoming data.
-        self.ch_array_ini = ch.x.array.copy()
+    def solve(self, w):
 
         for it in range(self.max_it):
 
-            self.callback(self, ch)
+            if self._pre_solve_callback is not None:
+                self._pre_solve_callback(self)
+
+            self.set_x(w)
 
             # Assemble RHS
-            self.setF(ch.vector)
+            self.setF(self.x)
 
             # Assemble the Jacobian
-            self.setJ(ch.vector)
+            self.setJ(self.x)
 
             # Finally update ghost values
-            self.set_form(ch.vector)
+            self.set_form(self.x)
 
             # Solve linear problem
-            self.krylov_solver.solve(self.L, dc.vector)
+            self.krylov_solver.solve(self.L, self.dx)
+
+            if self._error_on_nonconvergence:
+                if (status := self.krylov_solver.getConvergedReason()) <= 0:
+                    raise RuntimeError(
+                        f"Linear solver did not converge, got reason: {status}")
 
             # Compute norm of update
-            correction_norm = dc.vector.norm(0)
+            correction_norm = self.dx.norm(0)
 
             if np.isnan(correction_norm) or np.isinf(correction_norm):
                 raise RuntimeError("NaNs in NewtonSolver!")
 
-            dc.x.scatter_forward()
-            # Update u_{i+1} = u_i + delta u_i
-            ch.x.array[:] += dc.x.array
+            self.update_solution(w)
             it += 1
+
+            if self._post_solve_callback is not None:
+                self._post_solve_callback(self)
 
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
-                if correction_norm < self.rtol * ch.vector.norm(0):
-                    success = True
-                    break
+
+                logger.info(f"Iteration {it}: |dx| = {correction_norm:1.3e}")
+
+                if correction_norm < self.rtol * self.x.norm(0):
+                    return it, True
 
             elif self.convergence_criterion == "residual":
                 if self.L.norm(0) < self.rtol:
-                    success = True
-                    break
+                    return it, True
 
             elif self.convergence_criterion == "none":
                 if it == self.max_it:
-                    success = True
-                    break
+                    return it, True
 
             else:
                 raise ValueError(
                     f"Convergence criterion `{self.convergence_criterion}` not suported")
 
-        return it, success
+        if self._error_on_convergence:
+            raise RuntimeError("Newton solver did not converge")
+        else:
+            return it, False
 
 
 class MultiBlockNewtonSolver:
@@ -692,7 +779,7 @@ class MultiBlockNewtonSolver:
         self.callback = callback
 
         self.block_solvers = [
-            self.SingleBlockNewtonSolver(comm, problem)
+            self.SingleBlockNewtonSolver(problem)
             for problem in self.problem.problems]
 
     def line_search(self, solver, ch, ch_last, dc):
