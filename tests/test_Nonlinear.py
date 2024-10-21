@@ -14,8 +14,8 @@ import ufl
 from pyMoBiMP.fenicsx_utils import (
     NewtonSolver,
     NonlinearProblem,
-    BlockNewtonSolver,
-    BlockNonlinearProblem,
+    MultiBlockNewtonSolver,
+    MultiBlockNonlinearProblem,
 )
 
 
@@ -208,7 +208,7 @@ def NonlinearBlockProblemCreation_algebraic():
 
     Fs = [set_up_form(u) for u in us]
 
-    problem = BlockNonlinearProblem(Fs, us)
+    problem = MultiBlockNonlinearProblem(Fs, us)
 
     return us, problem, u_exact
 
@@ -221,8 +221,9 @@ def test_nonlinear_block_algebraic():
 
     us, block_problem, u_exact = NonlinearBlockProblemCreation_algebraic()
 
-    solver = BlockNewtonSolver(comm, block_problem,
-                               convergence_criterion="residual", atol=1e-10, rtol=0)
+    solver = MultiBlockNewtonSolver(
+        comm, block_problem, convergence_criterion="residual", atol=1e-10, rtol=0
+    )
 
     solver.solve(us)
 
@@ -317,7 +318,7 @@ def test_nonlinear_block_differential():
     u_inners[0].value = 1.0
     u_inners[1].value = 1.0
 
-    problem = BlockNonlinearProblem(Fs, us, bcs)
+    problem = MultiBlockNonlinearProblem(Fs, us, bcs)
 
     coords = ufl.SpatialCoordinate(meshes[1])
     r2 = ufl.dot(coords, coords)
@@ -350,7 +351,7 @@ def test_nonlinear_block_differential():
 
         u_inners[1].value = du_0_r
 
-    solver = BlockNewtonSolver(comm, problem, callback=callback)
+    solver = MultiBlockNewtonSolver(comm, problem, callback=callback)
 
     solver.solve(us)
 

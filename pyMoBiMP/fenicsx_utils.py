@@ -268,7 +268,7 @@ class NonlinearProblem:
         return dfx.fem.petsc.create_vector(self.L)
 
 
-class BlockNonlinearProblem:
+class MultiBlockNonlinearProblem:
     """
     Wrapper class to collect independent block problems to be solved simultaneously.
     """
@@ -404,7 +404,7 @@ class NewtonSolver():
         return it, success
 
 
-class BlockNewtonSolver:
+class MultiBlockNewtonSolver:
 
     SingleBlockNewtonSolver = NewtonSolver
 
