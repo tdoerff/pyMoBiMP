@@ -11,6 +11,8 @@ import ipywidgets
 from matplotlib import colors as clrs
 from matplotlib import pyplot as plt
 
+from mpi4py.MPI import COMM_WORLD as comm
+
 import numpy as np
 import numpy.typing as npt
 
@@ -22,6 +24,7 @@ import pyvista
 from typing import List, Optional, Tuple
 
 from .fenicsx_utils import Fenicx1DOutput
+from .gmsh_utils import dfx_spherical_mesh
 
 
 _fire = cc.cm.CET_L3
@@ -265,7 +268,12 @@ class PyvistaAnimation:
 
         self.t_out = np.array(t_out)
 
-        self.meshes = meshes
+        if meshes is not None:
+            self.meshes = meshes
+        else:
+            num_particles = self.data_out.shape[1]
+            mesh_3d, _, _ = dfx_spherical_mesh(comm, resolution=0.5, optimize=False)
+            self.meshes = [mesh_3d, ] * num_particles
 
         # Initialize pyvista plotter
         # ==========================
@@ -343,7 +351,25 @@ class PyvistaAnimation:
             # Retrieve voltage.
             V = rt_data[:, -1]
 
-            chart.line(q, V, color="k", label=r"$V_{cell}$")
+            # Retrieve time.
+            t = rt_data[:, 0]
+
+            dt = np.diff(t)
+
+            dq = np.zeros_like(q)
+            dq[:-1] = np.diff(q) / dt
+            dq[-1] = dq[-2]
+
+            eps = 1e-7
+
+            chart.line(q[dq > eps],
+                       V[dq > eps],
+                       color="r",
+                       label=r"$V_{cell}(I>0)$")
+            chart.line(q[dq < 0],
+                       V[dq < 0],
+                       color="b",
+                       label=r"$V_{cell}(I<0)$")
 
             chart.x_range = [0, 1]
             eps = 0.5

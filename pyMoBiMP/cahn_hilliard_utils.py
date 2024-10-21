@@ -659,6 +659,8 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         cs = [self.c_of_y(y) for y in ys.split()]
 
+        num_particles = len(ys.split())
+
         # select one reference particle
         c = cs[0]
         mu = mus[0]
@@ -671,7 +673,9 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
 
         self.chem_pot_form = dfx.fem.form(3 * dFdc * r_square * ufl.dx)
         self.mu_bc_form = dfx.fem.form(mu * r_square * ufl.ds)
-        self.charge_form = [dfx.fem.form(3 * c * r_square * ufl.dx) for c in cs]
+        self.charge_form = [
+            dfx.fem.form(3 / num_particles * c * r_square * ufl.dx) for c in cs
+        ]
         self.mus_bc_form = [dfx.fem.form(mu_ * r_square * ufl.ds) for mu_ in mus]
 
         return super().setup(u_state, *args, **kwargs)
@@ -689,7 +693,7 @@ class AnalyzeCellPotential(RuntimeAnalysisBase):
             L_ / self.L * a_ * mu_ for L_, a_, mu_ in zip(self.Ls, self.aas, mus_bc)
         )
 
-        self.data.append([charge, chem_pot, mu_bc, cell_voltage])
+        self.data.append([charge, chem_pot, mu_bc, -cell_voltage])
 
         return super().analyze(t)
 
@@ -764,7 +768,7 @@ class ChargeDischargeExperiment():
         # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
         # it increases with chemical potential at the surface of the particles.
         # The actual cell voltage as measured is the negative of it.
-        if cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
+        if -cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
             print(
                 ">>> Cell voltage exceeds maximum " +
                 f"(V_cell = {cell_voltage:1.3f} > {self.c_bounds[1]:1.3f})."
@@ -779,7 +783,7 @@ class ChargeDischargeExperiment():
 
             return False
 
-        if cell_voltage < self.c_bounds[0] and self.I_charge.value < 0.0:
+        if -cell_voltage < self.c_bounds[0] and self.I_charge.value < 0.0:
 
             if self.stop_at_empty:
                 print(">>> Cell voltage exceeds minimum." +
@@ -849,7 +853,7 @@ class MultiParticleSimulation():
         self.c_of_y = c_of_y
 
         # charging current
-        self.I_charge = I_charge = dfx.fem.Constant(mesh, 1. / 3. * C_rate)
+        self.I_charge = I_charge = dfx.fem.Constant(mesh, 2. / 3. * C_rate)
 
         # Invoke the experiment
         self.experiment = self.Experiment(u, I_charge, c_of_y=self.c_of_y)
@@ -1051,7 +1055,7 @@ class MultiParticleSimulation():
 
     @property
     def T_final(self):
-        self._T = 6.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
+        self._T = 3.0 / self.C_rate if self.C_rate > 0 else 2.0  # ending time
         return self._T
 
     @staticmethod

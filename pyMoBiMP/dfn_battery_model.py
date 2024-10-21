@@ -2,16 +2,15 @@ import abc
 
 import basix
 import dolfinx as dfx
-from dolfinx.fem.petsc import NonlinearProblem as NonlinearProblemBase
 
 from mpi4py import MPI
 from mpi4py.MPI import COMM_WORLD as comm, SUM
 
 import numpy as np
 
-from petsc4py import PETSc
-
 import pyvista as pv
+
+import scifem
 
 import ufl
 
@@ -23,7 +22,6 @@ from pyMoBiMP.cahn_hilliard_utils import (
     _free_energy as free_energy)
 
 from pyMoBiMP.fenicsx_utils import (
-    NewtonSolver,
     RuntimeAnalysisBase,
     StopEvent,
     strip_off_xdmf_file_ending)
@@ -50,10 +48,10 @@ def log(*msg, my_rank=0, all_procs=False):
 def time_stepping(
     solver,
     u,
+    voltage,
     u0,
     T,
     dt,
-    V_cell,
     t_start=0,
     dt_max=10.0,
     dt_min=1e-9,
@@ -75,6 +73,8 @@ def time_stepping(
 
     # Make sure initial time step does not exceed limits.
     dt.value = np.minimum(dt.value, dt_max)
+
+    u_inc_form = dfx.fem.form(ufl.dot(u - u0, u - u0) * ufl.dx)
 
     # Prepare output
     if output is not None:
@@ -100,17 +100,19 @@ def time_stepping(
 
             t += float(dt)
 
-            V_cell.update()
-            callback()  # check current
-            stop = event_handler(t, cell_voltage=V_cell.value, **event_pars)
+            stop = event_handler(t, cell_voltage=voltage.x.array[0], **event_pars)
 
             if stop:
                 break
 
-            iterations, success = solver.solve(u)
+            iterations = solver.solve(tol=1e-7)
 
-            if not success:
-                raise RuntimeError("Newton solver did not converge.")
+            # Callback test for the total current density. That should be
+            # done after the timestep. Otherwise an unsucessul previous
+            # timestep might be evaluated leading to a AssertionError that
+            # again restarts the timestep with smaller step size until we
+            # reach dt_min.
+            callback()
 
         except StopEvent as e:
 
@@ -161,9 +163,8 @@ def time_stepping(
             break
 
         # Adaptive timestepping a la Yibao Li et al. (2017)
-        u_max_loc = np.abs(u.sub(0).x.array - u0.sub(0).x.array).max()
-
-        u_err_max = u.function_space.mesh.comm.allreduce(u_max_loc, op=MPI.MAX)
+        u_inc = scifem.assemble_scalar(u_inc_form)
+        u_inc = max(u_inc, 1e-9)
 
         if iterations < solver.max_it / 5:
             # Use the given increment factor if we are in a safe region, i.e.,
@@ -179,7 +180,7 @@ def time_stepping(
             # Do not increase timestep between [0.5*max_it, 0.8*max_it]
             inc_factor = 1.0
 
-        dt.value = min(max(tol / u_err_max, dt_min), dt_max, inc_factor * dt.value)
+        dt.value = min(max(tol / u_inc, dt_min), dt_max, inc_factor * dt.value)
 
         # Find the minimum timestep among all processes.
         # Note that we explicitly use COMM_WORLD since the mesh communicator
@@ -213,18 +214,6 @@ def time_stepping(
             [o.finalize() for o in output]
 
     return
-
-
-class NonlinearProblem(NonlinearProblemBase):
-    def __init__(self, *args, callback=lambda: None, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.callback = callback
-
-    def form(self, x):
-        super().form(x)
-
-        self.callback()
 
 
 def plot_solution_on_grid(u):
@@ -347,75 +336,22 @@ class DefaultPhysicalSetup:
         return self.mean_affinity, self.reaction_affinities
 
 
-class Voltage(dfx.fem.Constant):
-
-    def __init__(self,
-                 u: dfx.fem.Function,
-                 I_global: float | dfx.fem.Constant,
-                 physical_setup: DefaultPhysicalSetup):
-
-        self.u = u
-        self.function_space = u.function_space
-        self.I_global = I_global
-
-        self.physical_setup = physical_setup
-
-        A, a_ratios = self.physical_setup.total_surface_and_weights()
-        L, Ls = self.physical_setup.mean_and_particle_affinities()
-
-        dA = self.physical_setup.dA
-
-        _, mu = ufl.split(u)
-
-        V_cell_ufl = - mu * Ls / L * a_ratios * dA
-        V_cell_ufl -= I_global / L * a_ratios * dA
-
-        self.V_cell_cpp = dfx.fem.form(V_cell_ufl)
-
-        super().__init__(self.function_space.mesh,
-                         self.compute_voltage())
-
-    def compute_voltage(self):
-
-        V_cell_value = float(dfx.fem.assemble_scalar(self.V_cell_cpp))
-        voltage = comm.allreduce(V_cell_value, op=SUM)
-
-        return voltage
-
-    def update(self):
-        voltage = self.compute_voltage()
-
-        np.copyto(self._cpp_object.value, np.asarray(voltage))
-
-    @property
-    def value(self):
-
-        self.update()
-
-        return float(self._cpp_object.value)
-
-    @property
-    def form(self):
-        return self.V_cell_cpp
-
-
 class TestCurrent():
-    def __init__(self, u, V_cell):
+    def __init__(self, u, voltage, I_global, physical_setup):
 
         _, mu = ufl.split(u)
 
-        a_ratios = V_cell.physical_setup.surface_weights
-        Ls = V_cell.physical_setup.reaction_affinities
+        a_ratios = physical_setup.surface_weights
+        Ls = physical_setup.reaction_affinities
 
         dA = create_particle_summation_measure(u.function_space.mesh)
 
-        I_particle = - Ls * (mu + V_cell)
+        I_particle = - Ls * (mu + voltage)
 
         I_global_ref_ufl = a_ratios * I_particle * dA
 
         self.I_global_ref_form = dfx.fem.form(I_global_ref_ufl)
-        self.I_global = V_cell.I_global
-        self.V_cell = V_cell
+        self.I_global = I_global
 
     def compute_current(self):
 
@@ -438,7 +374,7 @@ class TestCurrent():
 
 
 class AnalyzeOCP(RuntimeAnalysisBase):
-    def setup(self, u_state, c_of_y, V_cell, *args, **kwargs):
+    def setup(self, u_state, voltage, c_of_y, *args, **kwargs):
         super().setup(u_state, *args, **kwargs)
 
         # Function space(s) and mesh information
@@ -466,7 +402,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         self.soc_form = dfx.fem.form(3 / num_particles * c * r**2 * ufl.dx)
 
-        self.V_cell_form = V_cell.form
+        self.V_cell_form = dfx.fem.form(voltage / num_particles * ufl.dx)
 
     def analyze(self, t):
 
@@ -522,7 +458,7 @@ class ChargeDischargeExperiment():
         if -cell_voltage > self.v_cell_bounds[1] and self.I_charge.value > 0.0:
             log(
                 ">>> Cell voltage exceeds maximum " +
-                f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
+                f"(V_cell = {-cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
             )
 
             if self.stop_on_full:
@@ -538,7 +474,7 @@ class ChargeDischargeExperiment():
 
             if self.stop_at_empty:
                 log(">>> Cell voltage exceeds minimum." +
-                    f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[0]:1.3f}).")
+                    f"(V_cell = {-cell_voltage:1.3f} < {self.v_cell_bounds[0]:1.3f}).")
 
                 return True
 
@@ -566,7 +502,7 @@ def DFN_function_space(mesh):
 
 
 def DFN_FEM_form(
-    u, u0, v, dt, V_cell, free_energy,
+    u, voltage, u0, v, dt, free_energy, Ls,
     M=lambda c: c * (1 - c), gamma=0.1, grad_c_bc=lambda c: 0.0
 ):
 
@@ -578,9 +514,8 @@ def DFN_FEM_form(
     v_c, v_mu = ufl.split(v)
 
     dA = create_particle_summation_measure(mesh)
-    Ls = V_cell.physical_setup.reaction_affinities
 
-    I_particle = - Ls * (mu + V_cell)
+    I_particle = - Ls * (mu + voltage)
 
     theta = 1.0
 
@@ -613,6 +548,30 @@ def DFN_FEM_form(
     return F
 
 
+def voltage_form(u, voltage, v_voltage, I_global, physical_setup):
+
+    y, mu = ufl.split(u)
+
+    mesh = u.function_space.mesh
+
+    dA = create_particle_summation_measure(mesh)
+
+    Ls = physical_setup.reaction_affinities
+    L = physical_setup.mean_affinity
+    a_ratios = physical_setup.surface_weights
+
+    num_particles = scifem.assemble_scalar(
+        dfx.fem.form(dfx.fem.Constant(mesh, 1.) * ufl.dx)
+    )
+
+    F = (
+        (voltage / num_particles +
+         mu * Ls / L * a_ratios +
+         I_global / L * a_ratios) * v_voltage * dA)
+
+    return F
+
+
 class DFNSimulationBase(abc.ABC):
 
     PhysicalSetup = NotImplemented
@@ -620,6 +579,10 @@ class DFNSimulationBase(abc.ABC):
     Output = NotImplemented
     Experiment = NotImplemented
     free_energy = staticmethod(free_energy)
+
+    @staticmethod
+    def mobility(c):
+        return c * (1 - c)
 
     def __init__(
             self,
@@ -647,6 +610,11 @@ class DFNSimulationBase(abc.ABC):
 
         v = ufl.TestFunction(V)
 
+        W = scifem.create_real_functionspace(mesh)
+
+        self.voltage = voltage = dfx.fem.Function(W)
+        v_voltage = ufl.TestFunction(W)
+
         self.dt = dt = dfx.fem.Constant(mesh, 1e-8)
 
         # Runtime analysis and output
@@ -659,21 +627,34 @@ class DFNSimulationBase(abc.ABC):
 
         self.experiment = self.Experiment(u)
 
-        self.V_cell = V_cell = Voltage(u, self.experiment.I_charge, self.physical_setup)
-
         self.rt_analysis = self.RuntimeAnalysis(
-            u, c_of_y, V_cell, filename=self.output_file_name_base + "_rt.txt")
+            u, voltage, c_of_y, filename=self.output_file_name_base + "_rt.txt"
+        )
 
-        self.callback = TestCurrent(u, V_cell)
+        self.callback = TestCurrent(
+            u, voltage, self.experiment.I_charge, self.physical_setup
+        )
 
         # FEM Form
         # ========
-        self.F = F = DFN_FEM_form(u, u0, v, dt, V_cell, self.free_energy,
-                                  gamma=gamma)
+        self.F = DFN_FEM_form(
+            u,
+            voltage,
+            u0,
+            v,
+            dt,
+            self.free_energy,
+            self.physical_setup.reaction_affinities,
+            M=lambda c: self.mobility(c),
+            gamma=gamma,
+        )
+
+        self.voltage_form = voltage_form(
+            u, voltage, v_voltage, self.experiment.I_charge, self.physical_setup)
 
         # DOLFINx problem and solver setup
         # ===================================
-        self.solver_setup(comm, u, V_cell, F)
+        self.solver_setup()
 
         self.initial_data()
 
@@ -691,28 +672,36 @@ class DFNSimulationBase(abc.ABC):
 
         log(dfx.fem.petsc.assemble_vector(residual).norm())
 
-        its, success = self.solver.solve(self.u)
+        its = self.solver.solve(tol=1e-7)
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         log(its, error)
         assert np.isclose(error, 0.)
 
-    def solver_setup(self, comm, u, V_cell, F):
-        problem = NonlinearProblem(F, u)
-        self.solver = solver = NewtonSolver(
-            comm, problem, callback=lambda solver, uh: V_cell.update())
-        solver.rtol = 1e-7
-        solver.max_it = 50
-        solver.convergence_criterion = "incremental"
-        solver.relaxation_parameter = 1.0
+    def solver_setup(self):
 
-        ksp = solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        opts[f"{option_prefix}pc_type"] = "ksp"
-        ksp.setFromOptions()
+        du = ufl.TrialFunction(self.u.function_space)
+        dvoltage = ufl.TrialFunction(self.voltage.function_space)
 
-        self.solver
+        F = [self.F, self.voltage_form]
+
+        J = [[ufl.derivative(self.F, self.u, du),
+              ufl.derivative(self.F, self.voltage, dvoltage)],
+             [ufl.derivative(self.voltage_form, self.u, du),
+              ufl.derivative(self.voltage_form, self.voltage, dvoltage)]]
+
+        w = [self.u, self.voltage]
+
+        petsc_options = {
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+        }
+
+        self.solver = solver = scifem.NewtonSolver(
+            F, J, w, max_iterations=50, petsc_options=petsc_options
+        )
+
+        solver.max_it = solver.max_iterations
 
     def create_mesh(self):
 
@@ -745,10 +734,10 @@ class DFNSimulationBase(abc.ABC):
         time_stepping(
             self.solver,
             self.u,
+            self.voltage,
             self.u0,
             t_final,
             self.dt,
-            self.V_cell,
             t_start=t_start,
             dt_max=dt_max,
             dt_min=dt_min,
