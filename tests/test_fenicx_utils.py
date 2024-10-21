@@ -87,7 +87,7 @@ def test_NonlinearProblemBlock():
 
     problem = NonlinearProblemBlock(F, w)
 
-    solver = NewtonSolver(problem)
+    solver = NewtonSolver(comm, problem)
 
     its, success = solver.solve(w)
 

@@ -470,11 +470,14 @@ class NewtonSolver():
     """
 
     def __init__(self,
+                 comm: MPI.Intracomm,
                  problem: NonlinearProblemBlock,
                  max_iterations: int = 10,
                  rtol: float = 1e-10,
                  beta: float = 1.0,
                  error_on_nonconvergence: bool = True):
+
+        self.comm = comm  # NOTE: This communicator is not used by this class.
 
         self.problem = problem
 
