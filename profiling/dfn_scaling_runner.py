@@ -5,12 +5,14 @@ import os
 from pyMoBiMP.dfn_battery_model import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
+    DefaultPhysicalSetup,
     DFNSimulationBase)
 
 from pyMoBiMP.fenicsx_utils import FileOutput
 
 
 class Simulation(DFNSimulationBase):
+    PhysicalSetup = DefaultPhysicalSetup
     Output = FileOutput
     RuntimeAnalysis = AnalyzeOCP
     Experiment = ChargeDischargeExperiment
@@ -38,7 +40,7 @@ if __name__ == "__main__":
 
     tic = mpi_time()
 
-    simulation.run(dt_max=1e-4, n_out=0, t_final=0.01,)
+    simulation.run(dt_max=1e-4, n_out=0, t_final=0.05,)
 
     toc = mpi_time()
 
