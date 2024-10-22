@@ -14,6 +14,8 @@ from pyMoBiMP.dfn_battery_model import (
     voltage_form
 )
 
+from pyMoBiMP.fenicsx_utils import assemble_scalar, get_particle_number_from_mesh
+
 
 def test_physical_setup():
 
@@ -24,23 +26,16 @@ def test_physical_setup():
 
     dA_R = create_particle_summation_measure(mesh)
 
-    num_particles = dfx.fem.assemble_scalar(
-        dfx.fem.form(
-            dfx.fem.Constant(mesh, 1.0) * dA_R
-        )
-    )
+    num_particles = get_particle_number_from_mesh(mesh)
 
     A, a_ratios = physical_setup.total_surface_and_weights()
     L, Ls = physical_setup.mean_and_particle_affinities()
 
     assert np.isclose(A, 4 * np.pi * num_particles)
 
-    assert np.isclose(dfx.fem.assemble_scalar(dfx.fem.form(a_ratios * dA_R)),
-                      1.0)
+    assert np.isclose(assemble_scalar(dfx.fem.form(a_ratios * dA_R)), 1.0)
 
-    assert np.isclose(
-        dfx.fem.assemble_scalar(dfx.fem.form(Ls * a_ratios * dA_R)),
-        L)
+    assert np.isclose(assemble_scalar(dfx.fem.form(Ls * a_ratios * dA_R)), L)
 
 
 def test_mesh():
@@ -51,13 +46,13 @@ def test_mesh():
     dA = create_particle_summation_measure(mesh)
 
     form = dfx.fem.form(dfx.fem.Constant(mesh, 1.) * ufl.dx)
-    value = dfx.fem.assemble_scalar(form)
+    value = assemble_scalar(form)
 
     print(value)
     assert np.isclose(value, n_particles)
 
     form = dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA)
-    value = dfx.fem.assemble_scalar(form)
+    value = assemble_scalar(form)
 
     print(value)
     assert np.isclose(value, n_particles)
@@ -65,13 +60,13 @@ def test_mesh():
     r, _ = ufl.SpatialCoordinate(mesh)
 
     form = dfx.fem.form(r * dA)
-    value = dfx.fem.assemble_scalar(form)
+    value = assemble_scalar(form)
 
     print(value)
     assert np.isclose(value, n_particles)
 
     form = dfx.fem.form((1 - r) * dA)
-    value = dfx.fem.assemble_scalar(form)
+    value = assemble_scalar(form)
 
     print(value)
     assert np.isclose(value, 0.)

@@ -4,7 +4,6 @@ import basix
 import dolfinx as dfx
 
 from mpi4py import MPI
-from mpi4py.MPI import COMM_WORLD as comm, SUM
 
 import numpy as np
 
@@ -22,6 +21,7 @@ from pyMoBiMP.cahn_hilliard_utils import (
     _free_energy as free_energy)
 
 from pyMoBiMP.fenicsx_utils import (
+    assemble_scalar,
     RuntimeAnalysisBase,
     StopEvent,
     strip_off_xdmf_file_ending)
@@ -287,8 +287,7 @@ class DefaultPhysicalSetup:
     def _setup_total_surface(self):
         A_ufl = self._As * self.dA
 
-        A = dfx.fem.assemble_scalar(dfx.fem.form(A_ufl))
-        A = self.mesh.comm.allreduce(A, op=SUM)
+        A = assemble_scalar(dfx.fem.form(A_ufl))
 
         self._A = A
 
@@ -320,8 +319,7 @@ class DefaultPhysicalSetup:
         # from particle surfaces.
         L_ufl = self._a_ratios * self._Ls * self.dA
 
-        L = dfx.fem.assemble_scalar(dfx.fem.form(L_ufl))
-        L = self.mesh.comm.allreduce(L, op=SUM)
+        L = assemble_scalar(dfx.fem.form(L_ufl))
 
         self._L = L
 
@@ -355,8 +353,7 @@ class TestCurrent():
 
     def compute_current(self):
 
-        I_global_ref = dfx.fem.assemble_scalar(self.I_global_ref_form)
-        I_global_ref = comm.allreduce(I_global_ref, op=SUM)
+        I_global_ref = assemble_scalar(self.I_global_ref_form)
 
         return I_global_ref
 
@@ -390,10 +387,7 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
         # By integrating over the boundary we get a measure of the
         # number of particles.
-        num_particles = dfx.fem.assemble_scalar(
-            dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA_R)
-        )
-        num_particles = mesh.comm.allreduce(num_particles, op=SUM)
+        num_particles = assemble_scalar(dfx.fem.form(dfx.fem.Constant(mesh, 1.) * dA_R))
 
         y, mu = self.u_state.split()
 
@@ -406,13 +400,9 @@ class AnalyzeOCP(RuntimeAnalysisBase):
 
     def analyze(self, t):
 
-        mesh = self.u_state.function_space.mesh
+        soc = assemble_scalar(self.soc_form)
 
-        soc = dfx.fem.assemble_scalar(self.soc_form)
-        soc = mesh.comm.allreduce(soc, op=SUM)
-
-        V_cell = dfx.fem.assemble_scalar(self.V_cell_form)
-        V_cell = mesh.comm.allreduce(V_cell, op=SUM)
+        V_cell = assemble_scalar(self.V_cell_form)
 
         self.data.append([soc, V_cell])
 
