@@ -696,7 +696,7 @@ class DFNSimulationBase(abc.ABC):
 
     def run(self,
             t_start: float = 0.,
-            t_final: float = 150.,
+            t_final: float = 300.,
             n_out: int = 501,
             dt_min: float = 1e-9,
             dt_max: float = 1e-2,
