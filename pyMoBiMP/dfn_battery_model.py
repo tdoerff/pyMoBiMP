@@ -22,6 +22,8 @@ from pyMoBiMP.cahn_hilliard_utils import (
 
 from pyMoBiMP.fenicsx_utils import (
     assemble_scalar,
+    NewtonSolver,
+    NonlinearProblemBlock,
     RuntimeAnalysisBase,
     StopEvent,
     strip_off_xdmf_file_ending)
@@ -105,7 +107,7 @@ def time_stepping(
             if stop:
                 break
 
-            iterations = solver.solve(tol=1e-9)
+            iterations, _ = solver.solve([u, voltage])
 
             # Callback test for the total current density. That should be
             # done after the timestep. Otherwise an unsucessul previous
@@ -662,36 +664,26 @@ class DFNSimulationBase(abc.ABC):
 
         log(dfx.fem.petsc.assemble_vector(residual).norm())
 
-        its = self.solver.solve(tol=1e-7)
+        its, _ = self.solver.solve([self.u, self.voltage])
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         log(its, error)
         assert np.isclose(error, 0.)
 
     def solver_setup(self):
 
-        du = ufl.TrialFunction(self.u.function_space)
-        dvoltage = ufl.TrialFunction(self.voltage.function_space)
-
         F = [self.F, self.voltage_form]
-
-        J = [[ufl.derivative(self.F, self.u, du),
-              ufl.derivative(self.F, self.voltage, dvoltage)],
-             [ufl.derivative(self.voltage_form, self.u, du),
-              ufl.derivative(self.voltage_form, self.voltage, dvoltage)]]
 
         w = [self.u, self.voltage]
 
-        petsc_options = {
-            "ksp_type": "preonly",
-            "pc_type": "lu",
-            "pc_factor_mat_solver_type": "superlu",
-        }
+        problem = NonlinearProblemBlock(F, w)
 
-        self.solver = solver = scifem.NewtonSolver(
-            F, J, w, max_iterations=50, petsc_options=petsc_options
-        )
+        self.solver = NewtonSolver(self.mesh.comm, problem, max_iterations=50)
 
-        solver.max_it = solver.max_iterations
+        ksp = self.solver.ksp
+        ksp.setType("preonly")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("superlu")  # <- change to superlu_dist for parallel computations
+        ksp.getPC().setFactorSetUpSolverType()
 
     def create_mesh(self):
 
