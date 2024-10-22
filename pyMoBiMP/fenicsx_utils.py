@@ -14,6 +14,8 @@ import os
 
 from petsc4py import PETSc
 
+import scifem
+
 import shutil
 
 from typing import Callable, List
@@ -22,6 +24,11 @@ import ufl
 
 
 logger = logging.getLogger(__name__)
+
+
+# Below are a few wrappers to catch changes in the FEniCSx/scifem interface
+def assemble_scalar(*args, **kwargs):
+    return scifem.assemble_scalar(*args, **kwargs)
 
 
 def evaluation_points_and_cells(mesh, x):
@@ -791,7 +798,7 @@ def get_particle_number_from_mesh(mesh):
     dA = create_particle_summation_measure(mesh)
 
     nop_form = dfx.fem.form(dfx.fem.Constant(mesh, 1.0) * dA)
-    num_particles_from_mesh = int(round(dfx.fem.assemble_scalar(nop_form)))
+    num_particles_from_mesh = int(round(assemble_scalar(nop_form)))
 
     return num_particles_from_mesh
 
