@@ -415,7 +415,7 @@ class ChargeDischargeExperiment():
 
     # Global parameters
     c_rate: float = 0.01
-    v_cell_bounds = [-3.7, 3.7]
+    v_cell_bounds = [-4, 4]
     stop_at_empty = False
     stop_on_full = False
     cycling = False
@@ -699,9 +699,9 @@ class DFNSimulationBase(abc.ABC):
             t_final: float = 150.,
             n_out: int = 501,
             dt_min: float = 1e-9,
-            dt_max: float = 1e-3,
+            dt_max: float = 1e-2,
             dt_increase: float = 1.1,
-            tol: float = 1e-5):
+            tol: float = 1e-7):
 
         if n_out > 0:
             self.output = self.Output(
