@@ -442,7 +442,7 @@ class NewtonSolver():
                 raise ValueError(
                     f"Convergence criterion `{self.convergence_criterion}` not suported")
 
-        if self._error_on_convergence:
+        if self._error_on_nonconvergence:
             raise RuntimeError("Newton solver did not converge")
         else:
             return it, False
