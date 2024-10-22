@@ -1,3 +1,10 @@
+"""
+TODO: add authro, year, license strings
+
+fenicx_utils.py: This file contains functionality that extends and wraps
+FEniCSx and scifem.
+"""
+
 import abc
 
 import dolfinx as dfx
@@ -17,6 +24,8 @@ from petsc4py import PETSc
 import scifem
 
 import shutil
+
+import time
 
 from typing import Callable, List
 
@@ -914,3 +923,41 @@ def read_data(filebasename: str,
 
     else:
         return num_particles, t, x_data, u_data, rt_data
+
+
+class Timer:
+
+    def __init__(self, desciption: str = None):
+
+        if desciption is not None:
+            self.description = desciption
+        else:
+            self.description = "Time"
+
+    def __enter__(self):
+        self.start = self.get_time()
+        return self
+
+    def read_out(self):
+        self.readout = f'{self.description}: {self.elapsed_time:1.3e} seconds'
+
+    def __exit__(self, type, value, traceback):
+        self.elapsed_time = self.get_time() - self.start
+        self.read_out()
+        self.log(self.readout)
+
+    def get_time(self):
+        MPI.COMM_WORLD.Barrier()
+        return time.perf_counter()
+
+    def log(self, *msg):
+        log(*msg, rank=0)
+
+
+# %% aux functions
+def log(*msg, rank=0, all_procs=False):
+
+    digits = int(np.ceil(np.log10(MPI.COMM_WORLD.size)))
+
+    if MPI.COMM_WORLD.rank == rank or all_procs:
+        print(f"[{rank:0{digits}}]", *msg, flush=True)

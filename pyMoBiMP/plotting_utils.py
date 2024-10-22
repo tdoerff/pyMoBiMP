@@ -32,6 +32,30 @@ graphite_colormap = clrs.ListedColormap(
     _fire(np.linspace(0.15, 0.95, 101)), name='graphite')
 
 
+def plot_solution_on_grid(u: dolfinx.fem.Function):
+
+    V = u.function_space
+
+    topology, cell_types, x = dolfinx.plot.vtk_mesh(V)
+
+    n_particles = np.max(x)
+    x[:, 1] /= n_particles
+
+    grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+
+    grid['u'] = u.x.array
+
+    plotter = pyvista.Plotter()
+
+    warped = grid.warp_by_scalar('u')
+
+    plotter.add_mesh(warped, show_edges=True, show_vertices=False, show_scalar_bar=True)
+    plotter.add_axes()
+    plotter.add_bounding_box()
+
+    plotter.show()
+
+
 def add_arrow(line, position=None, direction="right", size=15, color=None):
     """
     add an arrow to a line.

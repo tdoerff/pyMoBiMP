@@ -3,7 +3,7 @@ import os
 # about busy resources.
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-from pyMoBiMP.dfn_battery_model import (  # noqa: 402
+from pyMoBiMP.cahn_hilliard_utils import (  # noqa: 402
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DFNSimulationBase,

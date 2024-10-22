@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pyMoBiMP.dfn_battery_model import (
+from pyMoBiMP.cahn_hilliard_utils import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DFNSimulationBase,
@@ -38,4 +38,4 @@ if __name__ == "__main__":
         output_destination=output_file
     )
 
-    simulation.run(dt_max=1e-2, n_out=501, tol=1e-5)
+    simulation.run(dt_max=1e-2, n_out=501)

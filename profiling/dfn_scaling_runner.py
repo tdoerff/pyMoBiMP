@@ -2,14 +2,13 @@ import os
 
 from petsc4py import PETSc
 
-from pyMoBiMP.dfn_battery_model import (
+from pyMoBiMP.cahn_hilliard_utils import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DefaultPhysicalSetup,
-    DFNSimulationBase,
-    Timer)
+    DFNSimulationBase)
 
-from pyMoBiMP.fenicsx_utils import FileOutput
+from pyMoBiMP.fenicsx_utils import FileOutput, Timer
 
 
 class Simulation(DFNSimulationBase):

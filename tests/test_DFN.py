@@ -5,13 +5,16 @@ import pytest
 import scifem
 import ufl
 
-from pyMoBiMP.dfn_battery_model import (
+from pyMoBiMP.cahn_hilliard_utils import (
+    DefaultPhysicalSetup as PhysicalSetup,
     TestCurrent,
+    voltage_form
+)
+
+from pyMoBiMP.dfn_utils import (
     create_1p1_DFN_mesh,
     create_particle_summation_measure,
     DFN_function_space,
-    DefaultPhysicalSetup as PhysicalSetup,
-    voltage_form
 )
 
 from pyMoBiMP.fenicsx_utils import assemble_scalar, get_particle_number_from_mesh
@@ -20,7 +23,7 @@ from pyMoBiMP.fenicsx_utils import assemble_scalar, get_particle_number_from_mes
 def test_physical_setup():
 
     mesh = create_1p1_DFN_mesh(comm)
-    V = DFN_function_space(mesh)
+    V, W = DFN_function_space(mesh)
 
     physical_setup = PhysicalSetup(V)
 
@@ -77,8 +80,7 @@ def test_Voltage_constant_mu(I_global_value: float):
 
     mesh = create_1p1_DFN_mesh(comm)
 
-    V = DFN_function_space(mesh)
-    W = scifem.create_real_functionspace(mesh)
+    V, W = DFN_function_space(mesh)
 
     physical_setup = PhysicalSetup(V)
 
@@ -123,8 +125,7 @@ def test_Voltage_constant_I_global():
 
     mesh = create_1p1_DFN_mesh(comm)
 
-    V = DFN_function_space(mesh)
-    W = scifem.create_real_functionspace(mesh)
+    V, W = DFN_function_space(mesh)
 
     physical_setup = PhysicalSetup(V)
 
@@ -159,8 +160,7 @@ def test_particle_current():
 
     mesh = create_1p1_DFN_mesh(comm)
 
-    V = DFN_function_space(mesh)
-    W = scifem.create_real_functionspace(mesh)
+    V, W = DFN_function_space(mesh)
 
     u = dfx.fem.Function(V)
 
