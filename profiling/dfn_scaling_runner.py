@@ -44,4 +44,4 @@ if __name__ == "__main__":
 
     if simulation.comm.rank == 0:
         with open(output_file, 'a') as file:
-            file.write(f"{comm.size} {timer.elapsed}\n")
+            file.write(f"{comm.size} {timer.elapsed_time}\n")
