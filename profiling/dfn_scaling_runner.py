@@ -37,7 +37,7 @@ if __name__ == "__main__":
     comm = simulation.comm
 
     with Timer(f"Running on {comm.size} procs") as timer:
-        simulation.run(dt_max=1e-2, n_out=0, t_final=0.05,)
+        simulation.run(dt_max=1e-2, n_out=0, t_final=0.001,)
 
     # Make sure the output file ends up in the same dir.
     output_file = os.path.dirname(__file__) + "/dfn_scaling.csv"
