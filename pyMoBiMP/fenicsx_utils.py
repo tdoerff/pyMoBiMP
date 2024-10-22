@@ -447,6 +447,14 @@ class NewtonSolver():
         else:
             return it, False
 
+    def __del__(self):
+        """Clean up the solver by destroying PETSc objects."""
+        self.A.destroy()
+        self.b.destroy()
+        self.dx.destroy()
+        self.krylov_solver.destroy()
+        self.x.destroy()
+
 
 class OutputBase(abc.ABC):
 
