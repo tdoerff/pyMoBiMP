@@ -582,7 +582,8 @@ class DFNSimulationBase(abc.ABC):
             n_particles: int = 1024,
             n_radius: int = 16,
             output_destination: str = "CH_4_DFN.xdmf",
-            gamma: float = 0.1):
+            gamma: float = 0.1,
+            **solver_args):
 
         self.comm = comm
 
@@ -646,7 +647,7 @@ class DFNSimulationBase(abc.ABC):
 
         # DOLFINx problem and solver setup
         # ===================================
-        self.solver_setup()
+        self.solver_setup(**solver_args)
 
         self.initial_data()
 
@@ -664,12 +665,20 @@ class DFNSimulationBase(abc.ABC):
 
         log(dfx.fem.petsc.assemble_vector(residual).norm())
 
-        its, _ = self.solver.solve([self.u, self.voltage])
+        # Set up a dedicated solver for the initial solve to make sure we have enough iterations.
+        F = [self.F, self.voltage_form]
+        w = [self.u, self.voltage]
+
+        problem = NonlinearProblemBlock(F, w)
+        solver = NewtonSolver(self.mesh.comm, problem, max_iterations=50)
+        self.linear_solver_setup(solver)
+
+        its, _ = solver.solve([self.u, self.voltage])
         error = dfx.fem.petsc.assemble_vector(residual).norm()
         log(its, error)
         assert np.isclose(error, 0.)
 
-    def solver_setup(self):
+    def solver_setup(self, **solver_args):
 
         F = [self.F, self.voltage_form]
 
@@ -677,9 +686,13 @@ class DFNSimulationBase(abc.ABC):
 
         problem = NonlinearProblemBlock(F, w)
 
-        self.solver = NewtonSolver(self.mesh.comm, problem, max_iterations=50)
+        self.solver = NewtonSolver(self.mesh.comm, problem, **solver_args)
 
-        ksp = self.solver.ksp
+        self.linear_solver_setup(self.solver)
+
+    def linear_solver_setup(self, solver):
+
+        ksp = solver.ksp
         ksp.setType("preonly")
         ksp.getPC().setType("lu")
         ksp.getPC().setFactorSolverType("superlu")  # <- change to superlu_dist for parallel computations
