@@ -1,5 +1,7 @@
 import os
 
+from petsc4py import PETSc
+
 from pyMoBiMP.dfn_battery_model import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
@@ -19,10 +21,10 @@ class Simulation(DFNSimulationBase):
     def linear_solver_setup(self, solver):
 
         ksp = solver.ksp
-        ksp.setType("preonly")
-        ksp.getPC().setType("lu")
-        ksp.getPC().setFactorSolverType("mumps")
-        ksp.getPC().setFactorSetUpSolverType()
+        ksp.setType(PETSc.KSP.Type.GMRES)
+        pc = ksp.getPC()
+        pc.setType(PETSc.PC.Type.HYPRE)
+        pc.setHYPREType("boomeramg")
 
 
 if __name__ == "__main__":
