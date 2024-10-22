@@ -11,6 +11,8 @@ import pyvista as pv
 
 import scifem
 
+import time
+
 import ufl
 
 from pyMoBiMP.cahn_hilliard_utils import (
@@ -32,19 +34,43 @@ from pyMoBiMP.fenicsx_utils import (
 # %% Helper functions
 # ===================
 
-def log(*msg, my_rank=0, all_procs=False):
 
-    rank = MPI.COMM_WORLD.rank
+class Timer:
 
-    if not all_procs:
-        if rank == my_rank:
-            print("[0] ", *msg, flush=True)
+    def __init__(self, desciption: str = None):
 
-    else:
-        size = MPI.COMM_WORLD.size
-        digits = np.ceil(np.log10(size))
+        if desciption is not None:
+            self.description = desciption
+        else:
+            self.description = "Time"
 
-        print(f"[{rank:0{digits}}] ", *msg)
+    def __enter__(self):
+        self.start = self.get_time()
+        return self
+
+    def read_out(self):
+        self.readout = f'{self.description}: {self.elapsed_time:1.3e} seconds'
+
+    def __exit__(self, type, value, traceback):
+        self.elapsed_time = self.get_time() - self.start
+        self.read_out()
+        self.log(self.readout)
+
+    def get_time(self):
+        MPI.COMM_WORLD.Barrier()
+        return time.perf_counter()
+
+    def log(self, *msg):
+        log(*msg, rank=0)
+
+
+# %% aux functions
+def log(*msg, rank=0, all_procs=False):
+
+    digits = int(np.ceil(np.log10(MPI.COMM_WORLD.size)))
+
+    if MPI.COMM_WORLD.rank == rank or all_procs:
+        print(f"[{rank:0{digits}}]", *msg, flush=True)
 
 
 def time_stepping(
