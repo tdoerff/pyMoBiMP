@@ -9,7 +9,7 @@ import pytest
 
 import ufl
 
-from pyMoBiMP.cahn_hilliard_utils import c_of_y
+from pyMoBiMP.battery_model import c_of_y
 
 from pyMoBiMP.fenicsx_utils import strip_off_xdmf_file_ending
 

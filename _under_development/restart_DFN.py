@@ -42,7 +42,7 @@ if __name__ == "__main__":
     v = ufl.TestFunction(V)
 
     # Initial data
-    from pyMoBiMP.cahn_hilliard_utils import y_of_c
+    from pyMoBiMP.battery_model import y_of_c
 
     V0, _ = V.sub(0).collapse()
     c = dfx.fem.Function(V0)

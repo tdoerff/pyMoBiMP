@@ -17,7 +17,7 @@ from petsc4py import PETSc
 
 import ufl
 
-from pyMoBiMP.cahn_hilliard_utils import (
+from pyMoBiMP.battery_model import (
     AnalyzeOCP,
     cahn_hilliard_form,
     charge_discharge_stop,

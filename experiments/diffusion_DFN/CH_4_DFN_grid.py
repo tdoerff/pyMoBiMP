@@ -9,7 +9,7 @@ from pyMoBiMP.dfn_battery_model import (  # noqa: 402
     DFNSimulationBase,
     DefaultPhysicalSetup)
 
-from pyMoBiMP.cahn_hilliard_utils import _free_energy  # noqa: 402
+from pyMoBiMP.battery_model import _free_energy  # noqa: 402
 from pyMoBiMP.fenicsx_utils import FileOutput  # noqa: 402
 
 

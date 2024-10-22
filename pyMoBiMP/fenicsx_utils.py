@@ -809,7 +809,7 @@ class SimulationFile(h5py.File):
 
 
 def get_particle_number_from_mesh(mesh):
-    from pyMoBiMP.cahn_hilliard_utils import (
+    from pyMoBiMP.battery_model import (
         create_particle_summation_measure)
 
     dA = create_particle_summation_measure(mesh)

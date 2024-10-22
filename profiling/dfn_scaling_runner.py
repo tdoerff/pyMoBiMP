@@ -2,7 +2,7 @@ import os
 
 from petsc4py import PETSc
 
-from pyMoBiMP.cahn_hilliard_utils import (
+from pyMoBiMP.battery_model import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DefaultPhysicalSetup,

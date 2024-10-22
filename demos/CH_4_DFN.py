@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from pyMoBiMP.cahn_hilliard_utils import (
+from pyMoBiMP.battery_model import (
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DFNSimulationBase,

@@ -5,7 +5,7 @@ import pytest
 import scifem
 import ufl
 
-from pyMoBiMP.cahn_hilliard_utils import (
+from pyMoBiMP.battery_model import (
     DefaultPhysicalSetup as PhysicalSetup,
     TestCurrent,
     voltage_form
