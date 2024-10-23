@@ -6,9 +6,12 @@ import scifem
 import ufl
 
 from pyMoBiMP.battery_model import (
+    compute_chemical_potential,
+    _free_energy,
     DefaultPhysicalSetup as PhysicalSetup,
     TestCurrent,
-    voltage_form
+    voltage_form,
+    y_of_c
 )
 
 from pyMoBiMP.dfn_utils import (
@@ -18,6 +21,31 @@ from pyMoBiMP.dfn_utils import (
 )
 
 from pyMoBiMP.fenicsx_utils import assemble_scalar, get_particle_number_from_mesh
+
+
+def test_chemical_potential():
+
+    mesh = create_1p1_DFN_mesh(comm)
+    V, W = DFN_function_space(mesh)
+
+    V0, _ = V.sub(0).collapse()
+
+    c = dfx.fem.Function(V0)
+    c.interpolate(lambda x: np.ones_like(x[0]) * 0.5)
+
+    def free_energy(c):
+        return _free_energy(c, a=0, b=0, c=0)
+
+    dfdc = compute_chemical_potential(free_energy, c)
+
+    y = y_of_c(c)
+
+    err_form = (y - dfdc)**2 * ufl.dx
+    err_compiled = dfx.fem.form(err_form)
+
+    error = assemble_scalar(err_compiled)
+
+    assert np.isclose(error, 0.)
 
 
 def test_physical_setup():
