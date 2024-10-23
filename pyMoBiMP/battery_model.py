@@ -415,8 +415,7 @@ class ChargeDischargeExperiment():
     ):
 
         self.u = u
-        # FIXME: Find out where the factor of 2 is coming from!
-        self._I_charge = dfx.fem.Constant(u.function_space.mesh, 2 / 3 * self.c_rate)
+        self._I_charge = dfx.fem.Constant(u.function_space.mesh, 1 / 3 * self.c_rate)
 
     @property
     def I_charge(self):
@@ -678,7 +677,7 @@ def DFN_FEM_form(
     r, _ = ufl.SpatialCoordinate(mesh)
 
     s_V = 4 * np.pi * r**2
-    s_A = 2 * np.pi * r**2
+    s_A = 4 * np.pi * r**2
 
     dx = ufl.dx  # The volume element
 
