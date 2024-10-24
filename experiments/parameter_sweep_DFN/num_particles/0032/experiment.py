@@ -32,4 +32,4 @@ if __name__ == "__main__":
         n_particles=32,
         output_destination=output_destination)
 
-    simulation.run(dt_max=1e-3, tol=1e-6, t_final=300.)
+    simulation.run(t_final=300.)
