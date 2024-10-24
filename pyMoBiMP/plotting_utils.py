@@ -504,29 +504,6 @@ class PyvistaAnimation:
 
         self.plotter.close()
 
-    def write_vtk_output(
-            self, filename: str | os.PathLike = "output.bp"):
-
-        u = self.u_3d
-        u.name = "c"
-        mesh = u.function_space.mesh
-        comm = mesh.comm
-
-        # writer = dolfinx.io.VTXWriter(comm, filename, u)
-        file = dolfinx.io.VTKFile(comm, filename, "w")
-
-        file.write_mesh(mesh)
-
-        it_max, _ = self.it_max_and_update()
-
-        for it in range(it_max):
-
-            self._update_data_on_grid(it)
-
-            file.write_function(u, self.t_out[it])
-
-        file.close()
-
     def show(self, **kwargs):
         self.plotter.show(**kwargs)
 
