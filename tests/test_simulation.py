@@ -60,3 +60,16 @@ def test_instatiate_default():
         Output = FileOutput
 
     Simulation()
+
+
+def test_run_simulation():
+
+    class Simulation(DFNSimulationBase):
+        PhysicalSetup = DefaultPhysicalSetup
+        RuntimeAnalysis = AnalyzeOCP
+        Experiment = ChargeDischargeExperiment
+        Output = FileOutput
+
+    simulation = Simulation(n_particles=2)
+
+    simulation.run(t_final=1.)
