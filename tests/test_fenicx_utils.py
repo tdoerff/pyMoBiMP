@@ -16,7 +16,7 @@ from pyMoBiMP.fenicsx_utils import (
 
 def test_read_data_DFN_shape():
 
-    n_particles = 4
+    n_particles = 2
     n_radius = 16
 
     directory = os.path.dirname(__file__) + "/data/DFN_simulation/"
