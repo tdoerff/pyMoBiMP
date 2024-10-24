@@ -473,11 +473,9 @@ class ChargeDischargeExperiment():
 
 class DFNSimulationBase(abc.ABC):
 
-    PhysicalSetup = NotImplemented
-    RuntimeAnalysis = NotImplemented
-    Output = NotImplemented
-    Experiment = NotImplemented
-    free_energy = staticmethod(_free_energy)
+    @staticmethod
+    def free_energy(u):
+        return _free_energy(u)
 
     @staticmethod
     def mobility(c):
@@ -491,6 +489,19 @@ class DFNSimulationBase(abc.ABC):
             output_destination: str = "CH_4_DFN.xdmf",
             gamma: float = 0.1,
             **solver_args):
+
+        # Ensure that the subclass has defined the required attributes
+        if not hasattr(self, 'PhysicalSetup'):
+            raise NotImplementedError("Subclasses must define 'PhysicalSetup'")
+
+        if not hasattr(self, 'RuntimeAnalysis'):
+            raise NotImplementedError("Subclasses must define 'RuntimeAnalysis'")
+
+        if not hasattr(self, 'Experiment'):
+            raise NotImplementedError("Subclasses must define 'Experiment'")
+
+        if not hasattr(self, 'Output'):
+            raise NotImplementedError("Subclasses must define 'Output'")
 
         self.comm = comm
 
