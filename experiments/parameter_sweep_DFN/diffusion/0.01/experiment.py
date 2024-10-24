@@ -3,7 +3,7 @@ import os
 # about busy resources.
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-from pyMoBiMP.dfn_battery_model import (  # noqa: 402
+from pyMoBiMP.battery_model import (  # noqa: 402
     AnalyzeOCP,
     ChargeDischargeExperiment,
     DFNSimulationBase,
@@ -23,9 +23,6 @@ class Simulation(DFNSimulationBase):
         return 0.01 * c * (1 - c)
 
 
-Simulation.Experiment.c_rate = 1e-2
-
-
 if __name__ == "__main__":
 
     dir = os.path.dirname(__file__)
@@ -36,4 +33,4 @@ if __name__ == "__main__":
         n_particles=256,
         output_destination=output_destination)
 
-    simulation.run(dt_max=1e-3, tol=1e-6, t_final=300.)
+    simulation.run(dt_max=1e-2, t_final=300.)
