@@ -20,7 +20,7 @@ class Simulation(DFNSimulationBase):
 
     @staticmethod
     def mobility(c):
-        return 1.0 * c * (1 - c)
+        return 10.0 * c * (1 - c)
 
 
 if __name__ == "__main__":
