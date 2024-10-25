@@ -27,12 +27,32 @@ import shutil
 
 import time
 
+import tqdm
+
 from typing import Callable, List
 
+import tqdm.contrib
+import tqdm.contrib.logging
 import ufl
 
 
-logger = logging.getLogger(__name__)
+class TqdmLoggingHandler(logging.Handler):
+    def __init__(self, level=logging.NOTSET):
+        super().__init__(level)
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.tqdm.write(msg)
+            self.flush()
+        except (KeyboardInterrupt, SystemError):
+            raise
+        except Exception:
+            self.handleError(record)
+
+
+log = logging.getLogger(__name__)
+# log.addHandler(TqdmLoggingHandler())
 
 
 # Below are a few wrappers to catch changes in the FEniCSx/scifem interface
@@ -434,7 +454,7 @@ class NewtonSolver():
             # print(f"Iteration {it}: Correction norm {correction_norm}")
             if self.convergence_criterion == 'incremental':
 
-                logger.info(f"Iteration {it}: |dx| = {correction_norm:1.3e}")
+                log.debug(f"Iteration {it}: |dx| = {correction_norm:1.3e}")
 
                 if correction_norm < self.rtol * self.x.norm(0):
                     return it, True
@@ -495,7 +515,7 @@ class OutputBase(abc.ABC):
 
         if t >= self.t_out_next or force:
 
-            print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+            log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
             self.output_container.append(self.extract_output(u_state, t))
             self.output_times.append(t)
@@ -640,7 +660,8 @@ class FileOutput(OutputBase):
 
         if t >= self.t_out_next or force:
 
-            print(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
             self.t_out_last = self.t_out_next
 
@@ -951,13 +972,4 @@ class Timer:
         return time.perf_counter()
 
     def log(self, *msg):
-        log(*msg, rank=0)
-
-
-# %% aux functions
-def log(*msg, rank=0, all_procs=False):
-
-    digits = int(np.ceil(np.log10(MPI.COMM_WORLD.size)))
-
-    if MPI.COMM_WORLD.rank == rank or all_procs:
-        print(f"[{rank:0{digits}}]", *msg, flush=True)
+        log.info(*msg)

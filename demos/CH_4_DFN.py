@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -20,6 +21,8 @@ class Simulation(DFNSimulationBase):
 
 
 if __name__ == "__main__":
+
+    logging.basicConfig(level=logging.INFO)
 
     # Specify the simulation output directory below the
     # scipt's directory. Here, we use Path for ease of use

@@ -3,20 +3,25 @@ import abc
 import dolfinx as dfx
 import dolfinx.fem.petsc
 
+import logging
+
 from mpi4py import MPI
 
 import numpy as np
 
+import tqdm
+
+import tqdm.contrib
+import tqdm.contrib.logging
 import ufl
 
 from pyMoBiMP.fenicsx_utils import (
     assemble_scalar,
-    log,
     NewtonSolver,
     NonlinearProblemBlock,
     RuntimeAnalysisBase,
     StopEvent,
-    strip_off_xdmf_file_ending
+    strip_off_xdmf_file_ending,
 )
 
 from pyMoBiMP.dfn_utils import (
@@ -24,6 +29,9 @@ from pyMoBiMP.dfn_utils import (
     create_particle_summation_measure,
     DFN_function_space,
 )
+
+
+log = logging.getLogger(__name__)
 
 
 def _free_energy(
@@ -100,6 +108,10 @@ def time_stepping(
 
     it = 0
 
+    if MPI.COMM_WORLD.rank == 0:
+        pbar = tqdm.tqdm(total=T, unit="h", unit_scale=1.)
+        pbar.set_description("Time loop")
+
     while t < T:
 
         it += 1
@@ -130,14 +142,16 @@ def time_stepping(
 
         except StopEvent as e:
 
-            print(e)
-            print(">>> Stop integration.")
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.warning(e)
+                log.warning(">>> Stop integration.")
 
             break
 
         except (RuntimeError, AssertionError) as e:
 
-            print(e)
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.warning(e)
 
             # reset and continue with smaller time step.
             u.x.array[:] = u0.x.array[:]
@@ -157,7 +171,8 @@ def time_stepping(
                 u.x.array[:] = u0.x.array[:]
                 u.x.scatter_forward()
 
-                print(f"Decrease timestep to dt={dt.value:1.3e}")
+                with tqdm.contrib.logging.logging_redirect_tqdm():
+                    log.warning(f"Decrease timestep to dt={dt.value:1.3e}")
 
                 # ... and restart the current iteration.
                 continue
@@ -169,7 +184,8 @@ def time_stepping(
 
         except ValueError as e:
 
-            print(e)
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.error(e)
 
             if output is not None:
                 [o.save_snapshot(u, t, force=True) for o in output]
@@ -209,17 +225,10 @@ def time_stepping(
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
 
-        if logging:
-            perc = (t - t_start) / (T - t_start) * 100
+            diag_str = f"dt = {dt.value:1.3e}, its = {iterations}"
 
-            if MPI.COMM_WORLD.rank == 0:
-                print(
-                    f"{perc:>3.0f} % :",
-                    f"t[{it:06}] = {t:1.6f}, "
-                    f"dt = {dt.value:1.3e}, "
-                    f"its = {iterations}",
-                    flush=True
-                )
+            pbar.set_postfix_str(diag_str)
+            pbar.update(dt.value)
 
     else:
 
@@ -427,21 +436,23 @@ class ChargeDischargeExperiment():
     def experiment(self, t, cell_voltage):
 
         if self.logging:
-            log(
-                f"t={t:1.5f} ; V_cell = {cell_voltage}")
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.info(f"t={t:1.5f} ; V_cell = {cell_voltage}")
 
         # Whenever you may ask yourself whether this works, mind the sign!
         # cell_voltage is the voltage computed by AnalyzeCellPotential, ie,
         # it increases with chemical potential at the surface of the particles.
         # The actual cell voltage as measured is the negative of it.
         if -cell_voltage > self.v_cell_bounds[1] and self.I_charge.value > 0.0:
-            log(
-                ">>> Cell voltage exceeds maximum " +
-                f"(V_cell = {-cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
-            )
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.info(
+                    ">>> Cell voltage exceeds maximum "
+                    + f"(V_cell = {-cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
+                )
 
             if self.stop_on_full:
-                log(">>> Cell is filled.")
+                with tqdm.contrib.logging.logging_redirect_tqdm():
+                    log.info(">>> Cell is filled.")
 
                 return True
 
@@ -451,20 +462,26 @@ class ChargeDischargeExperiment():
 
         if -cell_voltage < self.v_cell_bounds[0] and self.I_charge.value < 0.0:
 
-            log(">>> Cell voltage exceeds minimum." +
-                f"(V_cell = {-cell_voltage:1.3f} < {self.v_cell_bounds[0]:1.3f}).")
+            with tqdm.contrib.logging.logging_redirect_tqdm():
+                log.info(
+                    ">>> Cell voltage exceeds minimum."
+                    + f"(V_cell = {-cell_voltage:1.3f} < {self.v_cell_bounds[0]:1.3f})."
+                )
 
             if self.stop_at_empty:
-                log(">>> Cell is emptied.")
+                with tqdm.contrib.logging.logging_redirect_tqdm():
+                    log.info(">>> Cell is emptied.")
                 return True
 
             else:
                 if self.cycling:
-                    print(">>> Start charging.")
+                    with tqdm.contrib.logging.logging_redirect_tqdm():
+                        log.info(">>> Start charging.")
                     self.I_charge.value *= -1.0
 
                 else:
-                    print(">>> Stop charging.")
+                    with tqdm.contrib.logging.logging_redirect_tqdm():
+                        log.info(">>> Stop charging.")
                     self.I_charge.value = 0.0
 
                 return False
@@ -580,7 +597,7 @@ class DFNSimulationBase(abc.ABC):
         # Do some diagnostic checks to see whether the solver did ok.
         residual = dfx.fem.form(self.F)
 
-        log(dfx.fem.petsc.assemble_vector(residual).norm())
+        error_before = (dfx.fem.petsc.assemble_vector(residual).norm())
 
         # Set up a dedicated solver for the initial solve to make sure we
         # have enough iterations.
@@ -593,7 +610,9 @@ class DFNSimulationBase(abc.ABC):
 
         its, _ = solver.solve([self.u, self.voltage])
         error = dfx.fem.petsc.assemble_vector(residual).norm()
-        log(its, error)
+        with tqdm.contrib.logging.logging_redirect_tqdm():
+            log.info(
+                f"Initial data: ini_err = {error_before}, its={its}, res = {error:1.3e}")
         assert np.isclose(error, 0.)
 
     def solver_setup(self, **solver_args):
