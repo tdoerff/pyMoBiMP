@@ -33,4 +33,4 @@ if __name__ == "__main__":
         n_particles=256,
         output_destination=output_destination)
 
-    simulation.run(dt_max=1e-2, t_final=300.)
+    simulation.run(dt_max=1e-2, t_final=300., tol=1e-8)
