@@ -79,3 +79,10 @@ Contributions are welcome! Please open an issue or create a pull request to sugg
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+### Acknowledgments
+
+This project uses FEniCSx, which is licensed under the GNU Lesser General Public License version 3 (LGPL v3).
+Please refer to the FEniCSx [website](https://fenicsproject.org/) for more information.
+This project also uses GMSH, which is licensed under the GNU General Public License (GPL).
+Please refer to the GMSH [website](http://gmsh.info) for more information.
