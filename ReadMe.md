@@ -10,7 +10,7 @@ This code simulates a thermodynamically consistent (half-cell) battery model to 
 
 ### Directory Structure
 
-- **_under_development/**: non-productive, disfunctionional, or experimental scripts.
+- **_under_development/**: non-productive, disfunctionional, or experimental scripts. DO NOT RELY ON ANYTHING IN HERE!
 - **demos/**: Simple examples demonstrating the basic functionalities.
 - **experiments/**: More complex experiments showcasing advanced applications.
 - **profiling/**: Contains performance experiments.
