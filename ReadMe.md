@@ -1,6 +1,17 @@
 # pyMoBiMP
 
-Author: Tom Doerffel (2024)
+**Author:** Tom Doerffel (2024)
+
+## Project Overview
+
+This code simulates a thermodynamically consistent (half-cell) battery model to compute the intercalation of lithium in active materials such as graphite.
+
+### Directory Structure
+
+- **demos/**: Simple examples demonstrating the basic functionalities.
+- **experiments/**: More complex experiments showcasing advanced applications.
+- **pyMoBiMP/**: Main code of the project.
+- **tests/**: Contains unit tests.
 
 ## Installation (conda)
 
@@ -36,3 +47,15 @@ jupyter labextension enable --py widgetsnbextension
 ```{bash}
 pip install -e .
 ```
+
+## Usage
+
+After installation, you can run the provided examples in the demos/ and experiments/ directories to explore the functionalities of the model.
+
+## Contributions
+
+Contributions are welcome! Please open an issue or create a pull request to suggest improvements.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
