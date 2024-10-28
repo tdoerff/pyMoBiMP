@@ -13,6 +13,8 @@
 
 import abc
 
+from collections.abc import Callable
+
 import dolfinx as dfx
 import dolfinx.fem.petsc
 
@@ -517,6 +519,8 @@ class DFNSimulationBase(abc.ABC):
             n_radius: int = 16,
             output_destination: str = "CH_4_DFN.xdmf",
             gamma: float = 0.1,
+            c_of_y: Callable[[dfx.fem.Function], ufl.algebra.Operator] = c_of_y,
+            y_of_c: Callable[[dfx.fem.Function], ufl.algebra.Operator] = y_of_c,
             **solver_args):
 
         # Ensure that the subclass has defined the required attributes
@@ -575,6 +579,9 @@ class DFNSimulationBase(abc.ABC):
 
         # FEM Form
         # ========
+        self.c_of_y = c_of_y
+        self.y_of_c = y_of_c
+
         self.F = DFN_FEM_form(
             u,
             voltage,
@@ -585,6 +592,7 @@ class DFNSimulationBase(abc.ABC):
             self.physical_setup.reaction_affinities,
             M=lambda c: self.mobility(c),
             gamma=gamma,
+            c_of_y=self.c_of_y
         )
 
         self.voltage_form = voltage_form(
@@ -671,7 +679,7 @@ class DFNSimulationBase(abc.ABC):
                 self.u,
                 np.linspace(t_start, t_final, n_out),
                 filename=self.output_file_name_base + ".xdmf",
-                variable_transform=c_of_y,
+                variable_transform=self.c_of_y,
             )
         else:
             self.output = None
@@ -697,7 +705,8 @@ class DFNSimulationBase(abc.ABC):
 
 def DFN_FEM_form(
     u, voltage, u0, v, dt, free_energy, Ls,
-    M=lambda c: c * (1 - c), gamma=0.1, grad_c_bc=lambda c: 0.0
+    c_of_y=c_of_y, M=lambda c: c * (1 - c),
+    gamma=0.1, grad_c_bc=lambda c: 0.0
 ):
 
     V = u.function_space
