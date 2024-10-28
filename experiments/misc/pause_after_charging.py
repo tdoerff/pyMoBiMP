@@ -49,7 +49,7 @@ class Experiment(ChargeDischargeExperiment):
             self.status = "discharging"
 
         if self.status == "discharging" and \
-                cell_voltage < self.c_bounds[0]:
+                cell_voltage < self.v_cell_bounds[0]:
 
             self.status = "stopped"
             print(">>> Stop charging.")
