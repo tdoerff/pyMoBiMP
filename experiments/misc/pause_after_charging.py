@@ -1,23 +1,20 @@
 # %%
-import dolfinx as dfx
-
-from mpi4py import MPI
-
 import os
 
-from pyMoBiMP.cahn_hilliard_utils import (
-    ChargeDischargeExperiment as ExperimentBase,
-    MultiParticleSimulation as Simulation,
+from pyMoBiMP.battery_model import (
+    AnalyzeOCP,
+    ChargeDischargeExperiment,
+    DefaultPhysicalSetup,
+    DFNSimulationBase
 )
 
+from pyMoBiMP.fenicsx_utils import FileOutput
 
-comm_world = MPI.COMM_WORLD
 
-
-class Experiment(ExperimentBase):
+class Experiment(ChargeDischargeExperiment):
 
     pause = 150.0
-    charge_amplitude = 0.1
+    c_rate = 0.1
 
     def __init__(self, *args, **kwargs):
 
@@ -29,14 +26,13 @@ class Experiment(ExperimentBase):
 
         # Let the experiment completely control the current.
         self.status = "charging"
-        self.I_charge.value = self.charge_amplitude
 
     def experiment(self, t, cell_voltage):
 
-        if cell_voltage > self.c_bounds[1] and self.I_charge.value > 0.0:
+        if -cell_voltage > self.v_cell_bounds[1] and self.I_charge.value > 0.0:
             print(
                 ">>> Cell voltage exceeds maximum " +
-                f"(V_cell = {cell_voltage:1.3f} > {self.c_bounds[1]:1.3f})."
+                f"(V_cell = {cell_voltage:1.3f} > {self.v_cell_bounds[1]:1.3f})."
             )
 
             self.t_pause_start = t
@@ -62,24 +58,22 @@ class Experiment(ExperimentBase):
         return False  # Always continue the simulation
 
 
+class Simulation(DFNSimulationBase):
+    Experiment = Experiment
+    Output = FileOutput
+    PhysicalSetup = DefaultPhysicalSetup
+    RuntimeAnalysis = AnalyzeOCP
+
+
 if __name__ == "__main__":
 
-    # %%
-    # Discretization
-    # --------------
-    n_elem = 16
-    mesh = dfx.mesh.create_unit_interval(comm_world, n_elem)
-    exp_path = os.path.dirname(os.path.abspath(__file__))
-
-    Simulation.Experiment = Experiment
-
-    c_rate = 3 * Experiment.charge_amplitude
+    c_rate = Experiment.c_rate
     T_final = 6 / c_rate + 2 * Experiment.pause
 
-    Simulation.T_final = T_final
+    exp_path = os.path.dirname(__file__)
 
     simulation = Simulation(
-        mesh,
+        n_particles=128,
         output_destination=exp_path + "/simulation_output/pause_after_charging")
 
-    simulation.run(tol=1e-5, dt_max=1e-3)
+    simulation.run(tol=1e-7)
