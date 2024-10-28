@@ -2,6 +2,8 @@
 
 **Author:** Tom Doerffel (2024)
 
+Special thanks to Manuel Landstorfer for his helpful advice and guidance in the development of this project.
+
 ## Project Overview
 
 This code simulates a thermodynamically consistent (half-cell) battery model to compute the intercalation of lithium in active materials such as graphite.
@@ -86,3 +88,5 @@ This project uses FEniCSx, which is licensed under the GNU Lesser General Public
 Please refer to the FEniCSx [website](https://fenicsproject.org/) for more information.
 This project also uses GMSH, which is licensed under the GNU General Public License (GPL).
 Please refer to the GMSH [website](http://gmsh.info) for more information.
+
+This project was supported by funding from the German Research Foundation (DFG) through the Excelence Cluster [Math+](http://www.mathplus.de/), project [PaA-2](https://mathplus.de/transfer/partnership-area-paa-2/).
