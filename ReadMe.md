@@ -52,6 +52,19 @@ pip install -e .
 
 After installation, you can run the provided examples in the demos/ and experiments/ directories to explore the functionalities of the model.
 
+## Tests
+
+Tests can be run using `pytest`:
+
+````
+pytest tests/
+````
+or with
+```
+pytest --cov tests/
+```
+to get a coverage report.
+
 ## Contributions
 
 Contributions are welcome! Please open an issue or create a pull request to suggest improvements.
