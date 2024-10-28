@@ -12,6 +12,7 @@ This code simulates a thermodynamically consistent (half-cell) battery model to 
 
 - **demos/**: Simple examples demonstrating the basic functionalities.
 - **experiments/**: More complex experiments showcasing advanced applications.
+- **profiling/**: Contains performance experiments.
 - **pyMoBiMP/**: Main code of the project.
 - **tests/**: Contains unit tests.
 
