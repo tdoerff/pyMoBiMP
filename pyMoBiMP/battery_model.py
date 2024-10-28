@@ -205,6 +205,13 @@ def time_stepping(
 
             break
 
+        # Command line output
+        if MPI.COMM_WORLD.rank == 0:
+            diag_str = f"dt = {dt.value:1.3e}, its = {iterations}"
+
+            pbar.set_postfix_str(diag_str)
+            pbar.update(dt.value)
+
         # Adaptive timestepping a la Yibao Li et al. (2017)
         u_inc = assemble_scalar(u_inc_form)
         u_inc = max(u_inc, 1e-9)
@@ -233,11 +240,6 @@ def time_stepping(
 
         if output is not None:
             [o.save_snapshot(u, t) for o in output]
-
-            diag_str = f"dt = {dt.value:1.3e}, its = {iterations}"
-
-            pbar.set_postfix_str(diag_str)
-            pbar.update(dt.value)
 
     else:
 
