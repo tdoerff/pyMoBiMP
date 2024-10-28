@@ -526,7 +526,9 @@ class OutputBase(abc.ABC):
 
         if t >= self.t_out_next or force:
 
-            log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+            if MPI.COMM_WORLD.rank == 0:
+                with tqdm.contrib.logging.logging_redirect_tqdm():
+                    log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
             self.output_container.append(self.extract_output(u_state, t))
             self.output_times.append(t)
@@ -671,8 +673,9 @@ class FileOutput(OutputBase):
 
         if t >= self.t_out_next or force:
 
-            with tqdm.contrib.logging.logging_redirect_tqdm():
-                log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
+            if MPI.COMM_WORLD.rank == 0:
+                with tqdm.contrib.logging.logging_redirect_tqdm():
+                    log.info(f">>> Save snapshot [{self.it_out:04}] t={t:1.3f}")
 
             self.t_out_last = self.t_out_next
 
