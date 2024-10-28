@@ -124,7 +124,7 @@ def time_stepping(
     it = 0
 
     if MPI.COMM_WORLD.rank == 0:
-        pbar = tqdm.tqdm(total=T, unit="h", unit_scale=1., smoothing=0.7)
+        pbar = tqdm.tqdm(total=T, unit="unit time", unit_scale=1., smoothing=0.7)
         pbar.set_description("Time loop")
 
     while t < T:
