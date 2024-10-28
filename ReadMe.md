@@ -51,6 +51,13 @@ pip install -e .
 ## Usage
 
 After installation, you can run the provided examples in the demos/ and experiments/ directories to explore the functionalities of the model.
+The model usally outputs a collection of files (`*.h5`, `*.xdmf`, and `*_rt.txt`) containing the grid output and processed output of charge and cell voltage.
+To visualize the output, there is a script `tools/create_multi_particle_animation.py`that allows visualizing the `XDMF`and `*_rt.txt`output. Use
+
+```
+python tools/create_multi_particle_animation.py -h
+```
+for a detailed instruction.
 
 ## Tests
 
