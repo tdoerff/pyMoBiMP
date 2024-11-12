@@ -328,7 +328,7 @@ class NonlinearProblemBlock:
             self.a,
             self.bcs,
             x0=x,
-            scale=-1,
+            alpha=-1,
             **self.pack_constants_and_coeffs()
             )
 
