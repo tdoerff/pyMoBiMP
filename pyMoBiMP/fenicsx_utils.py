@@ -356,7 +356,7 @@ class NewtonSolver():
 
     def __init__(self,
                  comm: MPI.Intracomm,
-                 problem: NonlinearProblemBlock,
+                 problem: NonlinearProblem | NonlinearProblemBlock,
                  max_iterations: int = 10,
                  rtol: float = 1e-10,
                  beta: float = 1.0,
