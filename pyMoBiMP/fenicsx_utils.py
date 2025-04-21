@@ -129,37 +129,6 @@ class NonlinearProblem:
 
         self.bcs = bcs
 
-    def pack_constants_and_coeffs(self):
-
-        constants_L = [
-            form and dfx.cpp.fem.pack_constants(form._cpp_object) for form in [self.L]
-        ]
-        coeffs_L = [
-            dfx.cpp.fem.pack_coefficients(form._cpp_object) for form in [self.L]]
-
-        constants_a = [
-            [
-                dfx.cpp.fem.pack_constants(form._cpp_object)
-                if form is not None
-                else np.array([], dtype=PETSc.ScalarType)
-                for form in forms
-            ]
-            for forms in [[self.a]]
-        ]
-
-        coeffs_a = [
-            [
-                {} if form is None else dfx.cpp.fem.pack_coefficients(form._cpp_object)
-                for form in forms
-            ]
-            for forms in [[self.a]]
-        ]
-
-        return dict(coeffs_a=coeffs_a,
-                    constants_a=constants_a,
-                    coeffs_L=coeffs_L,
-                    constants_L=constants_L)
-
     def scatter_Function_to_vector(self, w: dfx.fem.Function, x: PETSc.Vec):
         # Scatter previous solution `w` to `self.x`, the blocked version used for lifting
 
