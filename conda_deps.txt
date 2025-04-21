@@ -1,0 +1,23 @@
+name: pyMoBiMP
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - fenics-dolfinx
+  - tqdm
+  - pyvista
+  - trame-vtk
+  - trame-vuetify
+  - pytest
+  - pytest-cov
+  - ca-certificates
+  - certifi
+  - openssl
+  - h5py
+  - scifem
+  - gmsh
+  - python-gmsh
+  - colorcet
+  - ipywidgets
+  - imageio
+
