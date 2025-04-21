@@ -32,9 +32,9 @@ def test_NonlinearProblem():
     v = ufl.TestFunction(V)
     x = ufl.SpatialCoordinate(mesh)
     F = (
-        uh**2 * v * ufl.dx
-        - 2 * uh * v * ufl.dx
-        - (x[0] ** 2 + 4 * x[0] + 3) * v * ufl.dx
+        uh**2 * v * ufl.dx  # type: ignore
+        - 2 * uh * v * ufl.dx  # type: ignore
+        - (x[0] ** 2 + 4 * x[0] + 3) * v * ufl.dx  # type: ignore
     )
 
     problem = NonlinearProblem(F, uh)
@@ -162,7 +162,7 @@ def test_differential(order):
     uh.x.array[:] -= min_uh
 
     L2_err0_loc = dfx.fem.assemble_scalar(
-        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx)
+        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx)  # type: ignore
     )
     L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
 
