@@ -167,3 +167,70 @@ def test_differential(order):
     L2_err0 = mesh.comm.allreduce(L2_err0_loc, op=SUM)
 
     assert np.isclose(L2_err0, 0.0)
+
+
+def test_DirichletBCs():
+
+    # Mesh and function space
+    # =======================
+    mesh = dfx.mesh.create_rectangle(
+        comm,
+        ((-1, -1), (1, 1)),
+        (32, 32)
+        )
+
+    V = dfx.fem.functionspace(mesh, ("Lagrange", 4))
+
+    # Solution and test function
+    # ==========================
+    uh = dfx.fem.Function(V)
+    v = ufl.TestFunction(V)
+
+    # Exact solution
+    # ==============
+    x, y = ufl.SpatialCoordinate(mesh)
+
+    u_ex_expr = dfx.fem.Expression(
+        100 + x**2 + y**2, V.element.interpolation_points()
+    )
+
+    u_ex = dfx.fem.Function(V)
+    u_ex.interpolate(u_ex_expr)  # type: ignore
+
+    # Boundary conditions
+    # ===================
+    tdim = mesh.topology.dim
+    fdim = tdim - 1
+
+    mesh.topology.create_connectivity(fdim, tdim)
+
+    boundary_facets = dfx.mesh.exterior_facet_indices(mesh.topology)
+    boundary_dofs = dfx.fem.locate_dofs_topological(V, fdim, boundary_facets)
+
+    bcs = [dfx.fem.dirichletbc(u_ex, boundary_dofs)]  # type: ignore
+
+    # Weak FEM form
+    # =============
+    F = ufl.dot(ufl.grad(uh), ufl.grad(v)) * ufl.dx +  2 * tdim * v * ufl.dx  # type: ignore
+
+    # Problem and solver
+    # ==================
+
+    problem = NonlinearProblem(F, uh, bcs=bcs)  # type: ignore
+    solver = NewtonSolver(comm, problem, max_iterations=100)
+
+    it, success = solver.solve(uh)  # type: ignore
+
+    assert it < 3
+
+    # L2 error
+    # ========
+    L2_err_loc = dfx.fem.assemble_scalar(
+        dfx.fem.form(ufl.inner(u_ex - uh, u_ex - uh) * ufl.dx)  # type: ignore
+    )
+
+    L2_err = mesh.comm.allreduce(L2_err_loc, op=SUM)
+
+    print("L2 error: ", L2_err)
+
+    assert np.isclose(L2_err, 0.0)
