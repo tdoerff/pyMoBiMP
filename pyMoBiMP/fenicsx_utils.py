@@ -204,14 +204,15 @@ class NonlinearProblemBlock:
         F: list[ufl.Form],
         w: list[dfx.fem.Function],
         bcs: list[dfx.fem.DirichletBC] = [],
+        **form_compiler_options: dict,
     ):
 
         dw = [ufl.TrialFunction(c.function_space) for c in w]
 
         J = [[ufl.derivative(Fi, c, dc) for c, dc in zip(w, dw)] for Fi in F]
 
-        self.L = dfx.fem.form(F)
-        self.a = dfx.fem.form(J)
+        self.L = dfx.fem.form(F, **form_compiler_options)
+        self.a = dfx.fem.form(J, **form_compiler_options)
 
         self.bcs = bcs
 
