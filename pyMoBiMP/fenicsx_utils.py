@@ -205,7 +205,7 @@ class NonlinearProblem:
 
         dfx.fem.petsc.assemble_vector(b, self.L)
 
-        dfx.fem.petsc.apply_lifting(b, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+        dfx.fem.petsc.apply_lifting(b, [self.a], bcs=[self.bcs], x0=[x], alpha=-1.0)
 
         b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
